@@ -27,6 +27,7 @@ return [
                     'job-location'               => 'Job Location',
                     'industry'                   => 'Industry',
                     'company'                    => 'Company',
+                    'company-modal-title'        => 'Create Company',
                     'employment-type'            => 'Employment Type',
                     'interviewers'               => 'Interviewers',
                     'recruiter'                  => 'Recruiter',

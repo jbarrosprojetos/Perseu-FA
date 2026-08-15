@@ -60,6 +60,16 @@ class UserResource extends Resource
 
     protected static ?string $recordTitleAttribute = 'name';
 
+    public static function getModelLabel(): string
+    {
+        return __('security::filament/resources/user.model-label');
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return __('security::filament/resources/user.plural-model-label');
+    }
+
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()->ownership();

@@ -1,0 +1,98 @@
+#ddev-generated
+# If you remove the ddev-generated line above you
+# are responsible for maintaining this file. DDEV will not then
+# update it, for example if you add `additional_hostnames`, etc.
+
+http:
+  routers:
+    perseu-web-80-http:
+      entrypoints:
+        - http-80
+      rule: HostRegexp(`^perseu\.ddev\.site$`)
+      
+      service: "perseu-web-80"
+      tls: false
+      # middlewares:
+      #   - "perseu-redirectHttps"
+    perseu-web-8025-http:
+      entrypoints:
+        - http-8025
+      rule: HostRegexp(`^perseu\.ddev\.site$`)
+      
+      service: "perseu-web-8025"
+      tls: false
+      # middlewares:
+      #   - "perseu-redirectHttps"
+    perseu-xhgui-80-http:
+      entrypoints:
+        - http-8143
+      rule: HostRegexp(`^perseu\.ddev\.site$`)
+      
+      service: "perseu-xhgui-80"
+      tls: false
+      # middlewares:
+      #   - "perseu-redirectHttps"
+    
+    
+    
+    perseu-web-80-https:
+      entrypoints:
+        - http-443
+      rule: HostRegexp(`^perseu\.ddev\.site$`)
+      
+      service: "perseu-web-80"
+      
+      tls: true
+      
+    perseu-web-8025-https:
+      entrypoints:
+        - http-8026
+      rule: HostRegexp(`^perseu\.ddev\.site$`)
+      
+      service: "perseu-web-8025"
+      
+      tls: true
+      
+    
+    perseu-xhgui-80-https:
+      entrypoints:
+        - http-8142
+      rule: HostRegexp(`^perseu\.ddev\.site$`)
+      
+      service: "perseu-xhgui-80"
+      
+      tls: true
+      
+    
+
+  middlewares:
+    perseu-redirectHttps:
+      redirectScheme:
+        scheme: https
+        permanent: true
+
+  services:
+    perseu-web-80:
+      loadbalancer:
+        servers:
+          - url: http://ddev-perseu-web:80
+        
+    perseu-web-8025:
+      loadbalancer:
+        servers:
+          - url: http://ddev-perseu-web:8025
+        
+    
+    
+    perseu-xhgui-80:
+      loadbalancer:
+        servers:
+          - url: http://ddev-perseu-xhgui:80
+        
+    
+    
+
+tls:
+  certificates:
+    - certFile: /mnt/ddev-global-cache/traefik/certs/perseu.crt
+      keyFile: /mnt/ddev-global-cache/traefik/certs/perseu.key

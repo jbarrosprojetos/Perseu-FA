@@ -24,6 +24,16 @@ class TeamResource extends Resource
 
     protected static ?int $navigationSort = 3;
 
+    public static function getModelLabel(): string
+    {
+        return __('security::filament/resources/team.model-label');
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return __('security::filament/resources/team.plural-model-label');
+    }
+
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()->ownership();

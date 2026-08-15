@@ -1,6 +1,10 @@
 <?php
 
 return [
+    'navigation' => [
+        'title' => 'Website',
+    ],
+
     'stats-overview' => 'Stats Overview',
 
     'from-date'  => 'From Date',

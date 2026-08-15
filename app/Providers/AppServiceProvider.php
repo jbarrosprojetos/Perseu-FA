@@ -2,6 +2,10 @@
 
 namespace App\Providers;
 
+use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\DateTimePicker;
+use Filament\Schemas\Schema;
+use Filament\Tables\Table;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
@@ -24,6 +28,34 @@ class AppServiceProvider extends ServiceProvider
         if (app()->environment('production')) {
             URL::forceScheme('https');
         }
+
+        DatePicker::configureUsing(function (DatePicker $component): void {
+            if (app()->getLocale() === 'pt_BR') {
+                $component->displayFormat('d/m/Y');
+            }
+        });
+
+        DateTimePicker::configureUsing(function (DateTimePicker $component): void {
+            if (app()->getLocale() === 'pt_BR') {
+                $component->displayFormat('d/m/Y H:i:s');
+            }
+        });
+
+        Table::configureUsing(function (Table $table): void {
+            if (app()->getLocale() === 'pt_BR') {
+                $table
+                    ->defaultDateDisplayFormat('d/m/Y')
+                    ->defaultDateTimeDisplayFormat('d/m/Y H:i:s');
+            }
+        });
+
+        Schema::configureUsing(function (Schema $schema): void {
+            if (app()->getLocale() === 'pt_BR') {
+                $schema
+                    ->defaultDateDisplayFormat('d/m/Y')
+                    ->defaultDateTimeDisplayFormat('d/m/Y H:i:s');
+            }
+        });
 
         on('dehydrate', function (Component $component): void {
             if (! Livewire::isLivewireRequest()) {

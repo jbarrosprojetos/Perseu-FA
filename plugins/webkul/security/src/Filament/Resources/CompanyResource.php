@@ -24,6 +24,16 @@ class CompanyResource extends BaseCompanyResource
 
     protected static ?string $recordTitleAttribute = 'name';
 
+    public static function getModelLabel(): string
+    {
+        return __('security::filament/resources/company.model-label');
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return __('security::filament/resources/company.plural-model-label');
+    }
+
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()

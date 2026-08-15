@@ -66,6 +66,16 @@ class CompanyResource extends Resource
 
     protected static ?string $recordTitleAttribute = 'name';
 
+    public static function getModelLabel(): string
+    {
+        return __('support::filament/resources/company.model-label');
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return __('support::filament/resources/company.plural-model-label');
+    }
+
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()
@@ -145,6 +155,7 @@ class CompanyResource extends Resource
                                                 TextInput::make('street2')
                                                     ->label(__('support::filament/resources/company.form.sections.address-information.fields.street2')),
                                                 TextInput::make('city')
+                                                    ->label(__('support::filament/resources/company.form.sections.address-information.fields.city'))
                                                     ->maxLength(255),
                                                 TextInput::make('zip')
                                                     ->live()

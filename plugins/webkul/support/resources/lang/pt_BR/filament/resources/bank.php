@@ -1,6 +1,11 @@
 <?php
 
 return [
+    'navigation' => [
+        'title' => 'Bancos',
+        'group' => 'Bancos',
+    ],
+
     'form' => [
         'sections' => [
             'general' => [

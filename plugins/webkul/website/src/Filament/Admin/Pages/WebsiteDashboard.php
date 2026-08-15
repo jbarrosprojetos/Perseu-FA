@@ -36,7 +36,7 @@ class WebsiteDashboard extends BaseDashboard
 
     public static function getNavigationLabel(): string
     {
-        return 'Website';
+        return __('website::filament/admin/pages/dashboard.navigation.title');
     }
 
     public static function getNavigationGroup(): string|\UnitEnum

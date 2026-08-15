@@ -3,6 +3,10 @@
 return [
     'title' => 'Usuários',
 
+    'model-label' => 'Usuário',
+
+    'plural-model-label' => 'Usuários',
+
     'navigation' => [
         'title' => 'Usuários',
     ],

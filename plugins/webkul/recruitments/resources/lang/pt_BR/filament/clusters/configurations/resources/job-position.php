@@ -27,6 +27,7 @@ return [
                     'job-location'               => 'Local da vaga',
                     'industry'                   => 'Setor',
                     'company'                    => 'Empresa',
+                    'company-modal-title'        => 'Criar empresa',
                     'employment-type'            => 'Tipo de vínculo',
                     'interviewers'               => 'Entrevistadores',
                     'recruiter'                  => 'Recrutador',

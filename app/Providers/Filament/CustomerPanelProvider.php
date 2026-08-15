@@ -33,7 +33,7 @@ class CustomerPanelProvider extends PanelProvider
             ->darkMode(false)
             ->brandLogoHeight('2rem')
             ->colors([
-                'primary' => Color::Blue,
+                'primary' => Color::hex('#FFC000'),
             ])
             ->topNavigation()
             ->renderHook(

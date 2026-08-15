@@ -1,6 +1,8 @@
 <?php
 
 return [
+    'title' => 'Filiais',
+
     'form' => [
         'tabs' => [
             'general-information' => [
@@ -88,7 +90,7 @@ return [
                         'fields' => [
                             'email-address' => 'Endereço de e-mail',
                             'phone-number'  => 'Número de telefone',
-                            'mobile-number' => 'Número de telefone',
+                            'mobile-number' => 'Celular',
                         ],
                     ],
                 ],
@@ -269,7 +271,7 @@ return [
                         'entries' => [
                             'email-address' => 'Endereço de e-mail',
                             'phone-number'  => 'Número de telefone',
-                            'mobile-number' => 'Número de telefone',
+                            'mobile-number' => 'Celular',
                         ],
                     ],
                 ],

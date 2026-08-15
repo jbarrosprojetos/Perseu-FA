@@ -3,6 +3,10 @@
 return [
     'title' => 'Companies',
 
+    'model-label' => 'Company',
+
+    'plural-model-label' => 'Companies',
+
     'navigation' => [
         'title' => 'Companies',
     ],
@@ -78,8 +82,8 @@ return [
                 'title'  => 'Contact Information',
                 'fields' => [
                     'email'  => 'Email Address',
-                    'phone'  => 'Phone Number',
-                    'mobile' => 'Phone Number',
+                    'phone'  => 'Phone',
+                    'mobile' => 'Mobile',
                 ],
             ],
         ],
@@ -239,8 +243,8 @@ return [
                 'title'   => 'Contact Information',
                 'entries' => [
                     'email'  => 'Email Address',
-                    'phone'  => 'Phone Number',
-                    'mobile' => 'Phone Number',
+                    'phone'  => 'Phone',
+                    'mobile' => 'Mobile',
                 ],
             ],
         ],

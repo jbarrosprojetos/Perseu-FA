@@ -1,6 +1,8 @@
 <?php
 
 return [
+    'title' => 'Branches',
+
     'form' => [
         'tabs' => [
             'general-information' => [
@@ -88,7 +90,7 @@ return [
                         'fields' => [
                             'email-address' => 'Email Address',
                             'phone-number'  => 'Phone Number',
-                            'mobile-number' => 'Phone Number',
+                            'mobile-number' => 'Mobile',
                         ],
                     ],
                 ],
@@ -269,7 +271,7 @@ return [
                         'entries' => [
                             'email-address' => 'Email Address',
                             'phone-number'  => 'Phone Number',
-                            'mobile-number' => 'Phone Number',
+                            'mobile-number' => 'Mobile',
                         ],
                     ],
                 ],

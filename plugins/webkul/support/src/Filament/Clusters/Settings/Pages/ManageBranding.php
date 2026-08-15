@@ -130,7 +130,7 @@ class ManageBranding extends SettingsPage
     private function getDefaultColors(): array
     {
         return [
-            'primary_color' => Color::convertToHex(Color::Blue[600]),
+            'primary_color' => '#FFC000',
             'gray_color'    => Color::convertToHex(Color::Zinc[600]),
             'danger_color'  => Color::convertToHex(Color::Red[600]),
             'info_color'    => Color::convertToHex(Color::Blue[600]),

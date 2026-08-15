@@ -25,7 +25,7 @@ class PriceListResource extends Resource
 
     public static function getNavigationLabel(): string
     {
-        return 'Price Lists';
+        return __('products::filament/resources/price-list.navigation.title');
     }
 
     public static function form(Schema $schema): Schema

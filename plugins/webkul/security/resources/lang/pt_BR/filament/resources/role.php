@@ -1,6 +1,14 @@
 <?php
 
 return [
+    'navigation' => [
+        'title' => 'Funções',
+    ],
+
+    'model-label' => 'Função',
+
+    'plural-model-label' => 'Funções',
+
     'form' => [
         'fields' => [
             'web'     => 'Web',

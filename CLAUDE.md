@@ -28,3 +28,11 @@ industrial (Perseu).
 Todo o sistema deve ser traduzido/adaptado para português do Brasil,
 incluindo campos específicos do Brasil (CPF, CNPJ, RG, Inscrição
 Estadual) quando aplicável.
+
+## Atenção: Resources duplicados entre plugins
+Alguns Resources existem em mais de um plugin (ex: CompanyResource
+existe em "security" E "support" — o de "support" é o que efetivamente
+serve as rotas, o de "security" tem shouldRegisterNavigation=false).
+Antes de editar um Resource, confirme com `route:list` ou busca por
+nome de classe qual versão está realmente ativa, para não editar a
+versão errada.

@@ -1,6 +1,10 @@
 <?php
 
 return [
+    'navigation' => [
+        'title' => 'Site',
+    ],
+
     'stats-overview' => 'Visão geral das estatísticas',
 
     'from-date'  => 'Data inicial',

@@ -1,6 +1,14 @@
 <?php
 
 return [
+    'navigation' => [
+        'title' => 'Roles',
+    ],
+
+    'model-label' => 'Role',
+
+    'plural-model-label' => 'Roles',
+
     'form' => [
         'fields' => [
             'web'     => 'Web',

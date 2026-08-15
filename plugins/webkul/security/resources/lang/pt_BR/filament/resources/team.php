@@ -3,6 +3,10 @@
 return [
     'title' => 'Equipes',
 
+    'model-label' => 'Equipe',
+
+    'plural-model-label' => 'Equipes',
+
     'navigation' => [
         'title' => 'Equipes',
     ],

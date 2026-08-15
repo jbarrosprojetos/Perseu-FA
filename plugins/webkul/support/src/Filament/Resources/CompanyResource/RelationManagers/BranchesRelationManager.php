@@ -39,6 +39,7 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
 use Webkul\Support\Models\Country;
 use Webkul\Support\Models\Currency;
@@ -48,6 +49,11 @@ class BranchesRelationManager extends RelationManager
     protected static string $relationship = 'branches';
 
     protected static ?string $recordTitleAttribute = 'name';
+
+    public static function getTitle(Model $ownerRecord, string $pageClass): string
+    {
+        return __('support::filament/resources/company/relation-managers/manage-branch.title');
+    }
 
     public function form(Schema $schema): Schema
     {

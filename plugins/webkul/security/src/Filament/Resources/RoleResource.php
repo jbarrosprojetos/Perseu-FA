@@ -44,6 +44,21 @@ class RoleResource extends RolesRoleResource
 
     protected static ?int $navigationSort = 1;
 
+    public static function getModelLabel(): string
+    {
+        return __('security::filament/resources/role.model-label');
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return __('security::filament/resources/role.plural-model-label');
+    }
+
+    public static function getNavigationLabel(): string
+    {
+        return __('security::filament/resources/role.navigation.title');
+    }
+
     public static function getNavigationGroup(): string|\UnitEnum
     {
         return NavigationGroup::Setting;

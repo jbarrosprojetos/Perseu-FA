@@ -3,7 +3,7 @@
         "symbol": "$",
         "iso_numeric": "840",
         "decimal_places": "2",
-        "full_name": "United States dollar",
+        "full_name": "Dólar americano",
         "rounding": 0.01,
         "active": true,
         "name": "USD"
@@ -39,9 +39,9 @@
         "symbol": "R$",
         "iso_numeric": "986",
         "decimal_places": "2",
-        "full_name": "Brazilian real",
+        "full_name": "Real brasileiro",
         "rounding": "0.01",
-        "active": false,
+        "active": true,
         "name": "BRL"
     },
     {

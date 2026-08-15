@@ -243,7 +243,7 @@
         "currency_id": "5",
         "phone_code": "55",
         "code": "BR",
-        "name": "Brazil",
+        "name": "Brasil",
         "state_required": false,
         "zip_required": true
     },
@@ -1475,7 +1475,7 @@
         "currency_id": "157",
         "phone_code": "595",
         "code": "PY",
-        "name": "Paraguay",
+        "name": "Paraguai",
         "state_required": false,
         "zip_required": true
     },
@@ -1859,7 +1859,7 @@
         "currency_id": "1",
         "phone_code": "1",
         "code": "US",
-        "name": "United States",
+        "name": "Estados Unidos",
         "state_required": true,
         "zip_required": true
     },
@@ -1867,7 +1867,7 @@
         "currency_id": "46",
         "phone_code": "598",
         "code": "UY",
-        "name": "Uruguay",
+        "name": "Uruguai",
         "state_required": false,
         "zip_required": true
     },

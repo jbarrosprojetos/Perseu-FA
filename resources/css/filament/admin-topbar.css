@@ -1,0 +1,115 @@
+/*
+ * Admin topbar customisation (Perseu-FA brand).
+ * Scoped to the admin panel (fi-panel-admin) so the customer panel is unaffected.
+ * Registered via FilamentAsset::register in AdminPanelProvider; published with
+ * `php artisan filament:assets`.
+ *
+ * Colours are NOT hardcoded: they use the dynamic CSS variables that Filament
+ * generates from the colours configured in Settings > Branding (registered by
+ * App\Http\Middleware\ApplyBrandSettings through FilamentColor::register). The
+ * seeded colours are anchored at shade 600, so:
+ *   --primary-600 == configured primary_color (currently #FFC000)
+ *   --gray-XXX   == shades of the configured gray_color (currently #71717A)
+ *
+ * This file intentionally contains plain (unlayered) CSS: unlayered author
+ * styles take precedence over the layered utility/component rules compiled by
+ * Filament (Tailwind v4), so these overrides survive Filament updates and
+ * dark-mode variants.
+ */
+
+.fi-panel-admin .fi-topbar {
+    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    min-height: auto;
+    gap: 0.375rem 1rem;
+    padding: 0.625rem 1rem 0.5rem;
+    background-color: var(--primary-600);
+}
+
+.fi-panel-admin .fi-topbar-start {
+    order: 1;
+    width: 100%;
+    min-height: 2.25rem;
+    margin-inline: 0;
+    justify-content: flex-start;
+}
+
+@media (max-width: 1023px) {
+    .fi-panel-admin .fi-topbar-start {
+        justify-content: center;
+    }
+}
+
+.fi-panel-admin .fi-topbar-start .fi-logo {
+    margin-inline-start: 0;
+}
+
+.fi-panel-admin .fi-topbar > .fi-dropdown {
+    order: 2;
+}
+
+.fi-panel-admin .fi-topbar > .fi-dropdown .fi-icon-btn {
+    margin: 0;
+}
+
+.fi-panel-admin .fi-topbar-nav-groups {
+    order: 3;
+    margin: 0;
+}
+
+.fi-panel-admin .fi-topbar-end {
+    order: 4;
+    margin-inline-start: auto;
+    padding-inline-end: 0;
+}
+
+.fi-panel-admin .fi-topbar-open-sidebar-btn,
+.fi-panel-admin .fi-topbar-close-sidebar-btn {
+    position: absolute;
+    inset-inline-start: 0.5rem;
+    top: 0.625rem;
+    z-index: 10;
+}
+
+.fi-panel-admin .fi-topbar .fi-icon-btn {
+    color: #374151;
+
+    &:hover,
+    &:focus-visible {
+        color: #111827;
+    }
+}
+
+.fi-panel-admin .fi-topbar-item:not(.fi-active) .fi-topbar-item-btn > .fi-icon,
+.fi-panel-admin .fi-topbar-item:not(.fi-active) .fi-topbar-item-label {
+    color: #374151;
+}
+
+.fi-panel-admin .fi-topbar-item-btn:hover,
+.fi-panel-admin .fi-topbar-item-btn:focus-visible {
+    background-color: rgba(17, 24, 39, 0.08);
+}
+
+.fi-panel-admin .fi-topbar-item.fi-active .fi-topbar-item-btn,
+.fi-panel-admin .fi-topbar-item.fi-active .fi-topbar-item-heading {
+    background-color: var(--gray-800);
+    border-radius: 0.5rem;
+    color: var(--gray-50);
+}
+
+.fi-panel-admin .fi-topbar-item.fi-active .fi-topbar-item-btn > .fi-icon,
+.fi-panel-admin .fi-topbar-item.fi-active .fi-topbar-item-label {
+    color: var(--gray-50);
+}
+
+.fi-panel-admin .fi-topbar-item.fi-active .fi-topbar-item-heading {
+    display: inline-flex;
+    align-items: center;
+}
+
+.fi-panel-admin .fi-topbar .fi-input-wrp-prefix .fi-icon,
+.fi-panel-admin .fi-topbar .fi-input::placeholder {
+    color: #374151;
+}
