@@ -36,3 +36,11 @@ serve as rotas, o de "security" tem shouldRegisterNavigation=false).
 Antes de editar um Resource, confirme com `route:list` ou busca por
 nome de classe qual versão está realmente ativa, para não editar a
 versão errada.
+
+## Distinção entre Favicon e Logo (Branding)
+No BrandSettings, "favicon" representa a identidade do PRODUTO Perseu
+(o software em si) e é usado em lugares que remetem ao "sistema"
+(ex: página de Ajuda). "light_logo"/"dark_logo" representam a
+identidade da EMPRESA CLIENTE que usa o sistema (ex: topbar). Ao
+adicionar imagens de marca em novas telas, considerar qual das duas
+identidades faz sentido em cada contexto.

@@ -66,9 +66,9 @@ enum NavigationGroup: string implements HasIcon, HasLabel
             self::Recruitment   => 'icon-recruitments',
             self::Website       => 'icon-website',
             self::Barcode       => 'icon-barcode',
-            self::Plugin        => 'icon-plugin',
+            self::Plugin        => 'heroicon-o-squares-2x2',
             self::Setting       => 'icon-settings',
-            self::Help          => 'icon-help',
+            self::Help          => 'heroicon-o-lifebuoy',
         };
     }
 }

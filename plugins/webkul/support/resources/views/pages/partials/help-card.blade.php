@@ -15,14 +15,23 @@
         </p>
 
         <div>
-            <x-filament::button
-                tag="a"
-                href="{{ $card['url'] }}"
-                target="_blank"
-                size="lg"
-            >
-                {{ $card['button'] }}
-            </x-filament::button>
+            @if (filled($card['url'] ?? null))
+                <x-filament::button
+                    tag="a"
+                    href="{{ $card['url'] }}"
+                    target="_blank"
+                    size="lg"
+                >
+                    {{ $card['button'] }}
+                </x-filament::button>
+            @else
+                <x-filament::button
+                    size="lg"
+                    disabled
+                >
+                    {{ $card['button'] }}
+                </x-filament::button>
+            @endif
         </div>
     </div>
 </x-filament::section>

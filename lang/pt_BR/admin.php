@@ -16,7 +16,7 @@ return [
         'time-off'      => 'Ausências',
         'recruitment'   => 'Recrutamento',
         'website'       => 'Site',
-        'plugin'        => 'Plugins',
+        'plugin'        => 'Módulos',
         'setting'       => 'Configurações',
         'help'          => 'Ajuda',
         'barcode'       => 'Código de barras',
