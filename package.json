@@ -15,5 +15,8 @@
         "postcss": "^8.4.47",
         "tailwindcss": "^4.3.0",
         "vite": "^5.0"
+    },
+    "dependencies": {
+        "@gitlawb/openclaude": "^0.28.0"
     }
 }

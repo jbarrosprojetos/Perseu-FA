@@ -1,7 +1,7 @@
 <?php
 
 namespace Webkul\Support\Filament\Pages;
-
+use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Infolists\Components\ViewEntry;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\Grid;
@@ -10,6 +10,7 @@ use Webkul\Support\Enums\NavigationGroup;
 
 class Help extends Page
 {
+    use HasPageShield;
     protected string $view = 'support::pages.help';
 
     protected static ?string $slug = 'help';

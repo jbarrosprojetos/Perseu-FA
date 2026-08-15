@@ -1,6 +1,12 @@
 {
   "version": 1,
   "skills": {
+    "aureuserp-plugin-builder": {
+      "source": "aureuserp/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/aureuserp-plugin-builder/SKILL.md",
+      "computedHash": "b7b0ac02dce0054a44f43e00ba959376f926fedc1fd26936e66f6a746fffd0fb"
+    },
     "aureuserp-test-case-builder": {
       "source": "aureuserp/agent-skills",
       "sourceType": "github",
