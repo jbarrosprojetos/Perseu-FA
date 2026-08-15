@@ -44,3 +44,18 @@ No BrandSettings, "favicon" representa a identidade do PRODUTO Perseu
 identidade da EMPRESA CLIENTE que usa o sistema (ex: topbar). Ao
 adicionar imagens de marca em novas telas, considerar qual das duas
 identidades faz sentido em cada contexto.
+
+## Estrutura do plugin de Pessoas (plugins/perseu/pessoas)
+- Organizado como Cluster "Pessoas" no menu principal, com 3 itens:
+  Categorias, Pessoas Físicas, Pessoas Jurídicas.
+- Contatos NÃO é um Resource/item de menu próprio — é um Relation
+  Manager dentro da tela de edição de Pessoa Jurídica (mesmo padrão do
+  BranchesRelationManager em Company).
+- Endereços também não é item de menu — é uma tabela própria
+  (enderecos) com pivots (pessoa_fisica_endereco,
+  pessoa_juridica_endereco), exibida como Relation Manager dentro de
+  Pessoa Física e Pessoa Jurídica. O tipo de endereço (Residencial,
+  Comercial, Cobrança, etc.) é um enum PHP com valor inteiro, não uma
+  tabela separada.
+- Itens novos de menu podem ser promovidos depois, caso surja
+  necessidade real (ex: uma listagem geral de contatos).
