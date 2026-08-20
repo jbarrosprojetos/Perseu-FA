@@ -14,6 +14,7 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Perseu\Pessoas\Enums\RegimeTributario;
 use Perseu\Pessoas\Filament\Clusters\Pessoas\Resources\PessoaJuridicaResource\Pages\CreatePessoaJuridica;
 use Perseu\Pessoas\Filament\Clusters\Pessoas\Resources\PessoaJuridicaResource\Pages\EditPessoaJuridica;
@@ -63,6 +64,18 @@ class PessoaJuridicaResource extends Resource
                     ->label(__('pessoas::filament/resources/pessoa-juridica.form.nome-fantasia'))
                     ->required()
                     ->maxLength(255)
+                    ->columnSpanFull(),
+
+                Select::make('categorias')
+                    ->label(__('pessoas::filament/resources/pessoa-juridica.form.categorias'))
+                    ->relationship(
+                        name: 'categorias',
+                        titleAttribute: 'descricao',
+                        modifyQueryUsing: fn (Builder $query) => $query->where('aplica_pj', true),
+                    )
+                    ->multiple()
+                    ->preload()
+                    ->searchable()
                     ->columnSpanFull(),
 
                 static::flexRow([
@@ -153,6 +166,9 @@ class PessoaJuridicaResource extends Resource
                     ->label(__('pessoas::filament/resources/pessoa-juridica.table.columns.telefone')),
                 TextColumn::make('regime_tributario')
                     ->label(__('pessoas::filament/resources/pessoa-juridica.table.columns.regime-tributario'))
+                    ->badge(),
+                TextColumn::make('categorias.descricao')
+                    ->label(__('pessoas::filament/resources/pessoa-juridica.table.columns.categorias'))
                     ->badge(),
                 TextColumn::make('created_at')
                     ->label(__('pessoas::filament/resources/pessoa-juridica.table.columns.created-at'))

@@ -10,6 +10,7 @@ return [
     ],
 
     'form' => [
+        'categorias'          => 'Categories',
         'razao-social'        => 'Corporate Name',
         'nome-fantasia'       => 'Trade Name',
         'cnpj'                => 'CNPJ',
@@ -40,6 +41,7 @@ return [
             'cnpj'               => 'CNPJ',
             'telefone'           => 'Phone',
             'regime-tributario'  => 'Tax Regime',
+            'categorias'         => 'Categories',
             'created-at'         => 'Created At',
         ],
 

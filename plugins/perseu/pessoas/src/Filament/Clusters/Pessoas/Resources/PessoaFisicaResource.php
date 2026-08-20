@@ -15,6 +15,7 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Perseu\Pessoas\Enums\EstadoCivil;
 use Perseu\Pessoas\Enums\Sexo;
 use Perseu\Pessoas\Filament\Clusters\Pessoas\Resources\PessoaFisicaResource\Pages\CreatePessoaFisica;
@@ -60,6 +61,18 @@ class PessoaFisicaResource extends Resource
                     ->label(__('pessoas::filament/resources/pessoa-fisica.form.nome'))
                     ->required()
                     ->maxLength(255)
+                    ->columnSpanFull(),
+
+                Select::make('categorias')
+                    ->label(__('pessoas::filament/resources/pessoa-fisica.form.categorias'))
+                    ->relationship(
+                        name: 'categorias',
+                        titleAttribute: 'descricao',
+                        modifyQueryUsing: fn (Builder $query) => $query->where('aplica_pf', true),
+                    )
+                    ->multiple()
+                    ->preload()
+                    ->searchable()
                     ->columnSpanFull(),
 
                 static::flexRow([
@@ -156,6 +169,9 @@ class PessoaFisicaResource extends Resource
                     ->searchable(),
                 TextColumn::make('estado_civil')
                     ->label(__('pessoas::filament/resources/pessoa-fisica.table.columns.estado-civil'))
+                    ->badge(),
+                TextColumn::make('categorias.descricao')
+                    ->label(__('pessoas::filament/resources/pessoa-fisica.table.columns.categorias'))
                     ->badge(),
                 TextColumn::make('created_at')
                     ->label(__('pessoas::filament/resources/pessoa-fisica.table.columns.created-at'))

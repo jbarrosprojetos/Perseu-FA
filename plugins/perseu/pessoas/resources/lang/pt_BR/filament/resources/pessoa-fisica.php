@@ -11,6 +11,7 @@ return [
 
     'form' => [
         'nome'               => 'Nome',
+        'categorias'         => 'Categorias',
         'telefone'           => 'Telefone',
         'telefone-whatsapp'  => 'É WhatsApp?',
         'email'              => 'E-mail',
@@ -37,6 +38,7 @@ return [
             'email'        => 'E-mail',
             'cpf'          => 'CPF',
             'estado-civil' => 'Estado Civil',
+            'categorias'   => 'Categorias',
             'created-at'   => 'Criado em',
         ],
 
