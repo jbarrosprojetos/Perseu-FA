@@ -10,7 +10,6 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
-use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
@@ -19,6 +18,8 @@ use Perseu\Pessoas\Enums\RegimeTributario;
 use Perseu\Pessoas\Filament\Clusters\Pessoas\Resources\PessoaJuridicaResource\Pages\CreatePessoaJuridica;
 use Perseu\Pessoas\Filament\Clusters\Pessoas\Resources\PessoaJuridicaResource\Pages\EditPessoaJuridica;
 use Perseu\Pessoas\Filament\Clusters\Pessoas\Resources\PessoaJuridicaResource\Pages\ListPessoasJuridicas;
+use Perseu\Pessoas\Filament\Clusters\Pessoas\Resources\PessoaJuridicaResource\RelationManagers\ContatosRelationManager;
+use Perseu\Pessoas\Filament\Clusters\Pessoas\Resources\PessoaJuridicaResource\RelationManagers\EnderecosRelationManager;
 use Perseu\Pessoas\Filament\Clusters\PessoasCluster;
 use Perseu\Pessoas\Models\PessoaJuridica;
 use Perseu\Pessoas\Rules\CnpjValido;
@@ -134,16 +135,6 @@ class PessoaJuridicaResource extends Resource
                 Textarea::make('observacoes')
                     ->label(__('pessoas::filament/resources/pessoa-juridica.form.observacoes'))
                     ->columnSpanFull(),
-
-                Section::make(__('pessoas::filament/resources/pessoa-juridica.form.sections.enderecos.title'))
-                    ->description(__('pessoas::filament/resources/pessoa-juridica.form.sections.enderecos.description'))
-                    ->schema([])
-                    ->columnSpanFull(),
-
-                Section::make(__('pessoas::filament/resources/pessoa-juridica.form.sections.contatos.title'))
-                    ->description(__('pessoas::filament/resources/pessoa-juridica.form.sections.contatos.description'))
-                    ->schema([])
-                    ->columnSpanFull(),
             ]);
     }
 
@@ -200,6 +191,14 @@ class PessoaJuridicaResource extends Resource
             'index'  => ListPessoasJuridicas::route('/'),
             'create' => CreatePessoaJuridica::route('/create'),
             'edit'   => EditPessoaJuridica::route('/{record}/edit'),
+        ];
+    }
+
+    public static function getRelations(): array
+    {
+        return [
+            EnderecosRelationManager::class,
+            ContatosRelationManager::class,
         ];
     }
 }

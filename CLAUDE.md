@@ -45,6 +45,38 @@ identidade da EMPRESA CLIENTE que usa o sistema (ex: topbar). Ao
 adicionar imagens de marca em novas telas, considerar qual das duas
 identidades faz sentido em cada contexto.
 
+## Tema Bonsai (qalainau/bonsai-theme) sobrescreve gap/espaçamento com !important
+O pacote `qalainau/bonsai-theme` está instalado e ativo neste projeto
+(registrado como plugin Filament em `AdminPanelProvider`), para deixar
+o painel mais denso. O CSS dele
+(`vendor/qalainau/bonsai-theme/resources/css/bonsai.css`) zera
+agressivamente TODOS os gaps de grid/flex/form do Filament usando
+`!important` — por exemplo `.fi-sc-form, .fi-sc-form.fi-dense { gap: 0
+!important; }` e `.fi-sc-flex, .fi-sc-flex.fi-dense { gap: 0
+!important; }` (junto de várias outras regras `.fi-*` com `!important`
+para padding/font-size/etc., é o "modo denso" do tema).
+
+**Qualquer `style` inline customizado que tente aumentar um `gap`
+nessas classes precisa do próprio `!important`, ou é silenciosamente
+ignorado** — um `!important` de stylesheet de autor sempre vence um
+`style=""` inline sem `!important`, não importa a especificidade.
+Isso já causou espaço "sumindo" sem explicação aparente em duas
+tarefas seguidas (`HasCompactFieldWidth::flexRow()` e
+`HasRelationManagerDividers::getFormContentComponent()`, ambos
+corrigidos adicionando `!important` ao valor do `gap` no `style`) antes
+de a causa real ser encontrada — o pacote não tem nenhuma opção de
+configuração para excluir elementos específicos da compactação (a
+classe do plugin só registra um CSS estático, nada mais).
+
+Ao adicionar qualquer novo `->extraAttributes(['style' => '...'])` que
+mexa com `gap` (ou outra propriedade que o Bonsai também força — vale
+conferir `bonsai.css` antes), inclua `!important` desde o início e não
+assuma que o valor "só não teve efeito visual por outro motivo" sem
+checar esse arquivo primeiro. `max-width`/`margin-right` usados por
+`HasCompactFieldWidth::compact()`/`compactByLabel()`/`flexRow()` não
+são afetados (o Bonsai não força essas propriedades nos seletores que
+usamos) — o problema é especificamente `gap`.
+
 ## Estrutura do plugin de Pessoas (plugins/perseu/pessoas)
 - Organizado como Cluster "Pessoas" no menu principal, com 3 itens:
   Categorias, Pessoas Físicas, Pessoas Jurídicas.
@@ -60,13 +92,43 @@ identidades faz sentido em cada contexto.
 - Itens novos de menu podem ser promovidos depois, caso surja
   necessidade real (ex: uma listagem geral de contatos).
 
-## Filtro de Tipo de Endereço por contexto (aplicar na Fase 3)
-No Select de "tipo" do Relation Manager de Endereços, filtrar as
-opções do enum TipoEndereco conforme o contexto:
+## Filtro de Tipo de Endereço por contexto (implementado na Fase 3)
+No Select de "tipo" do Relation Manager de Endereços, as opções do enum
+TipoEndereco são filtradas conforme o contexto:
 - Pessoa Física: Residencial, Cobrança, Entrega, Outro
 - Pessoa Jurídica: Comercial, Cobrança, Entrega, Obra, Outro
 O enum continua com todas as opções; a tela apenas restringe visualmente
 o que faz sentido em cada caso.
+
+`tipo` e `principal` são colunas do PIVOT (`pessoa_fisica_endereco`/
+`pessoa_juridica_endereco`), não da tabela `enderecos` — por isso não
+há cast de enum no Eloquent por padrão (o model `Endereco` não tem
+`$casts` para `tipo`, e não existe uma classe de Pivot customizada).
+No Relation Manager, `TextColumn::make('pivot.tipo')` usa
+`->formatStateUsing(fn ($state) => TipoEndereco::tryFrom((int) $state)?->getLabel())`
+para mostrar o label traduzido em vez do inteiro cru.
+
+Os dois Relation Managers de Endereços (um em cada Resource, já que o
+filtro de `tipo` difere) reaproveitam o mesmo form()/table() via o
+trait `Perseu\Pessoas\Traits\HasEnderecoRelationManagerSchema`
+(`plugins/perseu/pessoas/src/Traits/HasEnderecoRelationManagerSchema.php`).
+A classe concreta só declara `$relationship = 'enderecos'` e implementa
+`translationPrefix()` e `tipoEnderecoOptions(): array<TipoEndereco>`
+(os únicos dois pontos que variam entre PF e PJ). O campo `cep` usa
+`->live(onBlur: true)->afterStateUpdated(...)` chamando a API pública
+ViaCEP (`https://viacep.com.br/ws/{cep}/json/`, sem autenticação) para
+preencher `logradouro`/`bairro`/`municipio`/`uf` automaticamente — a
+chamada é envolta em `try/catch` e checa `$response->successful()`
+antes de usar o resultado, já que é uma dependência de rede externa
+que pode falhar.
+
+Como `enderecos()` é `belongsToMany(...)->withPivot('tipo', 'principal')`,
+o `CreateAction`/`EditAction` do Filament já separam automaticamente os
+campos do pivot dos campos do model `Endereco` ao salvar
+(`Filament\Actions\{Create,Edit}Action` verificam
+`$relationship->getPivotColumns()` quando a relationship é
+`BelongsToMany`) — não foi preciso nenhum `mutateFormDataUsing` manual
+para isso.
 
 ## Regra de largura de campos em formulários
 
@@ -236,3 +298,84 @@ chegarem ao container pai — o único filho real da div `flex` do
 continuam empilhados verticalmente em vez de lado a lado. O componente
 `Flex` (usado por `static::flexRow()`) renderiza os filhos
 diretamente, sem essa grid interna.
+
+### Divisores entre o formulário e os Relation Managers (páginas de Edit)
+
+Numa página `EditRecord` que tem Relation Manager(s), o Filament monta a
+página com `EditRecord::content()` empilhando dois componentes
+independentes: `getFormContentComponent()` (o `form()` do Resource +
+botões Salvar/Cancelar, que são o `->footer()` desse componente, não
+um item separado) e `getRelationManagersContentComponent()` — ou seja,
+o Relation Manager é renderizado **fora** do `form()` do Resource,
+mesmo aparecendo logo abaixo dele na tela. Isso explica por que não dá
+pra resolver o espaçamento só editando `form()`: os pontos de costura
+ficam nesses dois métodos da página (`Filament\Resources\Pages\EditRecord`),
+não no Resource.
+
+Não existe um componente `Divider` dedicado em `filament/schemas` — o
+jeito idiomático de colocar uma linha simples é `Html::make('<hr ...>')`
+(`Filament\Schemas\Components\Html`), com as mesmas classes de borda que
+o próprio Filament usa em outros lugares (`border-gray-200
+dark:border-white/10`, que já se adaptam ao dark mode).
+
+Solução reutilizável: trait `Perseu\Pessoas\Traits\HasRelationManagerDividers`
+(`plugins/perseu/pessoas/src/Traits/HasRelationManagerDividers.php`), para
+`use` na página `Edit{Xxx}` de qualquer Resource com Relation Manager:
+
+```php
+use Perseu\Pessoas\Traits\HasRelationManagerDividers;
+
+class EditPessoaJuridica extends EditRecord
+{
+    use HasRelationManagerDividers;
+
+    protected static string $resource = PessoaJuridicaResource::class;
+    // ...
+}
+```
+
+O trait sobrescreve dois métodos:
+- `getFormContentComponent()` — **sem linha `<hr>` aqui**, só espaço:
+  entre o fim do `form()` embutido (`EmbeddedSchema::make('form')`) e o
+  `->footer()` com os botões Salvar/Cancelar, o espaço vem de
+  `->extraAttributes(['style' => 'gap: 6rem;'])` no próprio
+  `Form::make(...)`. Não dá pra alcançar "antes dos botões" de outro
+  jeito, já que o footer é interno a esse componente. Esse `gap`
+  sobrescreve o `gap-6` (24px) padrão do Filament: `<form
+  class="fi-sc-form">` é `flex flex-col gap-6` (`filament/schemas`,
+  `resources/css/components/form.css`) — esse gap é o que efetivamente
+  separa os dois filhos diretos do flex (o bloco do formulário
+  embutido inteiro — TODOS os campos, como um único `.fi-grid` — e o
+  bloco do `->footer()`), então sobrescrevê-lo diretamente (mesma
+  técnica do `gap` do `Flex` em `HasCompactFieldWidth::flexRow()`) é o
+  jeito confiável de controlar esse espaço — colocar mais margem num
+  `<hr>` dentro do formulário embutido não teve o mesmo efeito visual
+  (foi tentado antes e removido).
+
+  O valor subiu de `4rem` para `6rem` depois que a Section placeholder
+  "Endereços" foi removida do `form()` (Fase 3, substituída pelo
+  Relation Manager de Endereços): o `gap` em si nunca deixou de
+  funcionar (ele separa os dois filhos do flex, não depende de qual
+  campo é o último dentro do formulário embutido), mas a Section tinha
+  peso visual próprio (`.fi-section`: padding, borda, sombra,
+  título+descrição) logo antes do respiro — sem ela, o último campo
+  (`Textarea` de Observações, uma caixa bem mais compacta) faz o
+  formulário terminar de forma mais abrupta, e o mesmo respiro em
+  pixels passa a parecer insuficiente. Se o último campo do `form()`
+  mudar de novo no futuro, reavaliar se `6rem` ainda é suficiente.
+- `content()` — insere um bloco com duas linhas (`<hr><hr>`, 2px cada,
+  `my-12 space-y-4`) entre `getFormContentComponent()` e
+  `getRelationManagersContentComponent()`, **e** envolve o Relation
+  Manager num `Group::make([...])->extraAttributes(['class' => ...])`
+  com fundo levemente acinzentado (`rounded-xl bg-gray-50 p-6
+  dark:bg-white/5`) — as mesmas classes que o próprio `Section` do
+  Filament usa na sua variante `->secondary()` (`.fi-section.fi-secondary`
+  em `filament/support`), reaproveitadas em vez de inventar uma cor. Uma
+  linha fina sozinha não bastou para o bloco parecer visualmente
+  separado do formulário; o fundo + linhas mais grossas + mais margem
+  resolveram isso.
+
+Aplicado em `EditPessoaJuridica` (Relation Managers de Endereços e
+Contatos) e `EditPessoaFisica` (Relation Manager de Endereços, desde a
+Fase 3). Reaproveitar em qualquer página `Edit{Xxx}` futura que ganhe
+seu primeiro Relation Manager.

@@ -22,13 +22,6 @@ return [
         'sexo'               => 'Sexo',
         'profissao'          => 'Profissão',
         'observacoes'        => 'Observações',
-
-        'sections' => [
-            'enderecos' => [
-                'title'       => 'Endereços',
-                'description' => 'Disponível após salvar o cadastro',
-            ],
-        ],
     ],
 
     'table' => [

@@ -6,9 +6,12 @@ use Filament\Actions\DeleteAction;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
 use Perseu\Pessoas\Filament\Clusters\Pessoas\Resources\PessoaJuridicaResource;
+use Perseu\Pessoas\Traits\HasRelationManagerDividers;
 
 class EditPessoaJuridica extends EditRecord
 {
+    use HasRelationManagerDividers;
+
     protected static string $resource = PessoaJuridicaResource::class;
 
     protected function getHeaderActions(): array

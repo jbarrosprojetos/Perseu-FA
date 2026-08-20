@@ -22,13 +22,6 @@ return [
         'sexo'               => 'Gender',
         'profissao'          => 'Occupation',
         'observacoes'        => 'Notes',
-
-        'sections' => [
-            'enderecos' => [
-                'title'       => 'Addresses',
-                'description' => 'Available after saving the record',
-            ],
-        ],
     ],
 
     'table' => [

@@ -21,17 +21,6 @@ return [
         'regime-tributario'   => 'Regime Tributário',
         'data-abertura'       => 'Data de Abertura',
         'observacoes'         => 'Observações',
-
-        'sections' => [
-            'enderecos' => [
-                'title'       => 'Endereços',
-                'description' => 'Disponível após salvar o cadastro',
-            ],
-            'contatos' => [
-                'title'       => 'Contatos',
-                'description' => 'Disponível após salvar o cadastro',
-            ],
-        ],
     ],
 
     'table' => [

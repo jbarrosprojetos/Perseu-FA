@@ -21,17 +21,6 @@ return [
         'regime-tributario'   => 'Tax Regime',
         'data-abertura'       => 'Opening Date',
         'observacoes'         => 'Notes',
-
-        'sections' => [
-            'enderecos' => [
-                'title'       => 'Addresses',
-                'description' => 'Available after saving the record',
-            ],
-            'contatos' => [
-                'title'       => 'Contacts',
-                'description' => 'Available after saving the record',
-            ],
-        ],
     ],
 
     'table' => [

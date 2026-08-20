@@ -6,9 +6,12 @@ use Filament\Actions\DeleteAction;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
 use Perseu\Pessoas\Filament\Clusters\Pessoas\Resources\PessoaFisicaResource;
+use Perseu\Pessoas\Traits\HasRelationManagerDividers;
 
 class EditPessoaFisica extends EditRecord
 {
+    use HasRelationManagerDividers;
+
     protected static string $resource = PessoaFisicaResource::class;
 
     protected function getHeaderActions(): array

@@ -11,7 +11,6 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
-use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
@@ -21,6 +20,7 @@ use Perseu\Pessoas\Enums\Sexo;
 use Perseu\Pessoas\Filament\Clusters\Pessoas\Resources\PessoaFisicaResource\Pages\CreatePessoaFisica;
 use Perseu\Pessoas\Filament\Clusters\Pessoas\Resources\PessoaFisicaResource\Pages\EditPessoaFisica;
 use Perseu\Pessoas\Filament\Clusters\Pessoas\Resources\PessoaFisicaResource\Pages\ListPessoasFisicas;
+use Perseu\Pessoas\Filament\Clusters\Pessoas\Resources\PessoaFisicaResource\RelationManagers\EnderecosRelationManager;
 use Perseu\Pessoas\Filament\Clusters\PessoasCluster;
 use Perseu\Pessoas\Models\PessoaFisica;
 use Perseu\Pessoas\Rules\CpfValido;
@@ -141,11 +141,6 @@ class PessoaFisicaResource extends Resource
                 Textarea::make('observacoes')
                     ->label(__('pessoas::filament/resources/pessoa-fisica.form.observacoes'))
                     ->columnSpanFull(),
-
-                Section::make(__('pessoas::filament/resources/pessoa-fisica.form.sections.enderecos.title'))
-                    ->description(__('pessoas::filament/resources/pessoa-fisica.form.sections.enderecos.description'))
-                    ->schema([])
-                    ->columnSpanFull(),
             ]);
     }
 
@@ -203,6 +198,13 @@ class PessoaFisicaResource extends Resource
             'index'  => ListPessoasFisicas::route('/'),
             'create' => CreatePessoaFisica::route('/create'),
             'edit'   => EditPessoaFisica::route('/{record}/edit'),
+        ];
+    }
+
+    public static function getRelations(): array
+    {
+        return [
+            EnderecosRelationManager::class,
         ];
     }
 }
