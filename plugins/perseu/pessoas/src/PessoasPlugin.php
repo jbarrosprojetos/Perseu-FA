@@ -23,6 +23,27 @@ class PessoasPlugin implements Plugin
         if (! Package::isPluginInstalled($this->getId())) {
             return;
         }
+
+        $panel
+            ->when($panel->getId() == 'admin', function (Panel $panel) {
+                $panel
+                    ->discoverResources(
+                        in: __DIR__.'/Filament/Resources',
+                        for: 'Perseu\\Pessoas\\Filament\\Resources'
+                    )
+                    ->discoverPages(
+                        in: __DIR__.'/Filament/Pages',
+                        for: 'Perseu\\Pessoas\\Filament\\Pages'
+                    )
+                    ->discoverClusters(
+                        in: __DIR__.'/Filament/Clusters',
+                        for: 'Perseu\\Pessoas\\Filament\\Clusters'
+                    )
+                    ->discoverWidgets(
+                        in: __DIR__.'/Filament/Widgets',
+                        for: 'Perseu\\Pessoas\\Filament\\Widgets'
+                    );
+            });
     }
 
     public function boot(Panel $panel): void
