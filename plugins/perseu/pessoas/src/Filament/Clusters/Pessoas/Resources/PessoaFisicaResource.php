@@ -22,9 +22,12 @@ use Perseu\Pessoas\Filament\Clusters\Pessoas\Resources\PessoaFisicaResource\Page
 use Perseu\Pessoas\Filament\Clusters\Pessoas\Resources\PessoaFisicaResource\Pages\ListPessoasFisicas;
 use Perseu\Pessoas\Filament\Clusters\PessoasCluster;
 use Perseu\Pessoas\Models\PessoaFisica;
+use Perseu\Pessoas\Traits\HasCompactFieldWidth;
 
 class PessoaFisicaResource extends Resource
 {
+    use HasCompactFieldWidth;
+
     protected static ?string $model = PessoaFisica::class;
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-user';
@@ -57,35 +60,73 @@ class PessoaFisicaResource extends Resource
                     ->required()
                     ->maxLength(255)
                     ->columnSpanFull(),
-                TextInput::make('telefone')
-                    ->label(__('pessoas::filament/resources/pessoa-fisica.form.telefone'))
-                    ->required()
-                    ->mask('(99) 99999-9999'),
-                Toggle::make('telefone_whatsapp')
-                    ->label(__('pessoas::filament/resources/pessoa-fisica.form.telefone-whatsapp')),
-                TextInput::make('email')
-                    ->label(__('pessoas::filament/resources/pessoa-fisica.form.email'))
-                    ->email()
-                    ->maxLength(255),
-                TextInput::make('cpf')
-                    ->label(__('pessoas::filament/resources/pessoa-fisica.form.cpf'))
-                    ->mask('999.999.999-99')
-                    ->unique(ignoreRecord: true),
-                TextInput::make('rg')
-                    ->label(__('pessoas::filament/resources/pessoa-fisica.form.rg')),
-                DatePicker::make('data_nascimento')
-                    ->label(__('pessoas::filament/resources/pessoa-fisica.form.data-nascimento')),
-                Select::make('estado_civil')
-                    ->label(__('pessoas::filament/resources/pessoa-fisica.form.estado-civil'))
-                    ->options(EstadoCivil::class),
-                Select::make('sexo')
-                    ->label(__('pessoas::filament/resources/pessoa-fisica.form.sexo'))
-                    ->options(Sexo::class),
-                TextInput::make('profissao')
-                    ->label(__('pessoas::filament/resources/pessoa-fisica.form.profissao')),
+
+                static::flexRow([
+                    static::compact(
+                        TextInput::make('telefone')
+                            ->label(__('pessoas::filament/resources/pessoa-fisica.form.telefone'))
+                            ->required()
+                            ->mask('(99) 99999-9999'),
+                        chars: 15, // "(99) 99999-9999"
+                    ),
+                    static::compactByLabel(
+                        Toggle::make('telefone_whatsapp')
+                            ->label(__('pessoas::filament/resources/pessoa-fisica.form.telefone-whatsapp'))
+                            ->inline(false)
+                            ->extraAttributes(['style' => 'transform: scale(0.75); transform-origin: left top; margin-top: 0.125rem;'])
+                    ),
+                    static::grow(
+                        TextInput::make('email')
+                            ->label(__('pessoas::filament/resources/pessoa-fisica.form.email'))
+                            ->email()
+                            ->maxLength(255)
+                    ),
+                ]),
+
+                static::flexRow([
+                    static::compact(
+                        TextInput::make('rg')
+                            ->label(__('pessoas::filament/resources/pessoa-fisica.form.rg')),
+                        chars: 12, // "99.999.999-9"
+                    ),
+                    static::compact(
+                        DatePicker::make('data_nascimento')
+                            ->label(__('pessoas::filament/resources/pessoa-fisica.form.data-nascimento')),
+                        chars: 10, // "10/11/1971"
+                        extraSlack: 2, // ícone de calendário do input
+                    ),
+                    static::compact(
+                        TextInput::make('cpf')
+                            ->label(__('pessoas::filament/resources/pessoa-fisica.form.cpf'))
+                            ->mask('999.999.999-99')
+                            ->unique(ignoreRecord: true),
+                        chars: 14, // "999.999.999-99"
+                    ),
+                ]),
+
+                static::flexRow([
+                    static::compact(
+                        Select::make('estado_civil')
+                            ->label(__('pessoas::filament/resources/pessoa-fisica.form.estado-civil'))
+                            ->options(EstadoCivil::class),
+                        chars: static::maxEnumLabelChars(EstadoCivil::class),
+                    ),
+                    static::compact(
+                        Select::make('sexo')
+                            ->label(__('pessoas::filament/resources/pessoa-fisica.form.sexo'))
+                            ->options(Sexo::class),
+                        chars: static::maxEnumLabelChars(Sexo::class),
+                    ),
+                    static::grow(
+                        TextInput::make('profissao')
+                            ->label(__('pessoas::filament/resources/pessoa-fisica.form.profissao'))
+                    ),
+                ]),
+
                 Textarea::make('observacoes')
                     ->label(__('pessoas::filament/resources/pessoa-fisica.form.observacoes'))
                     ->columnSpanFull(),
+
                 Section::make(__('pessoas::filament/resources/pessoa-fisica.form.sections.enderecos.title'))
                     ->description(__('pessoas::filament/resources/pessoa-fisica.form.sections.enderecos.description'))
                     ->schema([])
