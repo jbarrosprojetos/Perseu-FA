@@ -59,3 +59,11 @@ identidades faz sentido em cada contexto.
   tabela separada.
 - Itens novos de menu podem ser promovidos depois, caso surja
   necessidade real (ex: uma listagem geral de contatos).
+
+## Filtro de Tipo de Endereço por contexto (aplicar na Fase 3)
+No Select de "tipo" do Relation Manager de Endereços, filtrar as
+opções do enum TipoEndereco conforme o contexto:
+- Pessoa Física: Residencial, Cobrança, Entrega, Outro
+- Pessoa Jurídica: Comercial, Cobrança, Entrega, Obra, Outro
+O enum continua com todas as opções; a tela apenas restringe visualmente
+o que faz sentido em cada caso.
