@@ -19,6 +19,7 @@ use Webkul\Maintenance\MaintenanceServiceProvider;
 use Webkul\Manufacturing\ManufacturingServiceProvider;
 use Webkul\Partner\PartnerServiceProvider;
 use Webkul\Payment\PaymentServiceProvider;
+use Perseu\Pessoas\PessoasServiceProvider;
 use Webkul\PluginManager\PluginManagerServiceProvider;
 use Webkul\Product\ProductServiceProvider;
 use Webkul\Project\ProjectServiceProvider;
@@ -50,6 +51,7 @@ return [
     MaintenanceServiceProvider::class,
     ManufacturingServiceProvider::class,
     PartnerServiceProvider::class,
+    PessoasServiceProvider::class,
     PaymentServiceProvider::class,
     ProductServiceProvider::class,
     ProjectServiceProvider::class,

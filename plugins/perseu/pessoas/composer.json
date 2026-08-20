@@ -1,0 +1,23 @@
+{
+    "name": "perseu/pessoas",
+    "description": "Cadastro de Pessoas Físicas e Jurídicas do Perseu",
+    "authors": [
+        {
+            "name": "Perseu",
+            "email": "support@aureuserp.in"
+        }
+    ],
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Perseu\\Pessoas\\PessoasServiceProvider"
+            ],
+            "aliases": {}
+        }
+    },
+    "autoload": {
+        "psr-4": {
+            "Perseu\\Pessoas\\": "src/"
+        }
+    }
+}
