@@ -22,6 +22,7 @@ use Perseu\Pessoas\Filament\Clusters\Pessoas\Resources\PessoaFisicaResource\Page
 use Perseu\Pessoas\Filament\Clusters\Pessoas\Resources\PessoaFisicaResource\Pages\ListPessoasFisicas;
 use Perseu\Pessoas\Filament\Clusters\PessoasCluster;
 use Perseu\Pessoas\Models\PessoaFisica;
+use Perseu\Pessoas\Rules\CpfValido;
 use Perseu\Pessoas\Traits\HasCompactFieldWidth;
 
 class PessoaFisicaResource extends Resource
@@ -99,6 +100,7 @@ class PessoaFisicaResource extends Resource
                         TextInput::make('cpf')
                             ->label(__('pessoas::filament/resources/pessoa-fisica.form.cpf'))
                             ->mask('999.999.999-99')
+                            ->rule(new CpfValido())
                             ->unique(ignoreRecord: true),
                         chars: 14, // "999.999.999-99"
                     ),
