@@ -3,6 +3,13 @@
 namespace Perseu\Pessoas;
 
 use Filament\Panel;
+use Illuminate\Support\Facades\Gate;
+use Perseu\Pessoas\Models\CategoriaPessoa;
+use Perseu\Pessoas\Models\PessoaFisica;
+use Perseu\Pessoas\Models\PessoaJuridica;
+use Perseu\Pessoas\Policies\CategoriaPessoaPolicy;
+use Perseu\Pessoas\Policies\PessoaFisicaPolicy;
+use Perseu\Pessoas\Policies\PessoaJuridicaPolicy;
 use Webkul\PluginManager\Console\Commands\InstallCommand;
 use Webkul\PluginManager\Console\Commands\UninstallCommand;
 use Webkul\PluginManager\Package;
@@ -36,7 +43,9 @@ class PessoasServiceProvider extends PackageServiceProvider
 
     public function packageBooted(): void
     {
-        //
+        Gate::policy(CategoriaPessoa::class, CategoriaPessoaPolicy::class);
+        Gate::policy(PessoaFisica::class, PessoaFisicaPolicy::class);
+        Gate::policy(PessoaJuridica::class, PessoaJuridicaPolicy::class);
     }
 
     public function packageRegistered(): void
