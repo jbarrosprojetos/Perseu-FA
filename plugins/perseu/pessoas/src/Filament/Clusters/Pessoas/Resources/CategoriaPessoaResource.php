@@ -54,6 +54,8 @@ class CategoriaPessoaResource extends Resource
                     ->label(__('pessoas::filament/resources/categoria-pessoa.form.aplica-pf')),
                 Toggle::make('aplica_pj')
                     ->label(__('pessoas::filament/resources/categoria-pessoa.form.aplica-pj')),
+                Toggle::make('e_cliente')
+                    ->label(__('pessoas::filament/resources/categoria-pessoa.form.e-cliente')),
             ]);
     }
 
@@ -70,6 +72,9 @@ class CategoriaPessoaResource extends Resource
                     ->boolean(),
                 IconColumn::make('aplica_pj')
                     ->label(__('pessoas::filament/resources/categoria-pessoa.table.columns.aplica-pj'))
+                    ->boolean(),
+                IconColumn::make('e_cliente')
+                    ->label(__('pessoas::filament/resources/categoria-pessoa.table.columns.e-cliente'))
                     ->boolean(),
                 TextColumn::make('created_at')
                     ->label(__('pessoas::filament/resources/categoria-pessoa.table.columns.created-at'))

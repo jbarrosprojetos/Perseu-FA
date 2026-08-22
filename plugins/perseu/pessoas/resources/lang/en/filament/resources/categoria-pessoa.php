@@ -10,9 +10,10 @@ return [
     ],
 
     'form' => [
-        'descricao' => 'Description',
-        'aplica-pf' => 'Applies to Individual',
-        'aplica-pj' => 'Applies to Company',
+        'descricao'  => 'Description',
+        'aplica-pf'  => 'Applies to Individual',
+        'aplica-pj'  => 'Applies to Company',
+        'e-cliente'  => 'Is Customer category?',
     ],
 
     'table' => [
@@ -20,6 +21,7 @@ return [
             'descricao'  => 'Description',
             'aplica-pf'  => 'Individual',
             'aplica-pj'  => 'Company',
+            'e-cliente'  => 'Customer',
             'created-at' => 'Created At',
         ],
 

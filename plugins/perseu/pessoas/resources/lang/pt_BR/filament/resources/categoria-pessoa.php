@@ -10,9 +10,10 @@ return [
     ],
 
     'form' => [
-        'descricao' => 'Descrição',
-        'aplica-pf' => 'Aplica-se a Pessoa Física',
-        'aplica-pj' => 'Aplica-se a Pessoa Jurídica',
+        'descricao'  => 'Descrição',
+        'aplica-pf'  => 'Aplica-se a Pessoa Física',
+        'aplica-pj'  => 'Aplica-se a Pessoa Jurídica',
+        'e-cliente'  => 'É categoria de Cliente?',
     ],
 
     'table' => [
@@ -20,6 +21,7 @@ return [
             'descricao'  => 'Descrição',
             'aplica-pf'  => 'Pessoa Física',
             'aplica-pj'  => 'Pessoa Jurídica',
+            'e-cliente'  => 'Cliente',
             'created-at' => 'Criado em',
         ],
 

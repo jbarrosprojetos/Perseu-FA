@@ -33,6 +33,7 @@ class PessoasServiceProvider extends PackageServiceProvider
                 '2026_08_20_100006_create_pessoa_fisica_endereco_table',
                 '2026_08_20_100007_create_pessoa_juridica_endereco_table',
                 '2026_08_20_100008_create_contatos_table',
+                '2026_08_22_100000_add_e_cliente_to_categorias_pessoa_table',
             ])
             ->runsMigrations()
             ->hasInstallCommand(function (InstallCommand $command) {
