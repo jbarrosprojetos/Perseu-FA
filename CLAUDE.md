@@ -453,3 +453,14 @@ contexto de quem chama.
 Se um plugin fora de `perseu/pessoas`/`perseu/comercial` precisar dessa
 mesma lógica no futuro, isso já está resolvido — `ViaCepLookup` não tem
 nenhuma dependência do plugin Comercial nem de Relation Managers.
+
+## Roadmap — Geração de PDF de Proposta (pendente)
+Ao final do fluxo comercial (Projeto + itens de orçamento, ainda não
+desenvolvidos), o sistema deve gerar um PDF de proposta para o
+cliente, no estilo do documento real da F.A. Marcenaria (cabeçalho
+com dados da obra/contratante/contratada, tabela de itens/serviços
+com valores, condições de pagamento, cláusulas de multa/rescisão,
+assinaturas). O formulário de cadastro em si NÃO precisa espelhar
+visualmente esse documento — só captar os dados necessários para
+gerá-lo. Avaliar o pacote barryvdh/laravel-dompdf (já presente no
+composer.json do projeto) para essa geração.
