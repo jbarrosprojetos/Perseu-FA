@@ -21,7 +21,9 @@ return [
         'pessoa-fisica'   => 'Client (Individual)',
         'pessoa-juridica' => 'Client (Company)',
         'contato'         => 'Contact',
-        'endereco'        => 'Address',
+        'contato-email'   => 'Email',
+        'contato-telefone' => 'Phone',
+        'endereco'        => 'Project Address',
         'endereco-form'   => [
             'cep'         => 'Zip Code',
             'logradouro'  => 'Street',

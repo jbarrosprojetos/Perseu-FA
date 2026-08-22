@@ -59,24 +59,55 @@ class ProjetoResource extends Resource
     {
         return $schema
             ->components([
-                TextInput::make('descricao')
-                    ->label(__('comercial::filament/resources/projeto.form.descricao'))
-                    ->required()
-                    ->maxLength(255)
-                    ->columnSpanFull(),
+                // Linha 1: campos somente leitura/gerados automaticamente —
+                // nenhum deles tem .fi-input-wrp (são Placeholder), por isso
+                // usam compactByLabel() em vez de compact().
+                static::flexRow([
+                    static::compactByLabel(
+                        Placeholder::make('numero_projeto')
+                            ->label(__('comercial::filament/resources/projeto.form.numero-projeto'))
+                            ->content(fn (?Projeto $record) => $record?->numero_projeto
+                                ?? __('comercial::filament/resources/projeto.form.numero-projeto-pendente')),
+                        extraSlack: 2,
+                    ),
+                    static::compactByLabel(
+                        Placeholder::make('revisao_display')
+                            ->label(__('comercial::filament/resources/projeto.form.revisao'))
+                            ->content(fn (?Projeto $record) => str_pad((string) ($record->revisao ?? 0), 2, '0', STR_PAD_LEFT)),
+                    ),
+                    static::compactByLabel(
+                        Placeholder::make('data_cadastro')
+                            ->label(__('comercial::filament/resources/projeto.form.data-cadastro'))
+                            ->content(fn (?Projeto $record) => $record?->data_cadastro?->format('d/m/Y H:i')
+                                ?? __('comercial::filament/resources/projeto.form.data-cadastro-pendente')),
+                        extraSlack: 2,
+                    ),
+                ]),
 
-                static::compact(
-                    Select::make('tipo_projeto_id')
-                        ->label(__('comercial::filament/resources/projeto.form.tipo-projeto'))
-                        ->relationship('tipoProjeto', 'descricao')
-                        ->required()
-                        ->searchable()
-                        ->preload(),
-                    // sem enum para calcular dinamicamente (descrição livre) — revisar
-                    // se os tipos cadastrados passarem a ter descrições bem mais longas.
-                    chars: 24,
-                ),
+                // Linha 2: nome da obra (texto livre, cresce) + tipo (compacto).
+                static::flexRow([
+                    static::grow(
+                        TextInput::make('descricao')
+                            ->label(__('comercial::filament/resources/projeto.form.descricao'))
+                            ->required()
+                            ->maxLength(255),
+                    ),
+                    static::compact(
+                        Select::make('tipo_projeto_id')
+                            ->label(__('comercial::filament/resources/projeto.form.tipo-projeto'))
+                            ->relationship('tipoProjeto', 'descricao')
+                            ->required()
+                            ->searchable()
+                            ->preload(),
+                        // sem enum para calcular dinamicamente (descrição livre) — revisar
+                        // se os tipos cadastrados passarem a ter descrições bem mais longas.
+                        chars: 24,
+                    ),
+                ]),
 
+                // Situações fica em linha própria: é multi-select com badges,
+                // apertar junto de descricao/tipo_projeto_id na linha 2
+                // deixava pouco espaço pros chips quando várias são marcadas.
                 Select::make('situacoes')
                     ->label(__('comercial::filament/resources/projeto.form.situacoes'))
                     ->relationship(name: 'situacoes', titleAttribute: 'descricao')
@@ -85,98 +116,135 @@ class ProjetoResource extends Resource
                     ->searchable()
                     ->columnSpanFull(),
 
-                Radio::make('tipo_contratante')
-                    ->label(__('comercial::filament/resources/projeto.form.tipo-contratante'))
-                    ->options([
-                        'pf' => __('comercial::filament/resources/projeto.form.tipo-contratante-options.pessoa-fisica'),
-                        'pj' => __('comercial::filament/resources/projeto.form.tipo-contratante-options.pessoa-juridica'),
-                    ])
-                    ->live()
-                    ->dehydrated(false)
-                    ->afterStateHydrated(function (Radio $component, ?Model $record): void {
-                        if (! $record) {
-                            return;
-                        }
+                // Linha 3: Radio do Contratante (horizontal, via ->inline())
+                // ao lado do Select de PF ou PJ (só um visível por vez).
+                // Radio não tem .fi-input-wrp nem largura ligada ao label
+                // ("Contratante" é mais curto que as duas opções lado a lado),
+                // por isso a largura é fixada manualmente em vez de usar
+                // compact()/compactByLabel() — calibrada para caber
+                // "Pessoa Física"/"Pessoa Jurídica" lado a lado sem quebrar
+                // linha dentro do próprio Radio.
+                static::flexRow([
+                    Radio::make('tipo_contratante')
+                        ->label(__('comercial::filament/resources/projeto.form.tipo-contratante'))
+                        ->options([
+                            'pf' => __('comercial::filament/resources/projeto.form.tipo-contratante-options.pessoa-fisica'),
+                            'pj' => __('comercial::filament/resources/projeto.form.tipo-contratante-options.pessoa-juridica'),
+                        ])
+                        ->inline()
+                        ->grow(false)
+                        ->extraFieldWrapperAttributes(['style' => 'max-width: 36ch;'], merge: true)
+                        ->live()
+                        ->dehydrated(false)
+                        ->afterStateHydrated(function (Radio $component, ?Model $record): void {
+                            if (! $record) {
+                                return;
+                            }
 
-                        $component->state(match (true) {
-                            filled($record->pessoa_juridica_id) => 'pj',
-                            filled($record->pessoa_fisica_id) => 'pf',
-                            default => null,
-                        });
-                    })
-                    ->afterStateUpdated(function (Set $set, ?string $state): void {
-                        if ($state !== 'pf') {
-                            $set('pessoa_fisica_id', null);
-                        }
+                            $component->state(match (true) {
+                                filled($record->pessoa_juridica_id) => 'pj',
+                                filled($record->pessoa_fisica_id) => 'pf',
+                                default => null,
+                            });
+                        })
+                        ->afterStateUpdated(function (Set $set, ?string $state): void {
+                            if ($state !== 'pf') {
+                                $set('pessoa_fisica_id', null);
+                            }
 
-                        if ($state !== 'pj') {
-                            $set('pessoa_juridica_id', null);
-                            $set('contato_pessoa_fisica_id', null);
-                        }
+                            if ($state !== 'pj') {
+                                $set('pessoa_juridica_id', null);
+                                $set('contato_pessoa_fisica_id', null);
+                            }
 
-                        $set('endereco_id', null);
-                    })
-                    ->required(),
+                            $set('endereco_id', null);
+                        })
+                        ->required(),
 
-                Select::make('pessoa_fisica_id')
-                    ->label(__('comercial::filament/resources/projeto.form.pessoa-fisica'))
-                    ->relationship(
-                        name: 'pessoaFisica',
-                        titleAttribute: 'nome',
-                        modifyQueryUsing: fn (Builder $query) => $query->whereHas(
-                            'categorias',
-                            fn (Builder $query) => $query->where('e_cliente', true),
-                        ),
-                    )
-                    ->searchable()
-                    ->preload()
-                    ->live()
-                    ->afterStateUpdated(fn (Set $set) => $set('endereco_id', null))
-                    ->visible(fn (Get $get) => $get('tipo_contratante') === 'pf')
-                    ->required(fn (Get $get) => $get('tipo_contratante') === 'pf'),
+                    static::grow(
+                        Select::make('pessoa_fisica_id')
+                            ->label(__('comercial::filament/resources/projeto.form.pessoa-fisica'))
+                            ->relationship(
+                                name: 'pessoaFisica',
+                                titleAttribute: 'nome',
+                                modifyQueryUsing: fn (Builder $query) => $query->whereHas(
+                                    'categorias',
+                                    fn (Builder $query) => $query->where('e_cliente', true),
+                                ),
+                            )
+                            ->searchable()
+                            ->preload()
+                            ->live()
+                            ->afterStateUpdated(fn (Set $set) => $set('endereco_id', null))
+                            ->visible(fn (Get $get) => $get('tipo_contratante') === 'pf')
+                            ->required(fn (Get $get) => $get('tipo_contratante') === 'pf'),
+                    ),
 
-                Select::make('pessoa_juridica_id')
-                    ->label(__('comercial::filament/resources/projeto.form.pessoa-juridica'))
-                    ->relationship(
-                        name: 'pessoaJuridica',
-                        titleAttribute: 'nome_fantasia',
-                        modifyQueryUsing: fn (Builder $query) => $query->whereHas(
-                            'categorias',
-                            fn (Builder $query) => $query->where('e_cliente', true),
-                        ),
-                    )
-                    ->searchable()
-                    ->preload()
-                    ->live()
-                    ->afterStateUpdated(function (Set $set): void {
-                        $set('contato_pessoa_fisica_id', null);
-                        $set('endereco_id', null);
-                    })
-                    ->visible(fn (Get $get) => $get('tipo_contratante') === 'pj')
-                    ->required(fn (Get $get) => $get('tipo_contratante') === 'pj'),
+                    static::grow(
+                        Select::make('pessoa_juridica_id')
+                            ->label(__('comercial::filament/resources/projeto.form.pessoa-juridica'))
+                            ->relationship(
+                                name: 'pessoaJuridica',
+                                titleAttribute: 'nome_fantasia',
+                                modifyQueryUsing: fn (Builder $query) => $query->whereHas(
+                                    'categorias',
+                                    fn (Builder $query) => $query->where('e_cliente', true),
+                                ),
+                            )
+                            ->searchable()
+                            ->preload()
+                            ->live()
+                            ->afterStateUpdated(function (Set $set): void {
+                                $set('contato_pessoa_fisica_id', null);
+                                $set('endereco_id', null);
+                            })
+                            ->visible(fn (Get $get) => $get('tipo_contratante') === 'pj')
+                            ->required(fn (Get $get) => $get('tipo_contratante') === 'pj'),
+                    ),
+                ]),
 
-                Select::make('contato_pessoa_fisica_id')
-                    ->label(__('comercial::filament/resources/projeto.form.contato'))
-                    ->options(function (Get $get): array {
-                        $pessoaJuridicaId = $get('pessoa_juridica_id');
+                // Linha do Contato (só PJ): Select + Email/Telefone somente
+                // leitura da Pessoa Física escolhida como contato, ao lado.
+                static::flexRow([
+                    static::grow(
+                        Select::make('contato_pessoa_fisica_id')
+                            ->label(__('comercial::filament/resources/projeto.form.contato'))
+                            ->options(function (Get $get): array {
+                                $pessoaJuridicaId = $get('pessoa_juridica_id');
 
-                        if (blank($pessoaJuridicaId)) {
-                            return [];
-                        }
+                                if (blank($pessoaJuridicaId)) {
+                                    return [];
+                                }
 
-                        return Contato::query()
-                            ->where('pessoa_juridica_id', $pessoaJuridicaId)
-                            ->with('pessoaFisica')
-                            ->get()
-                            ->mapWithKeys(fn (Contato $contato) => [
-                                $contato->pessoa_fisica_id => $contato->pessoaFisica?->nome,
-                            ])
-                            ->filter()
-                            ->toArray();
-                    })
-                    ->searchable()
-                    ->live()
-                    ->visible(fn (Get $get) => $get('tipo_contratante') === 'pj'),
+                                return Contato::query()
+                                    ->where('pessoa_juridica_id', $pessoaJuridicaId)
+                                    ->with('pessoaFisica')
+                                    ->get()
+                                    ->mapWithKeys(fn (Contato $contato) => [
+                                        $contato->pessoa_fisica_id => $contato->pessoaFisica?->nome,
+                                    ])
+                                    ->filter()
+                                    ->toArray();
+                            })
+                            ->searchable()
+                            ->live()
+                            ->visible(fn (Get $get) => $get('tipo_contratante') === 'pj'),
+                    ),
+                    static::compactByLabel(
+                        Placeholder::make('contato_email')
+                            ->label(__('comercial::filament/resources/projeto.form.contato-email'))
+                            ->content(fn (Get $get) => static::contatoSelecionado($get)?->email)
+                            ->visible(fn (Get $get) => $get('tipo_contratante') === 'pj' && filled($get('contato_pessoa_fisica_id'))),
+                        extraSlack: 4,
+                    ),
+                    static::compactByLabel(
+                        Placeholder::make('contato_telefone')
+                            ->label(__('comercial::filament/resources/projeto.form.contato-telefone'))
+                            ->content(fn (Get $get) => static::contatoSelecionado($get)?->telefone)
+                            ->visible(fn (Get $get) => $get('tipo_contratante') === 'pj' && filled($get('contato_pessoa_fisica_id'))),
+                        extraSlack: 2,
+                    ),
+                ]),
 
                 Select::make('endereco_id')
                     ->label(__('comercial::filament/resources/projeto.form.endereco'))
@@ -229,21 +297,14 @@ class ProjetoResource extends Resource
 
                         return $endereco->id;
                     }),
-
-                Placeholder::make('numero_projeto')
-                    ->label(__('comercial::filament/resources/projeto.form.numero-projeto'))
-                    ->content(fn (?Projeto $record) => $record?->numero_projeto
-                        ?? __('comercial::filament/resources/projeto.form.numero-projeto-pendente')),
-
-                Placeholder::make('revisao_display')
-                    ->label(__('comercial::filament/resources/projeto.form.revisao'))
-                    ->content(fn (?Projeto $record) => 'R'.str_pad((string) ($record->revisao ?? 0), 2, '0', STR_PAD_LEFT)),
-
-                Placeholder::make('data_cadastro')
-                    ->label(__('comercial::filament/resources/projeto.form.data-cadastro'))
-                    ->content(fn (?Projeto $record) => $record?->data_cadastro?->format('d/m/Y H:i')
-                        ?? __('comercial::filament/resources/projeto.form.data-cadastro-pendente')),
             ]);
+    }
+
+    protected static function contatoSelecionado(Get $get): ?PessoaFisica
+    {
+        $pessoaFisicaId = $get('contato_pessoa_fisica_id');
+
+        return filled($pessoaFisicaId) ? PessoaFisica::find($pessoaFisicaId) : null;
     }
 
     /**

@@ -79,16 +79,25 @@ trait HasCompactFieldWidth
      * alone). Constrains the field wrapper (.fi-fo-field, the flex item
      * itself) directly via ->extraFieldWrapperAttributes(), since there's
      * no input box whose max-width would otherwise carry it.
+     *
+     * `Filament\Forms\Components\Placeholder` (deprecated, extends
+     * `Infolists\Components\TextEntry`) doesn't have
+     * `extraFieldWrapperAttributes()` at all — that method comes from a
+     * Field-schema concern the Entry class hierarchy doesn't use. For
+     * that case, ->extraAttributes() lands on the entry's own root
+     * wrapper (there's no separate ".fi-fo-field" to target), which
+     * constrains the same visual box since Placeholder has no
+     * ".fi-input-wrp" nesting to worry about either.
      */
     protected static function compactByLabel(mixed $component, int $extraSlack = 0): mixed
     {
         $width = static::labelChars($component) + static::compactFieldSlack() + $extraSlack;
 
-        return $component
-            ->grow(false)
-            ->extraFieldWrapperAttributes([
-                'style' => 'max-width: '.$width.'ch;',
-            ]);
+        $component->grow(false);
+
+        return method_exists($component, 'extraFieldWrapperAttributes')
+            ? $component->extraFieldWrapperAttributes(['style' => 'max-width: '.$width.'ch;'])
+            : $component->extraAttributes(['style' => 'max-width: '.$width.'ch;']);
     }
 
     protected static function flexRowGap(): string
@@ -154,9 +163,17 @@ trait HasCompactFieldWidth
     protected static function flexRow(array $components): Flex
     {
         foreach ($components as $component) {
-            $component->extraFieldWrapperAttributes([
-                'style' => 'margin-right: '.static::flexRowFieldMargin().';',
-            ], merge: true);
+            $style = ['style' => 'margin-right: '.static::flexRowFieldMargin().';'];
+
+            // Placeholder (deprecated Forms component, extends the Infolists
+            // TextEntry hierarchy) has no ".fi-fo-field" wrapper concern, so
+            // it falls back to the component's own ->extraAttributes() —
+            // same target compactByLabel() already uses for it, and Laravel's
+            // ComponentAttributeBag concatenates repeated `style` merges
+            // instead of overwriting, so both end up on the same element.
+            method_exists($component, 'extraFieldWrapperAttributes')
+                ? $component->extraFieldWrapperAttributes($style, merge: true)
+                : $component->extraAttributes($style, merge: true);
         }
 
         return Flex::make($components)

@@ -21,7 +21,9 @@ return [
         'pessoa-fisica'   => 'Cliente (Pessoa Física)',
         'pessoa-juridica' => 'Cliente (Pessoa Jurídica)',
         'contato'         => 'Contato',
-        'endereco'        => 'Endereço',
+        'contato-email'   => 'E-mail',
+        'contato-telefone' => 'Telefone',
+        'endereco'        => 'Endereço da Obra',
         'endereco-form'   => [
             'cep'         => 'CEP',
             'logradouro'  => 'Logradouro',
