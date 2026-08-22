@@ -15,9 +15,8 @@ use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\Http;
 use Perseu\Pessoas\Enums\TipoEndereco;
-use Throwable;
+use Perseu\Pessoas\Support\ViaCepLookup;
 
 /**
  * Shared form()/table() for the Endereços Relation Manager, reused by
@@ -59,7 +58,7 @@ trait HasEnderecoRelationManagerSchema
                     ->label(__("{$prefix}.form.cep"))
                     ->mask('99999-999')
                     ->live(onBlur: true)
-                    ->afterStateUpdated(fn (Set $set, ?string $state) => static::fillAddressFromCep($set, $state)),
+                    ->afterStateUpdated(fn (Set $set, ?string $state) => ViaCepLookup::fill($set, $state)),
                 TextInput::make('logradouro')
                     ->label(__("{$prefix}.form.logradouro")),
                 TextInput::make('numero')
@@ -151,35 +150,5 @@ trait HasEnderecoRelationManagerSchema
         }
 
         return $options;
-    }
-
-    protected static function fillAddressFromCep(Set $set, ?string $cep): void
-    {
-        $digits = preg_replace('/\D/', '', (string) $cep);
-
-        if (strlen($digits) !== 8) {
-            return;
-        }
-
-        try {
-            $response = Http::timeout(5)->get("https://viacep.com.br/ws/{$digits}/json/");
-        } catch (Throwable) {
-            return;
-        }
-
-        if (! $response->successful()) {
-            return;
-        }
-
-        $data = $response->json();
-
-        if (! is_array($data) || ($data['erro'] ?? false)) {
-            return;
-        }
-
-        $set('logradouro', $data['logradouro'] ?? null);
-        $set('bairro', $data['bairro'] ?? null);
-        $set('municipio', $data['localidade'] ?? null);
-        $set('uf', $data['uf'] ?? null);
     }
 }

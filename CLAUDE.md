@@ -415,3 +415,41 @@ pedir "adicionar uma flag para categoria X", a resposta padrão é
 perguntar se existe um módulo do sistema que vai *filtrar* por essa
 categoria de forma programática — se não existir ainda, a Categoria
 comum (sem flag) resolve o caso sem crescer o schema.
+
+## Reaproveitamento de utilitários entre os plugins Pessoas e Comercial
+
+O plugin Comercial já depende diretamente de models do plugin Pessoas
+desde a Fase 1 (`PessoaFisica`, `PessoaJuridica`, `Endereco`, `Contato`
+— FKs de `projetos` apontam para tabelas do Pessoas). Essa dependência
+de Comercial → Pessoas é uma decisão arquitetural já assumida deste
+projeto (Comercial é construído sobre o cadastro de Pessoas, não um
+plugin independente e reutilizável fora deste contexto) — não é
+acoplamento acidental.
+
+Com base nisso, quando o `createOptionForm` de Endereço em
+`ProjetoResource` (Comercial) precisou da mesma busca automática de CEP
+via ViaCEP que já existia em
+`Perseu\Pessoas\Traits\HasEnderecoRelationManagerSchema` (usada pelos
+Relation Managers de Endereços de PessoaFisica/PessoaJuridica), a lógica
+foi **extraída** (não duplicada) para
+`Perseu\Pessoas\Support\ViaCepLookup::fill(Set $set, ?string $cep)` —
+uma classe utilitária pura, sem estado, sem depender de Model/Resource
+específico. O trait `HasEnderecoRelationManagerSchema` foi atualizado
+para delegar a essa classe em vez de manter sua própria cópia
+(`fillAddressFromCep()` foi removido).
+
+Por que extrair para uma classe própria em vez de simplesmente chamar
+`HasEnderecoRelationManagerSchema` direto do Comercial (o método já era
+estático): o nome do trait é `...RelationManagerSchema` — chamá-lo a
+partir de um Resource comum (`ProjetoResource`, que não é um Relation
+Manager e não tem colunas de pivot `tipo`/`principal`) seria uma
+referência enganosa para quem lesse o código depois. `ViaCepLookup` tem
+nome neutro e escopo mínimo (só a consulta ViaCEP + preenchimento dos
+campos), então pode ser chamado de qualquer formulário do projeto que
+tenha os campos `cep`/`logradouro`/`bairro`/`municipio`/`uf`, dentro ou
+fora do plugin Pessoas, sem herdar nada que não faça sentido no
+contexto de quem chama.
+
+Se um plugin fora de `perseu/pessoas`/`perseu/comercial` precisar dessa
+mesma lógica no futuro, isso já está resolvido — `ViaCepLookup` não tem
+nenhuma dependência do plugin Comercial nem de Relation Managers.

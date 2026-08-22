@@ -3,6 +3,13 @@
 namespace Perseu\Comercial;
 
 use Filament\Panel;
+use Illuminate\Support\Facades\Gate;
+use Perseu\Comercial\Models\Projeto;
+use Perseu\Comercial\Models\SituacaoProjeto;
+use Perseu\Comercial\Models\TipoProjeto;
+use Perseu\Comercial\Policies\ProjetoPolicy;
+use Perseu\Comercial\Policies\SituacaoProjetoPolicy;
+use Perseu\Comercial\Policies\TipoProjetoPolicy;
 use Webkul\PluginManager\Console\Commands\InstallCommand;
 use Webkul\PluginManager\Console\Commands\UninstallCommand;
 use Webkul\PluginManager\Package;
@@ -32,7 +39,9 @@ class ComercialServiceProvider extends PackageServiceProvider
 
     public function packageBooted(): void
     {
-        //
+        Gate::policy(SituacaoProjeto::class, SituacaoProjetoPolicy::class);
+        Gate::policy(TipoProjeto::class, TipoProjetoPolicy::class);
+        Gate::policy(Projeto::class, ProjetoPolicy::class);
     }
 
     public function packageRegistered(): void
