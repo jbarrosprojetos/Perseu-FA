@@ -28,6 +28,7 @@ use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Lang;
 use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Unique;
@@ -411,6 +412,38 @@ JS,
             ->toArray());
     }
 
+    /**
+     * getPluginResources()/getPluginPages()/getPluginWidgets() group entities
+     * by the raw PHP namespace segment (e.g. "Field", "PluginManager"), used
+     * verbatim as the Section title in the tabs below — no translation is
+     * ever applied to it. "Pessoas" only ever looked correct by coincidence
+     * (our own namespace segment already is the Portuguese word), not
+     * because any localization mechanism was in play.
+     *
+     * Reuses the plugin display names already translated for the Módulos
+     * screen (plugin-manager::filament/resources/plugin.names.*) instead of
+     * introducing a second, separate translation source. The namespace
+     * segment doesn't always match the plugin's package name 1:1 (e.g.
+     * "Field"/"Partner" namespaces vs. "fields"/"partners" package names),
+     * so an explicit map is used rather than a mechanical Str::kebab() guess.
+     */
+    protected static function getPluginGroupLabel(string $namespaceSegment): string
+    {
+        $packageNameByNamespaceSegment = [
+            'Field'          => 'fields',
+            'Partner'        => 'partners',
+            'Pessoas'        => 'pessoas',
+            'PluginManager'  => 'plugin-manager',
+            'Security'       => 'security',
+            'Support'        => 'support',
+        ];
+
+        $packageName = $packageNameByNamespaceSegment[$namespaceSegment] ?? null;
+        $translationKey = $packageName ? "plugin-manager::filament/resources/plugin.names.{$packageName}" : null;
+
+        return ($translationKey && Lang::has($translationKey)) ? __($translationKey) : $namespaceSegment;
+    }
+
     public static function getResources(): ?array
     {
         return FilamentShield::discoverResources()
@@ -470,7 +503,7 @@ JS,
                     return;
                 }
 
-                return Section::make($key)
+                return Section::make(static::getPluginGroupLabel($key))
                     ->collapsible()
                     ->collapsed()
                     ->persistCollapsed()
@@ -512,7 +545,7 @@ JS,
         return collect(static::getPluginPages())
             ->sortKeys()
             ->map(function ($plugin, $key) {
-                return Section::make($key)
+                return Section::make(static::getPluginGroupLabel($key))
                     ->collapsible()
                     ->collapsed()
                     ->persistCollapsed()
@@ -541,7 +574,7 @@ JS,
         return collect(static::getPluginWidgets())
             ->sortKeys()
             ->map(function ($plugin, $key) {
-                return Section::make($key)
+                return Section::make(static::getPluginGroupLabel($key))
                     ->collapsible()
                     ->collapsed()
                     ->persistCollapsed()
