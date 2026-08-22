@@ -10,19 +10,21 @@ return [
     ],
 
     'form' => [
-        'descricao'  => 'Descrição',
-        'aplica-pf'  => 'Aplica-se a Pessoa Física',
-        'aplica-pj'  => 'Aplica-se a Pessoa Jurídica',
-        'e-cliente'  => 'É categoria de Cliente?',
+        'descricao'    => 'Descrição',
+        'aplica-pf'    => 'Aplica-se a Pessoa Física',
+        'aplica-pj'    => 'Aplica-se a Pessoa Jurídica',
+        'e-cliente'    => 'É categoria de Cliente?',
+        'e-fornecedor' => 'É categoria de Fornecedor?',
     ],
 
     'table' => [
         'columns' => [
-            'descricao'  => 'Descrição',
-            'aplica-pf'  => 'Pessoa Física',
-            'aplica-pj'  => 'Pessoa Jurídica',
-            'e-cliente'  => 'Cliente',
-            'created-at' => 'Criado em',
+            'descricao'    => 'Descrição',
+            'aplica-pf'    => 'Pessoa Física',
+            'aplica-pj'    => 'Pessoa Jurídica',
+            'e-cliente'    => 'Cliente',
+            'e-fornecedor' => 'Fornecedor',
+            'created-at'   => 'Criado em',
         ],
 
         'actions' => [

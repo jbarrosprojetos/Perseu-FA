@@ -14,12 +14,14 @@ class CategoriaPessoa extends Model
         'aplica_pf',
         'aplica_pj',
         'e_cliente',
+        'e_fornecedor',
     ];
 
     protected $casts = [
-        'aplica_pf' => 'boolean',
-        'aplica_pj' => 'boolean',
-        'e_cliente' => 'boolean',
+        'aplica_pf'    => 'boolean',
+        'aplica_pj'    => 'boolean',
+        'e_cliente'    => 'boolean',
+        'e_fornecedor' => 'boolean',
     ];
 
     public function pessoasFisicas(): BelongsToMany

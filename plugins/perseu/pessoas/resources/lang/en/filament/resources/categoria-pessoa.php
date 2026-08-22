@@ -10,19 +10,21 @@ return [
     ],
 
     'form' => [
-        'descricao'  => 'Description',
-        'aplica-pf'  => 'Applies to Individual',
-        'aplica-pj'  => 'Applies to Company',
-        'e-cliente'  => 'Is Customer category?',
+        'descricao'    => 'Description',
+        'aplica-pf'    => 'Applies to Individual',
+        'aplica-pj'    => 'Applies to Company',
+        'e-cliente'    => 'Is Customer category?',
+        'e-fornecedor' => 'Is Supplier category?',
     ],
 
     'table' => [
         'columns' => [
-            'descricao'  => 'Description',
-            'aplica-pf'  => 'Individual',
-            'aplica-pj'  => 'Company',
-            'e-cliente'  => 'Customer',
-            'created-at' => 'Created At',
+            'descricao'    => 'Description',
+            'aplica-pf'    => 'Individual',
+            'aplica-pj'    => 'Company',
+            'e-cliente'    => 'Customer',
+            'e-fornecedor' => 'Supplier',
+            'created-at'   => 'Created At',
         ],
 
         'actions' => [

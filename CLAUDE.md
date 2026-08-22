@@ -379,3 +379,39 @@ Aplicado em `EditPessoaJuridica` (Relation Managers de Endereços e
 Contatos) e `EditPessoaFisica` (Relation Manager de Endereços, desde a
 Fase 3). Reaproveitar em qualquer página `Edit{Xxx}` futura que ganhe
 seu primeiro Relation Manager.
+
+## Flags de sistema em Categoria de Pessoa — decisão consciente de escopo limitado
+
+A tabela `categorias_pessoa` tem duas colunas booleanas dedicadas,
+além dos campos de aplicação a PF/PJ: `e_cliente` e `e_fornecedor`
+(ambas `boolean`, default `false`, adicionadas em migrations
+separadas — `2026_08_22_100000_add_e_cliente_to_categorias_pessoa_table`
+e `2026_08_22_100001_add_e_fornecedor_to_categorias_pessoa_table`).
+
+Essas são, deliberadamente, as **únicas** flags de sistema fixas nessa
+tabela. A razão: "Cliente" e "Fornecedor" são os dois papéis que
+módulos do sistema precisam poder filtrar de forma confiável e
+estável — o plugin Comercial (futuro) precisa saber quem pode ser
+Contratante em Projetos a partir de `e_cliente`; o módulo de Compras
+(futuro) precisará de `e_fornecedor` de forma análoga. Um filtro assim
+não pode depender de nomenclatura livre da categoria (ex: confiar que
+uma categoria chamada "Clientes" sempre vai se chamar exatamente
+"Clientes") — precisa de uma coluna estável e sem ambiguidade.
+
+Qualquer outro papel ou classificação adicional que apareça no futuro
+(ex: "Parceiro", "Representante", "Transportadora") **não** deve virar
+automaticamente um novo campo `e_algumaCoisa` na tabela. O caminho
+padrão para isso é uma Categoria de Pessoa comum (uma "tag" livre, sem
+flag de sistema dedicada) — o cadastro de Categorias já suporta isso
+sem qualquer alteração de schema. Antes de adicionar um novo campo
+booleano fixo do mesmo tipo de `e_cliente`/`e_fornecedor`, reavaliar
+essa decisão com o cliente: o custo de uma migration + coluna
+dedicada só se justifica quando um módulo do sistema realmente precisa
+filtrar por esse papel de forma confiável, não para toda classificação
+que surgir.
+
+Ponto de atenção para consultas futuras/manual do sistema: se alguém
+pedir "adicionar uma flag para categoria X", a resposta padrão é
+perguntar se existe um módulo do sistema que vai *filtrar* por essa
+categoria de forma programática — se não existir ainda, a Categoria
+comum (sem flag) resolve o caso sem crescer o schema.
