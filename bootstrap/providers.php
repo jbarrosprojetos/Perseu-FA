@@ -3,6 +3,7 @@
 use App\Providers\AppServiceProvider;
 use App\Providers\Filament\AdminPanelProvider;
 use App\Providers\Filament\CustomerPanelProvider;
+use Perseu\Comercial\ComercialServiceProvider;
 use Webkul\Account\AccountServiceProvider;
 use Webkul\Accounting\AccountingServiceProvider;
 use Webkul\Analytic\AnalyticServiceProvider;
@@ -43,6 +44,7 @@ return [
     BarcodeServiceProvider::class,
     BlogServiceProvider::class,
     ChatterServiceProvider::class,
+    ComercialServiceProvider::class,
     ContactServiceProvider::class,
     EmployeeServiceProvider::class,
     FieldServiceProvider::class,

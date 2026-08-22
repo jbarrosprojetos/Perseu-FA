@@ -1,0 +1,23 @@
+{
+    "name": "perseu/comercial",
+    "description": "Gestão comercial de Projetos do Perseu",
+    "authors": [
+        {
+            "name": "Perseu",
+            "email": "support@aureuserp.in"
+        }
+    ],
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Perseu\\Comercial\\ComercialServiceProvider"
+            ],
+            "aliases": {}
+        }
+    },
+    "autoload": {
+        "psr-4": {
+            "Perseu\\Comercial\\": "src/"
+        }
+    }
+}
