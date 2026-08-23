@@ -38,6 +38,9 @@ class AdminPanelProvider extends PanelProvider
         FilamentAsset::register([
             Css::make('admin-topbar', resource_path('css/filament/admin-topbar.css')),
             Css::make('admin-select', resource_path('css/filament/admin-select.css')),
+            Css::make('admin-entry-label', resource_path('css/filament/admin-entry-label.css')),
+            Css::make('admin-radio-gap', resource_path('css/filament/admin-radio-gap.css')),
+            Css::make('admin-entry-content', resource_path('css/filament/admin-entry-content.css')),
         ]);
     }
 

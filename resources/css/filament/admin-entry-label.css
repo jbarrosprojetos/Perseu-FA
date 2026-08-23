@@ -1,0 +1,45 @@
+/*
+ * Equaliza a tipografia do label de campos somente leitura
+ * (Filament\Forms\Components\Placeholder) com a dos campos editáveis
+ * normais (TextInput, Select, etc).
+ *
+ * Causa raiz: Placeholder é uma classe deprecated que estende
+ * Infolists\Components\TextEntry (não Forms\Components\Field) — seu
+ * label é renderizado por
+ * vendor/filament/infolists/resources/views/components/entry-wrapper.blade.php
+ * com a classe ".fi-in-entry-label", vinda de
+ * vendor/filament/infolists/resources/css/components/entry.css
+ * (".fi-in-entry-label { text-sm font-medium text-gray-950 }" —
+ * 14px/font-medium/quase preto). Já o label de um campo editável de
+ * verdade usa ".fi-fo-field-label-content"
+ * (vendor/filament/forms .../field-wrapper.blade.php), e o tema Bonsai
+ * (qalainau/bonsai-theme) sobrescreve especificamente ESSA classe para
+ * deixá-la menor/mais leve — ver ".fi-fo-field .fi-fo-field-label-content"
+ * em vendor/qalainau/bonsai-theme/resources/css/bonsai.css (12px,
+ * font-weight 500, cor cinza). O Bonsai não tem NENHUMA regra para
+ * ".fi-in-entry-label" (Placeholder/Infolist não é o alvo do tema), por
+ * isso Placeholder ficou com a tipografia PADRÃO do Filament (maior,
+ * mais escura) enquanto os demais campos ficaram com a tipografia densa
+ * do Bonsai — a diferença visual reportada.
+ *
+ * Correção: aplicar em ".fi-in-entry-label" exatamente os mesmos valores
+ * que o Bonsai já aplica em ".fi-fo-field-label-content", para os dois
+ * ficarem visualmente idênticos. entry.css é importado no layer
+ * "components" do Tailwind (`@import './components/entry.css'
+ * layer(components);`) — CSS de autor sem @layer (como este arquivo)
+ * já vence CSS em layer automaticamente, mesmo sem !important (mesmo
+ * mecanismo documentado em admin-topbar.css), mas !important + prefixo
+ * ".fi-panel-admin" (maior especificidade) são mantidos por consistência
+ * com os outros overrides deste projeto que convivem com o Bonsai.
+ */
+
+.fi-panel-admin .fi-in-entry-label {
+    font-size: 0.75rem !important;
+    line-height: 1rem !important;
+    font-weight: 500 !important;
+    color: #4b5563 !important;
+}
+
+:is(.dark) .fi-panel-admin .fi-in-entry-label {
+    color: #9ca3af !important;
+}

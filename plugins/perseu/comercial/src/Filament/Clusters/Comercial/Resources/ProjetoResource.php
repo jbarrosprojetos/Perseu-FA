@@ -10,6 +10,8 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Html;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
@@ -28,12 +30,9 @@ use Perseu\Pessoas\Models\Endereco;
 use Perseu\Pessoas\Models\PessoaFisica;
 use Perseu\Pessoas\Models\PessoaJuridica;
 use Perseu\Pessoas\Support\ViaCepLookup;
-use Perseu\Pessoas\Traits\HasCompactFieldWidth;
 
 class ProjetoResource extends Resource
 {
-    use HasCompactFieldWidth;
-
     protected static ?string $model = Projeto::class;
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-clipboard-document-list';
@@ -62,143 +61,137 @@ class ProjetoResource extends Resource
         // default 2 — confirmado via HTML renderizado, mesmo default que
         // PessoaFisicaResource/PessoaJuridicaResource usam). Cada componente
         // de nível mais alto que NÃO chama ->columnSpanFull() ocupa só 1 das
-        // 2 colunas (--col-span-default: span 1 / span 1) e o grid faz
-        // auto-placement lado a lado — por isso os 3 blocos (2x flexRow() +
-        // endereco_id) apareciam emparelhados horizontalmente em vez de
-        // empilhados. static::flexRow() e static::compact()/compactByLabel()
-        // controlam a largura dos campos DENTRO de cada linha, mas não têm
-        // nenhuma relação com o columnSpan do BLOCO inteiro no grid do
-        // formulário — os 3 blocos de nível mais alto precisam de
-        // ->columnSpanFull() explícito para ocupar a linha inteira e forçar
-        // quebra antes do próximo bloco, independente da largura interna que
-        // cada flexRow já calibra.
-        // Nome da Obra (Linha 1) e o Select de Cliente (Linha 2) precisam
-        // da MESMA largura final para ficarem alinhados visualmente, uma
-        // coluna embaixo da outra — mesma constante nos dois lugares em vez
-        // de repetir o literal, pra não desalinhar se um dos dois mudar
-        // sem o outro no futuro. pessoa_fisica_id/pessoa_juridica_id são
-        // Select (não passam por static::compact(), que já soma
-        // static::selectIconSlack() automaticamente — são só ->grow() com
-        // max-width manual), então a folga extra dos ícones internos do
-        // Select (X de limpar + seta) é somada aqui à mão; descricao (um
-        // TextInput comum, sem esses ícones) herda a mesma largura maior
-        // só pelo vínculo de alinhamento, não porque precise da folga.
-        $larguraDescricaoECliente = 'max-width: '.(48 + static::selectIconSlack()).'ch;';
+        // 2 colunas e o grid faz auto-placement lado a lado — por isso os
+        // blocos de nível mais alto (as duas Grid::make(12) e o Select de
+        // Endereço) precisam de ->columnSpanFull() explícito, independente
+        // do columnSpan() interno de cada campo dentro deles.
+        //
+        // Layout por Grid::make(12) + columnSpan() numérico por campo, em
+        // vez do antigo padrão Flex (static::flexRow() + HasCompactFieldWidth
+        // ::compact()/compactByLabel(), calibrado por caractere/ch) — ver
+        // "Grid vs. static::flexRow()" no CLAUDE.md. Como aqui NENHUM campo
+        // precisa "absorver" sobra de espaço (todo campo tem uma largura
+        // fixa em número de colunas, não uma largura calculada por
+        // conteúdo), Grid é o mecanismo correto — a ressalva do CLAUDE.md
+        // contra Grid (linha que mistura compactos com um campo de largura
+        // "normal" que deve crescer) não se aplica. O trait
+        // HasCompactFieldWidth deixou de ser usado neste Resource.
+        //
+        // Nome da Obra (Linha 1, columnSpan 4) e o Select de Cliente
+        // (Linha 2, columnSpan 4) ficam alinhados verticalmente porque
+        // ambos são o 2º item de cada Grid::make(12) e têm a MESMA soma de
+        // columnSpan antes deles (numero_projeto+revisao+data_cadastro = 3
+        // na Linha 1; tipo_contratante = 3 na Linha 2) — alinhamento vem da
+        // posição na grid, não de um max-width em comum calibrado à mão
+        // como antes.
+        //
+        // Grid::make(N) tem seu próprio gap zerado pelo Bonsai
+        // (`.fi-sc.fi-sc-has-gap { gap: 0 !important; }`, que cobre o
+        // "fi-sc" que TODO Schema — inclusive o schema filho de um Grid —
+        // recebe; ver alerta do Bonsai no CLAUDE.md), por isso o gap é
+        // restaurado aqui via extraAttributes com !important, mesma técnica
+        // já usada em HasCompactFieldWidth::flexRow().
+        $gridGap = ['style' => 'gap: 1rem !important;'];
 
         return $schema
             ->components([
-                // Linha 1 (consolidada): numero_projeto/revisao/data_cadastro
-                // (compactByLabel — são Placeholder, sem .fi-input-wrp) +
-                // descricao (cresce, mas com teto — "nome da obra" não
-                // precisa ocupar metade da tela) + tipo_projeto_id (compacto)
-                // + situacoes (cresce, sem teto). Com dois campos crescendo
-                // (descricao e situacoes) e descricao tendo max-width, o
-                // algoritmo de flexbox devolve o espaço que descricao não usa
-                // para situacoes assim que ela bate no teto — dá "mais
-                // respiro" pro multi-select de badges sem precisar de um peso
-                // de flex-grow explícito (a API grow() do Filament é só
-                // booleana, não aceita peso).
-                static::flexRow([
-                    static::compactByLabel(
+                // Linha 1: numero_projeto/revisao/data_cadastro (1 coluna
+                // cada) + descricao "Nome da Obra" (4) + tipo_projeto_id (2)
+                // + situacoes (3) = 12 colunas.
+                Grid::make(12)
+                    ->columnSpanFull()
+                    ->extraAttributes($gridGap)
+                    ->schema([
+                        // fi-entry-bold: classe própria (ver
+                        // resources/css/filament/admin-entry-content.css) pra
+                        // aplicar negrito só ao VALOR desses 3 campos —
+                        // contato_email/contato_telefone (abaixo, Linha 2)
+                        // recebem a correção de tipografia/alinhamento do
+                        // mesmo CSS, mas sem essa classe, então sem negrito.
                         Placeholder::make('numero_projeto')
                             ->label(__('comercial::filament/resources/projeto.form.numero-projeto'))
                             ->content(fn (?Projeto $record) => $record?->numero_projeto
-                                ?? __('comercial::filament/resources/projeto.form.numero-projeto-pendente')),
-                        extraSlack: 2,
-                    ),
-                    static::compactByLabel(
+                                ?? __('comercial::filament/resources/projeto.form.numero-projeto-pendente'))
+                            ->extraAttributes(['class' => 'fi-entry-bold'])
+                            ->columnSpan(1),
                         Placeholder::make('revisao_display')
                             ->label(__('comercial::filament/resources/projeto.form.revisao'))
-                            ->content(fn (?Projeto $record) => str_pad((string) ($record->revisao ?? 0), 2, '0', STR_PAD_LEFT)),
-                    ),
-                    static::compactByLabel(
+                            ->content(fn (?Projeto $record) => str_pad((string) ($record->revisao ?? 0), 2, '0', STR_PAD_LEFT))
+                            ->extraAttributes(['class' => 'fi-entry-bold'])
+                            ->columnSpan(1),
                         Placeholder::make('data_cadastro')
                             ->label(__('comercial::filament/resources/projeto.form.data-cadastro'))
                             ->content(fn (?Projeto $record) => $record?->data_cadastro?->format('d/m/Y H:i')
-                                ?? __('comercial::filament/resources/projeto.form.data-cadastro-pendente')),
-                        extraSlack: 2,
-                    ),
-                    static::grow(
+                                ?? __('comercial::filament/resources/projeto.form.data-cadastro-pendente'))
+                            ->extraAttributes(['class' => 'fi-entry-bold'])
+                            ->columnSpan(1),
                         TextInput::make('descricao')
                             ->label(__('comercial::filament/resources/projeto.form.descricao'))
                             ->required()
-                            ->maxLength(255),
-                    )->extraAttributes(['style' => $larguraDescricaoECliente], merge: true),
-                    static::compact(
+                            ->maxLength(255)
+                            ->columnSpan(4),
                         Select::make('tipo_projeto_id')
                             ->label(__('comercial::filament/resources/projeto.form.tipo-projeto'))
                             ->relationship('tipoProjeto', 'descricao')
                             ->required()
                             ->searchable()
-                            ->preload(),
-                        // sem enum para calcular dinamicamente (descrição livre) — revisar
-                        // se os tipos cadastrados passarem a ter descrições bem mais longas.
-                        chars: 24,
-                    ),
-                    static::grow(
+                            ->preload()
+                            ->columnSpan(2),
                         Select::make('situacoes')
                             ->label(__('comercial::filament/resources/projeto.form.situacoes'))
                             ->relationship(name: 'situacoes', titleAttribute: 'descricao')
                             ->multiple()
                             ->preload()
-                            ->searchable(),
-                    ),
-                ])->columnSpanFull(),
+                            ->searchable()
+                            ->columnSpan(3),
+                    ]),
 
-                // Linha 2: tudo relacionado ao contratante/contato numa
-                // linha só — Radio do Contratante (horizontal, via
-                // ->inline()), Select de Cliente (PF ou PJ, só um visível
-                // por vez, cresce no espaço restante), Contato, E-mail e
-                // Telefone (compact(), largura calibrada pelo valor
-                // esperado — ver comentários abaixo).
-                //
-                // Radio não tem .fi-input-wrp nem largura ligada ao label
-                // ("Contratante" é mais curto que as duas opções lado a lado),
-                // por isso a largura é fixada manualmente em vez de usar
-                // compact()/compactByLabel() — calibrada para caber "Física"/
-                // "Jurídica" lado a lado sem quebrar linha dentro do próprio
-                // Radio. 22ch (calibrado numa tarefa anterior, proporcional
-                // aos labels curtos "Física"/"Jurídica") deixava as duas
-                // opções visualmente espremidas; 30ch dá mais respiro sem
-                // desalinhar o resto da linha.
-                static::flexRow([
-                    Radio::make('tipo_contratante')
-                        ->label(__('comercial::filament/resources/projeto.form.tipo-contratante'))
-                        ->options([
-                            'pf' => __('comercial::filament/resources/projeto.form.tipo-contratante-options.pessoa-fisica'),
-                            'pj' => __('comercial::filament/resources/projeto.form.tipo-contratante-options.pessoa-juridica'),
-                        ])
-                        ->inline()
-                        ->grow(false)
-                        ->extraFieldWrapperAttributes(['style' => 'max-width: 30ch;'], merge: true)
-                        ->live()
-                        ->dehydrated(false)
-                        ->afterStateHydrated(function (Radio $component, ?Model $record): void {
-                            if (! $record) {
-                                return;
-                            }
+                // Linha 2: tipo_contratante (Radio Física/Jurídica, 3) +
+                // Select de Cliente — pessoa_fisica_id OU pessoa_juridica_id,
+                // ambos no mesmo columnSpan(4), logo após o Radio; só um
+                // fica ->visible() por vez conforme o Radio, então o outro
+                // simplesmente não é renderizado e não deixa buraco na
+                // grid — + Contato (2) + Email do Contato (2) + Telefone do
+                // Contato (1) = 12 colunas.
+                Grid::make(12)
+                    ->columnSpanFull()
+                    ->extraAttributes($gridGap)
+                    ->schema([
+                        Radio::make('tipo_contratante')
+                            ->label(__('comercial::filament/resources/projeto.form.tipo-contratante'))
+                            ->options([
+                                'pf' => __('comercial::filament/resources/projeto.form.tipo-contratante-options.pessoa-fisica'),
+                                'pj' => __('comercial::filament/resources/projeto.form.tipo-contratante-options.pessoa-juridica'),
+                            ])
+                            ->inline()
+                            ->live()
+                            ->dehydrated(false)
+                            ->afterStateHydrated(function (Radio $component, ?Model $record): void {
+                                if (! $record) {
+                                    return;
+                                }
 
-                            $component->state(match (true) {
-                                filled($record->pessoa_juridica_id) => 'pj',
-                                filled($record->pessoa_fisica_id) => 'pf',
-                                default => null,
-                            });
-                        })
-                        ->afterStateUpdated(function (Set $set, ?string $state): void {
-                            if ($state !== 'pf') {
-                                $set('pessoa_fisica_id', null);
-                            }
+                                $component->state(match (true) {
+                                    filled($record->pessoa_juridica_id) => 'pj',
+                                    filled($record->pessoa_fisica_id) => 'pf',
+                                    default => null,
+                                });
+                            })
+                            ->afterStateUpdated(function (Set $set, ?string $state): void {
+                                if ($state !== 'pf') {
+                                    $set('pessoa_fisica_id', null);
+                                }
 
-                            if ($state !== 'pj') {
-                                $set('pessoa_juridica_id', null);
-                                $set('contato_pessoa_fisica_id', null);
-                            }
+                                if ($state !== 'pj') {
+                                    $set('pessoa_juridica_id', null);
+                                    $set('contato_pessoa_fisica_id', null);
+                                }
 
-                            $set('endereco_id', null);
-                        })
-                        ->required(),
+                                $set('endereco_id', null);
+                            })
+                            ->required()
+                            ->columnSpan(3),
 
-                    static::grow(
                         Select::make('pessoa_fisica_id')
                             ->label(__('comercial::filament/resources/projeto.form.pessoa-fisica'))
                             ->relationship(
@@ -214,10 +207,9 @@ class ProjetoResource extends Resource
                             ->live()
                             ->afterStateUpdated(fn (Set $set) => $set('endereco_id', null))
                             ->visible(fn (Get $get) => $get('tipo_contratante') === 'pf')
-                            ->required(fn (Get $get) => $get('tipo_contratante') === 'pf'),
-                    )->extraAttributes(['style' => $larguraDescricaoECliente], merge: true),
+                            ->required(fn (Get $get) => $get('tipo_contratante') === 'pf')
+                            ->columnSpan(4),
 
-                    static::grow(
                         Select::make('pessoa_juridica_id')
                             ->label(__('comercial::filament/resources/projeto.form.pessoa-juridica'))
                             ->relationship(
@@ -236,24 +228,9 @@ class ProjetoResource extends Resource
                                 $set('endereco_id', null);
                             })
                             ->visible(fn (Get $get) => $get('tipo_contratante') === 'pj')
-                            ->required(fn (Get $get) => $get('tipo_contratante') === 'pj'),
-                    )->extraAttributes(['style' => $larguraDescricaoECliente], merge: true),
+                            ->required(fn (Get $get) => $get('tipo_contratante') === 'pj')
+                            ->columnSpan(4),
 
-                    // Contato/E-mail/Telefone (só PJ), na mesma linha do
-                    // Radio/Cliente acima. Contato usava static::grow() (sem
-                    // teto) e ocupava espaço demais, sobrando pouco pros dois
-                    // Placeholder ao lado — trocado para compact() com
-                    // largura fixa (~metade do que ocupava antes). compact()
-                    // funciona em Placeholder também (só depende de
-                    // ->extraAttributes(), que ambas hierarquias de
-                    // componente têm — diferente de compactByLabel(), que
-                    // dependia do fallback pra extraFieldWrapperAttributes).
-                    // Email/telefone também passaram de compactByLabel() (que
-                    // só olha o tamanho do LABEL, "E-mail"/"Telefone", bem
-                    // mais curto que o VALOR real exibido) para compact() com
-                    // chars calibrados pelo conteúdo — era essa a causa da
-                    // quebra de linha reportada.
-                    static::compact(
                         Select::make('contato_pessoa_fisica_id')
                             ->label(__('comercial::filament/resources/projeto.form.contato'))
                             ->options(function (Get $get): array {
@@ -275,36 +252,25 @@ class ProjetoResource extends Resource
                             })
                             ->searchable()
                             ->live()
-                            ->visible(fn (Get $get) => $get('tipo_contratante') === 'pj'),
-                        // nome de pessoa — sem formato fixo, valor aproximado
-                        // pra caber a maioria dos nomes sem exagerar na largura
-                        // (testado com "Contato Layout Teste 2", 22 chars).
-                        chars: 24,
-                    ),
-                    static::compact(
+                            ->visible(fn (Get $get) => $get('tipo_contratante') === 'pj')
+                            ->columnSpan(2),
+
                         Placeholder::make('contato_email')
                             ->label(__('comercial::filament/resources/projeto.form.contato-email'))
                             ->content(fn (Get $get) => static::contatoSelecionado($get)?->email)
-                            ->visible(fn (Get $get) => $get('tipo_contratante') === 'pj' && filled($get('contato_pessoa_fisica_id'))),
-                        // testado com "financeiro.contato@empresateste.com.br"
-                        // (39 chars, e-mail corporativo real usado em teste) —
-                        // 38 cobre esse caso e a maioria dos e-mails
-                        // corporativos comuns; e-mails bem mais longos que
-                        // isso ainda podem quebrar linha dentro da caixa, é
-                        // um teto razoável, não absoluto.
-                        chars: 38,
-                    ),
-                    static::compact(
+                            ->visible(fn (Get $get) => $get('tipo_contratante') === 'pj' && filled($get('contato_pessoa_fisica_id')))
+                            ->columnSpan(2),
+
                         Placeholder::make('contato_telefone')
                             ->label(__('comercial::filament/resources/projeto.form.contato-telefone'))
                             ->content(fn (Get $get) => static::contatoSelecionado($get)?->telefone)
-                            ->visible(fn (Get $get) => $get('tipo_contratante') === 'pj' && filled($get('contato_pessoa_fisica_id'))),
-                        // "(99) 99999-9999" = 16 chars, mesmo formato usado
-                        // no campo telefone de PessoaFisica/PessoaJuridica.
-                        chars: 16,
-                    ),
-                ])->columnSpanFull(),
+                            ->visible(fn (Get $get) => $get('tipo_contratante') === 'pj' && filled($get('contato_pessoa_fisica_id')))
+                            ->columnSpan(1),
+                    ]),
 
+                // Linha 3: Endereço da Obra sozinho, largura total — não
+                // precisa de Grid, o próprio campo com columnSpanFull() já
+                // ocupa a linha inteira.
                 Select::make('endereco_id')
                     ->label(__('comercial::filament/resources/projeto.form.endereco'))
                     ->options(function (Get $get): array {
@@ -357,6 +323,25 @@ class ProjetoResource extends Resource
 
                         return $endereco->id;
                     }),
+
+                // Linha 4: respiro visual entre Endereço e os botões
+                // Salvar/Cancelar. Não existe um componente "spacer"
+                // dedicado em filament/schemas (mesma lacuna documentada no
+                // CLAUDE.md para o Divider entre form/Relation Manager) —
+                // Html::make() com um <div> de altura fixa é o mecanismo
+                // idiomático disponível pra isso (mesmo usado no CLAUDE.md
+                // para o <hr> de divisor). Deliberadamente NÃO foi usado gap
+                // aqui: o container do Schema de nível mais alto também tem
+                // sua classe "fi-sc-has-gap" zerada pelo Bonsai (mesma regra
+                // que afeta os dois Grid::make(12) acima), e um valor de gap
+                // só teria efeito visual se sobrescrito com !important, sem
+                // nenhuma vantagem sobre simplesmente dar altura própria a
+                // um elemento real — o <div> abaixo ocupa espaço no fluxo
+                // normal do documento por conta própria, então não depende
+                // de gap nenhum (nem precisa de !important: height não é
+                // uma das propriedades que o Bonsai força).
+                Html::make('<div style="height: 3rem;"></div>')
+                    ->columnSpanFull(),
             ]);
     }
 

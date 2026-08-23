@@ -33,10 +33,10 @@ return [
             'municipio'   => 'City',
             'uf'          => 'State',
         ],
-        'numero-projeto'          => 'Project Number',
+        'numero-projeto'          => 'Project',
         'numero-projeto-pendente' => 'Automatically generated on save',
         'revisao'                 => 'Revision',
-        'data-cadastro'           => 'Registration Date',
+        'data-cadastro'           => 'Registered on:',
         'data-cadastro-pendente'  => 'Automatically filled on save',
     ],
 

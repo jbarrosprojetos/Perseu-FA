@@ -15,8 +15,8 @@ return [
         'situacoes'      => 'Situações',
         'tipo-contratante' => 'Contratante',
         'tipo-contratante-options' => [
-            'pessoa-fisica'   => 'Física',
-            'pessoa-juridica' => 'Jurídica',
+            'pessoa-fisica'   => 'Pessoa Física',
+            'pessoa-juridica' => 'Pessoa Jurídica',
         ],
         'pessoa-fisica'   => 'Cliente (Pessoa Física)',
         'pessoa-juridica' => 'Cliente (Pessoa Jurídica)',
@@ -33,10 +33,10 @@ return [
             'municipio'   => 'Município',
             'uf'          => 'UF',
         ],
-        'numero-projeto'          => 'Número do Projeto',
+        'numero-projeto'          => 'Projeto',
         'numero-projeto-pendente' => 'Gerado automaticamente ao salvar',
         'revisao'                 => 'Revisão',
-        'data-cadastro'           => 'Data de Cadastro',
+        'data-cadastro'           => 'Cadastrado em:',
         'data-cadastro-pendente'  => 'Preenchida automaticamente ao salvar',
     ],
 
