@@ -121,7 +121,7 @@ class ProjetoResource extends Resource
                             ->columnSpan(1),
                         Placeholder::make('data_cadastro')
                             ->label(__('comercial::filament/resources/projeto.form.data-cadastro'))
-                            ->content(fn (?Projeto $record) => $record?->data_cadastro?->format('d/m/Y H:i')
+                            ->content(fn (?Projeto $record) => $record?->data_cadastro?->format('d/m/Y')
                                 ?? __('comercial::filament/resources/projeto.form.data-cadastro-pendente'))
                             ->extraAttributes(['class' => 'fi-entry-bold'])
                             ->columnSpan(1),

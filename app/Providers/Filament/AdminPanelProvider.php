@@ -41,6 +41,7 @@ class AdminPanelProvider extends PanelProvider
             Css::make('admin-entry-label', resource_path('css/filament/admin-entry-label.css')),
             Css::make('admin-radio-gap', resource_path('css/filament/admin-radio-gap.css')),
             Css::make('admin-entry-content', resource_path('css/filament/admin-entry-content.css')),
+            Css::make('admin-select-badge', resource_path('css/filament/admin-select-badge.css')),
         ]);
     }
 

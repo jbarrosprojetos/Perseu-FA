@@ -1,0 +1,39 @@
+/*
+ * Equaliza o tamanho de fonte dos badges/tags de valores selecionados
+ * num Select ->multiple() (ex: campo "situacoes" em ProjetoResource,
+ * que exibe "Negociação" etc. como badge) com o tamanho padrão dos
+ * demais campos.
+ *
+ * Causa raiz: cada valor selecionado num Select multiple é renderizado
+ * via JS (vendor/filament/support/resources/js/utilities/select.js,
+ * método addBadge()/equivalente) com a classe genérica
+ * ".fi-badge fi-size-md ..." (o mesmo componente Badge usado em
+ * qualquer lugar do painel, ex: colunas de tabela) — não algo
+ * específico do Select. vendor/filament/support/resources/css/
+ * components/badge.css define ".fi-badge { @apply text-xs ... }"
+ * (12px) como base, e não existe uma variante "fi-size-md" que
+ * sobrescreva isso (só "fi-size-xs"/"fi-size-sm" existem em
+ * badge.css), então mesmo o Filament "puro" já usa 12px aqui — menor
+ * que os 13px usados nos outros campos deste tema denso.
+ *
+ * O Bonsai (qalainau/bonsai-theme) tem uma regra ATIVA para
+ * ".fi-badge" (bonsai.css: "font-size: 11px !important;"), reduzindo
+ * ainda mais — provavelmente pensada para badges de tabela (status,
+ * contadores), onde um texto bem pequeno faz sentido pra densidade,
+ * mas o mesmo componente Badge é reaproveitado aqui pros valores de um
+ * Select multiple, onde o resultado (11px) destoa visivelmente do
+ * texto ao redor (13px).
+ *
+ * Diferente das correções anteriores desta sessão, aqui NÃO
+ * sobrescrevemos ".fi-badge" globalmente — isso afetaria também
+ * badges de tabela (fora do escopo desta tarefa, e onde o tamanho
+ * reduzido do Bonsai pode ser intencional). O seletor é escopado a
+ * ".fi-select-input-value-badges-ctn" (o container dos badges de valor
+ * selecionado DENTRO de um Select, vendor/filament/support/resources/
+ * css/components/input/select.css), afetando só esse contexto.
+ */
+
+.fi-panel-admin .fi-select-input-value-badges-ctn .fi-badge {
+    font-size: 13px !important;
+    line-height: 1.25rem !important;
+}
