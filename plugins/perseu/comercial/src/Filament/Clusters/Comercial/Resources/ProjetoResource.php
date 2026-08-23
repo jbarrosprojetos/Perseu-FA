@@ -76,8 +76,14 @@ class ProjetoResource extends Resource
         // da MESMA largura final para ficarem alinhados visualmente, uma
         // coluna embaixo da outra — mesma constante nos dois lugares em vez
         // de repetir o literal, pra não desalinhar se um dos dois mudar
-        // sem o outro no futuro.
-        $larguraDescricaoECliente = 'max-width: 48ch;';
+        // sem o outro no futuro. pessoa_fisica_id/pessoa_juridica_id são
+        // Select (não passam por static::compact(), que já soma
+        // static::selectIconSlack() automaticamente — são só ->grow() com
+        // max-width manual), então a folga extra dos ícones internos do
+        // Select (X de limpar + seta) é somada aqui à mão; descricao (um
+        // TextInput comum, sem esses ícones) herda a mesma largura maior
+        // só pelo vínculo de alinhamento, não porque precise da folga.
+        $larguraDescricaoECliente = 'max-width: '.(48 + static::selectIconSlack()).'ch;';
 
         return $schema
             ->components([

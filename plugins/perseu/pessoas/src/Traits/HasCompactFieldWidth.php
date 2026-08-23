@@ -2,6 +2,7 @@
 
 namespace Perseu\Pessoas\Traits;
 
+use Filament\Forms\Components\Select;
 use Filament\Schemas\Components\Flex;
 
 /**
@@ -28,6 +29,33 @@ trait HasCompactFieldWidth
     }
 
     /**
+     * Extra slack (on top of compactFieldSlack()) for `Select` — unlike a
+     * plain `TextInput`, a non-native Select (any Select with
+     * ->searchable() and/or ->multiple(), which is effectively every
+     * Select in this project — see HasOptions/CanBeSearchable in
+     * Filament\Forms\Components\Select::isNative()) renders through the
+     * JS "choices" component instead of a bare `<select>`, which draws a
+     * clear ("X") button AND a dropdown chevron INSIDE the same
+     * `.fi-input-wrp` box the value text sits in. Neither icon is part of
+     * the character count, so without this the selected option's text
+     * visually collides with/hides behind them — reported with
+     * `tipo_projeto_id`/`contato_pessoa_fisica_id`/`pessoa_fisica_id`/
+     * `pessoa_juridica_id` in Comercial's ProjetoResource and confirmed
+     * also affecting `estado_civil`/`sexo` in Pessoas' PessoaFisicaResource
+     * (same compact() call, same missing slack — not something specific
+     * to Comercial).
+     */
+    protected static function selectIconSlack(): int
+    {
+        return 6;
+    }
+
+    protected static function extraSlackFor(mixed $component): int
+    {
+        return $component instanceof Select ? static::selectIconSlack() : 0;
+    }
+
+    /**
      * Also works for `Placeholder`/`TextEntry` (no `.fi-input-wrp`, since
      * it's not really an input) — ->extraAttributes() lands on its own
      * root wrapper in that case, which is exactly the box that needs the
@@ -46,7 +74,7 @@ trait HasCompactFieldWidth
         // removes the mismatch instead of just letting the label overflow.
         $chars = max($chars, static::labelChars($component));
 
-        $width = $chars + static::compactFieldSlack() + $extraSlack;
+        $width = $chars + static::compactFieldSlack() + $extraSlack + static::extraSlackFor($component);
 
         // Filament wraps TextInput/Select/DatePicker's <input>/<select> in an
         // outer ".fi-input-wrp" div, which is the element that actually
@@ -100,7 +128,7 @@ trait HasCompactFieldWidth
      */
     protected static function compactByLabel(mixed $component, int $extraSlack = 0): mixed
     {
-        $width = static::labelChars($component) + static::compactFieldSlack() + $extraSlack;
+        $width = static::labelChars($component) + static::compactFieldSlack() + $extraSlack + static::extraSlackFor($component);
 
         $component->grow(false);
 

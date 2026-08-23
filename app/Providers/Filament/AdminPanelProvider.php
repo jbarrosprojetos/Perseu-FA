@@ -3,6 +3,7 @@
 namespace App\Providers\Filament;
 
 use App\Http\Middleware\ApplyBrandSettings;
+use App\Http\Middleware\ControlDebugbarVisibility;
 use App\Http\Middleware\SetLocale;
 use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
 use Filament\Actions\Action;
@@ -36,6 +37,7 @@ class AdminPanelProvider extends PanelProvider
     {
         FilamentAsset::register([
             Css::make('admin-topbar', resource_path('css/filament/admin-topbar.css')),
+            Css::make('admin-select', resource_path('css/filament/admin-select.css')),
         ]);
     }
 
@@ -113,6 +115,7 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->authMiddleware([
                 Authenticate::class,
+                ControlDebugbarVisibility::class,
             ])
             ->multiFactorAuthentication([
                 AppAuthentication::make()

@@ -23,6 +23,26 @@ return [
 
     /*
      |--------------------------------------------------------------------------
+     | Force allow enable
+     |--------------------------------------------------------------------------
+     |
+     | Sem isso, o ServiceProvider do pacote nem registra os listeners/rotas
+     | que fazem a Debugbar aparecer quando app.debug (APP_DEBUG) é false ou
+     | o ambiente é "production"/"testing" (ver
+     | Fruitcake\LaravelDebugbar\LaravelDebugbar::canBeEnabled()) — nesse
+     | caso, chamar Debugbar::enable() em runtime (ver
+     | App\Http\Middleware\ControlDebugbarVisibility) não teria nenhum
+     | efeito, porque a "cola" que injeta a barra na resposta simplesmente
+     | não existe. Precisa ficar true para o controle por Role/Guard
+     | Sanctum funcionar independente de APP_DEBUG — ver "Controle de
+     | visibilidade da Debugbar via Role com Guard Sanctum" no CLAUDE.md.
+     |
+     */
+
+    'force_allow_enable' => env('DEBUGBAR_FORCE_ALLOW_ENABLE', true),
+
+    /*
+     |--------------------------------------------------------------------------
      | Storage settings
      |--------------------------------------------------------------------------
      |

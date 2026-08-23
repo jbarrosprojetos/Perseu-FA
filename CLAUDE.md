@@ -454,6 +454,70 @@ Se um plugin fora de `perseu/pessoas`/`perseu/comercial` precisar dessa
 mesma lógica no futuro, isso já está resolvido — `ViaCepLookup` não tem
 nenhuma dependência do plugin Comercial nem de Relation Managers.
 
+## Controle de visibilidade da Debugbar via Role com Guard Sanctum
+
+A barra de Debug (`barryvdh/laravel-debugbar`, mostra queries SQL,
+models carregados, tempo de execução, etc.) **não** é controlada por
+`APP_DEBUG` neste projeto — ela fica condicionada a o usuário
+autenticado possuir pelo menos uma Role (Função) com
+`guard_name = 'sanctum'`, independente do que estiver configurado no
+`.env`.
+
+### Mecanismo
+
+- `Webkul\Security\Models\User::$guard_name = ['web', 'sanctum']` (ver
+  AUDITORIA-ESTRUTURA.md) — um usuário pode ter roles em qualquer um
+  dos dois guards. `HasRoles::roles()` (Spatie Permission) retorna as
+  roles do usuário em QUALQUER guard, sem filtrar — o filtro por
+  `guard_name = 'sanctum'` é feito manualmente
+  (`$user->roles()->where('guard_name', 'sanctum')->exists()`).
+- Middleware `App\Http\Middleware\ControlDebugbarVisibility`, registrado
+  no array `->authMiddleware([Authenticate::class,
+  ControlDebugbarVisibility::class])` de `AdminPanelProvider` (roda
+  DEPOIS do `Authenticate`, garantindo `$request->user()` já resolvido)
+  — a cada requisição autenticada, chama
+  `app(Fruitcake\LaravelDebugbar\LaravelDebugbar::class)->enable()` se o
+  usuário tiver a role, ou `->disable()` caso contrário.
+- `config/debugbar.php` ganhou a chave `'force_allow_enable' =>
+  env('DEBUGBAR_FORCE_ALLOW_ENABLE', true)` (ausente na versão
+  publicada originalmente, mas já suportada pelo pacote). Sem isso,
+  `Fruitcake\LaravelDebugbar\LaravelDebugbar::canBeEnabled()` retorna
+  `false` sempre que `APP_DEBUG=false` (ou `APP_ENV` for
+  `production`/`testing`), e nesse caso o
+  `ServiceProvider::boot()` do pacote faz um *early return* — os
+  listeners que injetam a barra na resposta (`RequestHandled`) e as
+  rotas de assets nunca chegam a ser registrados. Chamar
+  `Debugbar::enable()` em runtime não teria nenhum efeito nesse cenário,
+  porque a "cola" que liga a Debugbar à resposta HTTP simplesmente não
+  existiria — daí essa chave precisar ficar sempre `true` pro controle
+  por Role funcionar de fato independente de `APP_DEBUG`.
+
+### Como habilitar a Debugbar para um usuário
+
+1. Configurações > Funções > Nova Função.
+2. Preencher "Guard" com **Sanctum** (não "Web" — as roles usadas para
+   permissões normais do painel usam guard `web`; esta é
+   deliberadamente uma role "técnica" separada, sem nenhuma permissão
+   de Filament Shield associada a ela).
+3. Salvar e atribuir essa Função ao usuário (Segurança > Usuários >
+   editar o usuário > aba de Roles).
+4. Da próxima requisição em diante (não precisa logout/login), a barra
+   aparece para esse usuário.
+
+Uma role "Sistema" (guard `sanctum`) já existe neste ambiente para
+esse fim.
+
+### Por que por Role/Guard em vez de só `APP_DEBUG`
+
+`APP_DEBUG` é global — vale para TODOS os usuários e expõe a Debugbar
+(que mostra queries SQL, stack traces, etc.) para qualquer um com
+acesso ao painel enquanto estiver ligado, inclusive em ambientes tipo
+staging. Condicionar por Role permite ligar a barra para uma pessoa
+específica (ex: o próprio desenvolvedor investigando um problema
+pontual) sem expor esse nível de detalhe a todo mundo — inclusive em
+produção, se necessário, sem precisar mexer no `.env` nem reiniciar
+nada.
+
 ## Roadmap — Geração de PDF de Proposta (pendente)
 Ao final do fluxo comercial (Projeto + itens de orçamento, ainda não
 desenvolvidos), o sistema deve gerar um PDF de proposta para o
