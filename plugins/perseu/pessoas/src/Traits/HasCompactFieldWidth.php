@@ -27,6 +27,15 @@ trait HasCompactFieldWidth
         return 2;
     }
 
+    /**
+     * Also works for `Placeholder`/`TextEntry` (no `.fi-input-wrp`, since
+     * it's not really an input) — ->extraAttributes() lands on its own
+     * root wrapper in that case, which is exactly the box that needs the
+     * max-width. Confirmed via HTML render (Comercial's ProjetoResource
+     * uses this for read-only Email/Telefone Placeholders next to a
+     * Select, sized by the expected VALUE, not just the label — see
+     * compactByLabel() for the case where only the label length matters).
+     */
     protected static function compact(mixed $component, int $chars, int $extraSlack = 0): mixed
     {
         // The label sits on its own line above the input but is part of the

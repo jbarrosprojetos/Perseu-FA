@@ -15,8 +15,8 @@ return [
         'situacoes'      => 'Situações',
         'tipo-contratante' => 'Contratante',
         'tipo-contratante-options' => [
-            'pessoa-fisica'   => 'Pessoa Física',
-            'pessoa-juridica' => 'Pessoa Jurídica',
+            'pessoa-fisica'   => 'Física',
+            'pessoa-juridica' => 'Jurídica',
         ],
         'pessoa-fisica'   => 'Cliente (Pessoa Física)',
         'pessoa-juridica' => 'Cliente (Pessoa Jurídica)',
