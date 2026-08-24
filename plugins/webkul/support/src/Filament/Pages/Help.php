@@ -8,10 +8,10 @@ use Filament\Pages\Page;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Schema;
 use Illuminate\Contracts\Support\Htmlable;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\HtmlString;
 use Webkul\Support\Enums\NavigationGroup;
 use Webkul\Support\Settings\BrandSettings;
+use Webkul\Support\Support\BrandAssetResolver;
 
 class Help extends Page
 {
@@ -42,7 +42,7 @@ class Help extends Page
     {
         $brand = settings(BrandSettings::class);
 
-        $faviconUrl = $this->resolveBrandAsset($brand->favicon);
+        $faviconUrl = BrandAssetResolver::resolve($brand->favicon);
 
         $logo = '';
 
@@ -51,23 +51,6 @@ class Help extends Page
         }
 
         return new HtmlString('<span class="inline-flex items-center gap-3">'.$logo.'<span>Perseu MRP</span></span>');
-    }
-
-    protected function resolveBrandAsset(?string $path): ?string
-    {
-        if (blank($path)) {
-            return null;
-        }
-
-        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://') || str_starts_with($path, '//')) {
-            return $path;
-        }
-
-        if (Storage::disk('public')->exists($path)) {
-            return Storage::disk('public')->url($path);
-        }
-
-        return asset($path);
     }
 
     public function getSubheading(): ?string
