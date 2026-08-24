@@ -528,3 +528,28 @@ assinaturas). O formulário de cadastro em si NÃO precisa espelhar
 visualmente esse documento — só captar os dados necessários para
 gerá-lo. Avaliar o pacote barryvdh/laravel-dompdf (já presente no
 composer.json do projeto) para essa geração.
+
+## Decisão pendente: plugin de Tarefas (webkul/projects) + integração
+Decidido manter o plugin "projects" do AureusERP instalado (não é
+mais só teste), para servir dois propósitos: (1) tarefas/iniciativas
+internas criadas manualmente pela direção (ex: mutirão de limpeza,
+inventário, prospecção de clientes) e (2) tarefas automáticas geradas
+pelo nosso Comercial\Projeto, vinculadas a uma Obra real.
+
+Duas questões em aberto, a decidir DEPOIS que o plugin estiver
+estável e em uso real (não decidir prematuramente):
+
+1. Vínculo entre nosso Perseu\Comercial\Projeto e o Project do plugin
+   de tarefas: Opção A (criar um Project espelho por Obra, mais
+   organizado, exige sincronização) vs. Opção B (um Project único
+   "guarda-chuva", mais simples, referência só em texto). Definir
+   quando formos implementar a automação de criação de tarefas,
+   analisando o momento certo de disparo (ex: mudança de Situação do
+   Projeto).
+
+2. Nome final: cogitando renomear nosso Perseu\Comercial\Projeto para
+   "Obra" ou "Proposta" (mantendo o plugin de tarefas como
+   "Projetos"/"Projects"), OU manter nosso nome como está e renomear
+   o plugin de tarefas para algo tipo "Tarefas". Decisão a tomar após
+   uso real de ambos, para ver qual nomenclatura reflete melhor o
+   dia a dia da empresa.
