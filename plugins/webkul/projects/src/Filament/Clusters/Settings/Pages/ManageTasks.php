@@ -9,6 +9,7 @@ use Filament\Schemas\Schema;
 use Illuminate\Support\HtmlString;
 use Webkul\Project\Filament\Clusters\Configurations\Resources\TaskStageResource;
 use Webkul\Project\Settings\TaskSettings;
+use Webkul\Support\Enums\NavigationGroup;
 use Webkul\Support\Filament\Clusters\Settings;
 
 class ManageTasks extends SettingsPage
@@ -17,11 +18,14 @@ class ManageTasks extends SettingsPage
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-clipboard-document-check';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Project';
-
     protected static string $settings = TaskSettings::class;
 
     protected static ?string $cluster = Settings::class;
+
+    public static function getNavigationGroup(): string|\UnitEnum
+    {
+        return NavigationGroup::Project;
+    }
 
     public function getBreadcrumbs(): array
     {

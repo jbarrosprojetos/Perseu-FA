@@ -7,6 +7,7 @@ use Filament\Forms\Components\Toggle;
 use Filament\Pages\SettingsPage;
 use Filament\Schemas\Schema;
 use Webkul\Project\Settings\TimeSettings;
+use Webkul\Support\Enums\NavigationGroup;
 use Webkul\Support\Filament\Clusters\Settings;
 
 class ManageTime extends SettingsPage
@@ -15,11 +16,14 @@ class ManageTime extends SettingsPage
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-clock';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Project';
-
     protected static string $settings = TimeSettings::class;
 
     protected static ?string $cluster = Settings::class;
+
+    public static function getNavigationGroup(): string|\UnitEnum
+    {
+        return NavigationGroup::Project;
+    }
 
     public function getBreadcrumbs(): array
     {

@@ -15,8 +15,6 @@ class TaskByStageChart extends ChartWidget
 {
     use HasWidgetShield, InteractsWithPageFilters;
 
-    protected ?string $heading = 'Tasks By Stage';
-
     protected ?string $maxHeight = '250px';
 
     protected static ?int $sort = 1;

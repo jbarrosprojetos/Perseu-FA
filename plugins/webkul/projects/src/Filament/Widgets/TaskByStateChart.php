@@ -16,8 +16,6 @@ class TaskByStateChart extends ChartWidget
 {
     use HasWidgetShield, InteractsWithPageFilters;
 
-    protected ?string $heading = 'Tasks By State';
-
     protected ?string $maxHeight = '250px';
 
     protected static ?int $sort = 1;

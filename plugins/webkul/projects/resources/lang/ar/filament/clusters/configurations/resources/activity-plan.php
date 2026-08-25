@@ -82,7 +82,8 @@ return [
     ],
 
     'infolist' => [
-        'name'   => 'الاسم',
-        'status' => 'الحالة',
+        'general-information' => 'معلومات عامة',
+        'name'                => 'الاسم',
+        'status'              => 'الحالة',
     ],
 ];

@@ -179,7 +179,7 @@ class ActivityPlanResource extends Resource
     {
         return $schema
             ->components([
-                Section::make('General Information')
+                Section::make(__('projects::filament/clusters/configurations/resources/activity-plan.infolist.general-information'))
                     ->schema([
                         TextEntry::make('name')
                             ->label(__('projects::filament/clusters/configurations/resources/activity-plan.infolist.name'))
