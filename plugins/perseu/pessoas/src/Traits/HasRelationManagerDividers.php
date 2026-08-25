@@ -38,17 +38,20 @@ trait HasRelationManagerDividers
      * Save/Cancel buttons, regardless of which field happens to be last
      * inside the embedded form.
      *
-     * The qalainau/bonsai-theme package installed in this project ships
-     * `.fi-sc-form, .fi-sc-form.fi-dense { gap: 0 !important; }` as part
-     * of its zero-gap, high-density design. An author stylesheet's
-     * !important always wins over a non-important inline style
-     * regardless of specificity, so this needs its own `!important` to
-     * actually win — without it, every gap value tried here (4rem, then
-     * 6rem) was silently zeroed out with no visible effect. Confirmed by
-     * reading vendor/qalainau/bonsai-theme/resources/css/bonsai.css;
-     * Bonsai ships no config/exclusion mechanism to opt specific
-     * elements out (its plugin class only registers a static CSS file,
-     * nothing else).
+     * The qalainau/bonsai-theme package, installed in this project until
+     * it was removed for good (see CLAUDE.md), shipped `.fi-sc-form,
+     * .fi-sc-form.fi-dense { gap: 0 !important; }` as part of its
+     * zero-gap, high-density design. An author stylesheet's !important
+     * always wins over a non-important inline style regardless of
+     * specificity, so this needed its own `!important` to actually win —
+     * without it, every gap value tried here (4rem, then 6rem) was
+     * silently zeroed out with no visible effect. Confirmed at the time
+     * by reading vendor/qalainau/bonsai-theme/resources/css/bonsai.css;
+     * Bonsai shipped no config/exclusion mechanism to opt specific
+     * elements out (its plugin class only registered a static CSS file,
+     * nothing else). Kept even after Bonsai's removal: harmless without
+     * a competing !important, and cheap insurance against another
+     * package doing the same thing later.
      *
      * Once the !important actually started winning, 6rem (picked while
      * the gap had no visible effect, to compensate for the "Endereços"

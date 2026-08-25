@@ -45,8 +45,22 @@ identidade da EMPRESA CLIENTE que usa o sistema (ex: topbar). Ao
 adicionar imagens de marca em novas telas, considerar qual das duas
 identidades faz sentido em cada contexto.
 
-## Tema Bonsai (qalainau/bonsai-theme) sobrescreve gap/espaçamento com !important
-O pacote `qalainau/bonsai-theme` está instalado e ativo neste projeto
+## Tema Bonsai (qalainau/bonsai-theme) — REMOVIDO definitivamente em 2026-08-24
+**O pacote `qalainau/bonsai-theme` foi removido do projeto em
+2026-08-24** (`composer remove qalainau/bonsai-theme`, plugin retirado
+de `AdminPanelProvider`, CSS de correção de conflitos específicos dele
+apagados — `admin-select.css`, `admin-entry-label.css`,
+`admin-entry-content.css`, `admin-radio-gap.css`). Motivo: conflitos
+recorrentes de espaçamento/tipografia com qualquer tela ou plugin fora
+dos nossos próprios módulos (`perseu/pessoas`, `perseu/comercial`), que
+já têm sistema de compactação independente (`HasCompactFieldWidth`,
+`HasRelationManagerDividers`) e não dependem do Bonsai para densidade
+visual — o custo de investigar e corrigir cada novo conflito superou o
+benefício do tema. **Não está mais ativo no projeto.** O restante desta
+seção é mantido como registro histórico da investigação (útil se algo
+parecido for cogitado no futuro), não como estado atual.
+
+O pacote estava instalado e ativo neste projeto até a remoção acima
 (registrado como plugin Filament em `AdminPanelProvider`), para deixar
 o painel mais denso. O CSS dele
 (`vendor/qalainau/bonsai-theme/resources/css/bonsai.css`) zera

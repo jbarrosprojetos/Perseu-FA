@@ -4,6 +4,7 @@ namespace Webkul\Project\Filament\Widgets;
 
 use BezhanSalleh\FilamentShield\Traits\HasWidgetShield;
 use Exception;
+use Filament\Facades\Filament;
 use Filament\Widgets\ChartWidget;
 use Filament\Widgets\Concerns\InteractsWithPageFilters;
 use Illuminate\Contracts\Support\Htmlable;
@@ -24,6 +25,16 @@ class TaskByStateChart extends ChartWidget
     protected static function getPagePermission(): ?string
     {
         return 'widget_project_task_by_state_chart';
+    }
+
+    public static function canView(): bool
+    {
+        $permission = static::getWidgetPermission();
+        $user = Filament::auth()?->user();
+
+        return $permission && $user
+            ? $user->can($permission)
+            : true;
     }
 
     public function getHeading(): string|Htmlable|null

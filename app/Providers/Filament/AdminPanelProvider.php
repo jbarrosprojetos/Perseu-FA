@@ -26,7 +26,6 @@ use Illuminate\Session\Middleware\AuthenticateSession;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
-use Qalainau\BonsaiTheme\BonsaiThemePlugin;
 use Webkul\Support\Enums\NavigationGroup;
 use Webkul\Support\Filament\Pages\Profile;
 use Webkul\Support\GlobalSearchProvider;
@@ -37,10 +36,6 @@ class AdminPanelProvider extends PanelProvider
     {
         FilamentAsset::register([
             Css::make('admin-topbar', resource_path('css/filament/admin-topbar.css')),
-            Css::make('admin-select', resource_path('css/filament/admin-select.css')),
-            Css::make('admin-entry-label', resource_path('css/filament/admin-entry-label.css')),
-            Css::make('admin-radio-gap', resource_path('css/filament/admin-radio-gap.css')),
-            Css::make('admin-entry-content', resource_path('css/filament/admin-entry-content.css')),
             Css::make('admin-select-badge', resource_path('css/filament/admin-select-badge.css')),
         ]);
     }
@@ -101,7 +96,6 @@ class AdminPanelProvider extends PanelProvider
                         'default' => 1,
                         'sm'      => 2,
                     ]),
-                BonsaiThemePlugin::make(),
             ])
             ->globalSearch(provider: GlobalSearchProvider::class)
             ->middleware([

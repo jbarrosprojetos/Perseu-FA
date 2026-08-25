@@ -3,6 +3,7 @@
 namespace Webkul\Project\Filament\Widgets;
 
 use BezhanSalleh\FilamentShield\Traits\HasWidgetShield;
+use Filament\Facades\Filament;
 use Filament\Widgets\ChartWidget;
 use Filament\Widgets\Concerns\InteractsWithPageFilters;
 use Illuminate\Contracts\Support\Htmlable;
@@ -23,6 +24,16 @@ class TaskByStageChart extends ChartWidget
     protected static function getPagePermission(): ?string
     {
         return 'widget_project_task_by_stage_chart';
+    }
+
+    public static function canView(): bool
+    {
+        $permission = static::getWidgetPermission();
+        $user = Filament::auth()?->user();
+
+        return $permission && $user
+            ? $user->can($permission)
+            : true;
     }
 
     public function getHeading(): string|Htmlable|null

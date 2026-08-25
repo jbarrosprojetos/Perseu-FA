@@ -3,6 +3,7 @@
 namespace Webkul\Project\Filament\Widgets;
 
 use BezhanSalleh\FilamentShield\Traits\HasWidgetShield;
+use Filament\Facades\Filament;
 use Filament\Widgets\Concerns\InteractsWithPageFilters;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
@@ -20,6 +21,16 @@ class StatsOverviewWidget extends BaseWidget
     protected static function getPagePermission(): ?string
     {
         return 'widget_project_stats_overview_widget';
+    }
+
+    public static function canView(): bool
+    {
+        $permission = static::getWidgetPermission();
+        $user = Filament::auth()?->user();
+
+        return $permission && $user
+            ? $user->can($permission)
+            : true;
     }
 
     protected function getHeading(): ?string

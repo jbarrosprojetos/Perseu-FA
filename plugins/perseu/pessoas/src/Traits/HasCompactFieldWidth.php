@@ -174,15 +174,19 @@ trait HasCompactFieldWidth
      * flexRowGap()) via ->extraAttributes(['style' => 'gap: ...']).
      *
      * That inline style needs its own !important: the qalainau/bonsai-theme
-     * package installed in this project ships `.fi-sc-flex, .fi-sc-flex.fi-dense
-     * { gap: 0 !important; }` (its whole design is zero-gap, high-density
-     * forms), and an author stylesheet's !important always wins over a
+     * package, installed in this project until it was removed for good
+     * (see CLAUDE.md), shipped `.fi-sc-flex, .fi-sc-flex.fi-dense { gap: 0
+     * !important; }` (its whole design was zero-gap, high-density forms),
+     * and an author stylesheet's !important always wins over a
      * non-important inline style regardless of specificity — a plain
      * inline `gap: 2ch` here was silently overridden back to 0 the entire
-     * time this trait existed, with no visible effect. Confirmed by
-     * reading vendor/qalainau/bonsai-theme/resources/css/bonsai.css.
+     * time Bonsai was active, with no visible effect. Confirmed at the
+     * time by reading vendor/qalainau/bonsai-theme/resources/css/bonsai.css.
      * ->extraAttributes()'s style value is used verbatim, so `!important`
      * in the string is all that's needed — no Filament API for it.
+     * Kept even after Bonsai's removal: harmless without a competing
+     * !important, and cheap insurance against another package doing the
+     * same thing later.
      *
      * On top of the container gap, every field also gets its own
      * margin-right (static::flexRowFieldMargin()) on its outermost

@@ -3,6 +3,7 @@
 namespace Webkul\Project\Filament\Widgets;
 
 use BezhanSalleh\FilamentShield\Traits\HasWidgetShield;
+use Filament\Facades\Filament;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Filament\Widgets\Concerns\InteractsWithPageFilters;
@@ -23,6 +24,16 @@ class TopAssigneesWidget extends BaseWidget
     protected static function getPagePermission(): ?string
     {
         return 'widget_project_top_assignees_widget';
+    }
+
+    public static function canView(): bool
+    {
+        $permission = static::getWidgetPermission();
+        $user = Filament::auth()?->user();
+
+        return $permission && $user
+            ? $user->can($permission)
+            : true;
     }
 
     protected function getTableHeading(): string|Htmlable|null

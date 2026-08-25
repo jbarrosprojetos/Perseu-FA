@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "976bac9d64bd7b44c9ae724c6d675f79",
+    "content-hash": "6b938c0d5528231a5bf5907fa48c6a1c",
     "packages": [
         {
             "name": "anourvalar/eloquent-serialize",
@@ -7770,58 +7770,6 @@
                 "source": "https://github.com/bobthecow/psysh/tree/v0.12.24"
             },
             "time": "2026-06-29T15:41:09+00:00"
-        },
-        {
-            "name": "qalainau/bonsai-theme",
-            "version": "v0.1.0",
-            "source": {
-                "type": "git",
-                "url": "https://github.com/qalainau/filament-bonsai-theme.git",
-                "reference": "7a066d6b26bd0ca1a104d9a4e587b64538fc6233"
-            },
-            "dist": {
-                "type": "zip",
-                "url": "https://api.github.com/repos/qalainau/filament-bonsai-theme/zipball/7a066d6b26bd0ca1a104d9a4e587b64538fc6233",
-                "reference": "7a066d6b26bd0ca1a104d9a4e587b64538fc6233",
-                "shasum": ""
-            },
-            "require": {
-                "filament/filament": "^5.0",
-                "php": "^8.2",
-                "spatie/laravel-package-tools": "^1.16"
-            },
-            "type": "library",
-            "extra": {
-                "laravel": {
-                    "providers": [
-                        "Qalainau\\BonsaiTheme\\BonsaiThemeServiceProvider"
-                    ]
-                }
-            },
-            "autoload": {
-                "psr-4": {
-                    "Qalainau\\BonsaiTheme\\": "src/"
-                }
-            },
-            "notification-url": "https://packagist.org/downloads/",
-            "license": [
-                "MIT"
-            ],
-            "description": "High-density, compact UI theme for Filament v5",
-            "keywords": [
-                "bonsai",
-                "compact",
-                "filament",
-                "high-density",
-                "japanese",
-                "laravel",
-                "theme"
-            ],
-            "support": {
-                "issues": "https://github.com/qalainau/filament-bonsai-theme/issues",
-                "source": "https://github.com/qalainau/filament-bonsai-theme/tree/v0.1.0"
-            },
-            "time": "2026-05-01T14:38:50+00:00"
         },
         {
             "name": "ralouphie/getallheaders",
