@@ -15,8 +15,8 @@ use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Perseu\Pessoas\Filament\Clusters\Pessoas\Resources\CategoriaPessoaResource\Pages\ManageCategoriaPessoas;
-use Perseu\Pessoas\Filament\Clusters\PessoasCluster;
 use Perseu\Pessoas\Models\CategoriaPessoa;
+use Webkul\Support\Enums\NavigationGroup;
 
 class CategoriaPessoaResource extends Resource
 {
@@ -24,7 +24,12 @@ class CategoriaPessoaResource extends Resource
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-tag';
 
-    protected static ?string $cluster = PessoasCluster::class;
+    protected static ?string $slug = 'pessoas/categoria-pessoas';
+
+    public static function getNavigationGroup(): string|\UnitEnum
+    {
+        return NavigationGroup::Pessoas;
+    }
 
     public static function getModelLabel(): string
     {

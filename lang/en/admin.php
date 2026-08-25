@@ -12,6 +12,8 @@ return [
         'maintenance'   => 'Maintenance',
         'manufacturing' => 'Manufacturing',
         'project'       => 'Project',
+        'pessoas'       => 'People',
+        'comercial'     => 'Sales',
         'employee'      => 'Employees',
         'time-off'      => 'Time Off',
         'recruitment'   => 'Recruitments',

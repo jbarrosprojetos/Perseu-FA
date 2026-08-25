@@ -21,10 +21,10 @@ use Perseu\Pessoas\Filament\Clusters\Pessoas\Resources\PessoaFisicaResource\Page
 use Perseu\Pessoas\Filament\Clusters\Pessoas\Resources\PessoaFisicaResource\Pages\EditPessoaFisica;
 use Perseu\Pessoas\Filament\Clusters\Pessoas\Resources\PessoaFisicaResource\Pages\ListPessoasFisicas;
 use Perseu\Pessoas\Filament\Clusters\Pessoas\Resources\PessoaFisicaResource\RelationManagers\EnderecosRelationManager;
-use Perseu\Pessoas\Filament\Clusters\PessoasCluster;
 use Perseu\Pessoas\Models\PessoaFisica;
 use Perseu\Pessoas\Rules\CpfValido;
 use Perseu\Pessoas\Traits\HasCompactFieldWidth;
+use Webkul\Support\Enums\NavigationGroup;
 
 class PessoaFisicaResource extends Resource
 {
@@ -34,9 +34,12 @@ class PessoaFisicaResource extends Resource
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-user';
 
-    protected static ?string $cluster = PessoasCluster::class;
+    protected static ?string $slug = 'pessoas/pessoas-fisicas';
 
-    protected static ?string $slug = 'pessoas-fisicas';
+    public static function getNavigationGroup(): string|\UnitEnum
+    {
+        return NavigationGroup::Pessoas;
+    }
 
     public static function getModelLabel(): string
     {

@@ -567,3 +567,175 @@ estável e em uso real (não decidir prematuramente):
    o plugin de tarefas para algo tipo "Tarefas". Decisão a tomar após
    uso real de ambos, para ver qual nomenclatura reflete melhor o
    dia a dia da empresa.
+
+## Navegação de módulos com múltiplos itens irmãos: grupo compartilhado "achatado", não Cluster — histórico e mecanismo correto (2026-08-24)
+
+Esta seção documenta a investigação completa (duas tentativas, a
+primeira incorreta) de como fazer Categorias/Pessoas Físicas/Pessoas
+Jurídicas (grupo "Pessoas") e Projetos/Situações/Tipos de Projeto
+(grupo "Comercial") aparecerem juntos DENTRO da topbar colorida do
+painel, na mesma linha do nome do módulo — igual a "Projetos" (plugin
+`webkul/projects`) e "Estoque" (`webkul/inventories`).
+
+### Tentativa 1 (INCORRETA, revertida): `SubNavigationPosition::Top`
+
+A primeira correção aplicada (`PessoasCluster`/`ComercialCluster`
+declarando `protected static ?SubNavigationPosition
+$subNavigationPosition = SubNavigationPosition::Top;`) produzia algo
+DIFERENTE do pedido: abas "em pílula" (`x-filament-panels::page.sub-navigation.tabs`)
+renderizadas ABAIXO do cabeçalho da página, como um bloco separado —
+não itens dentro da própria topbar. Essa propriedade controla a
+**sub-navegação de página** (`Filament\Pages\Concerns\HasSubNavigation`,
+só existe quando a página pertence a um Cluster via `$cluster =
+XxxCluster::class`), que é um mecanismo TOTALMENTE INDEPENDENTE da
+topbar principal do painel. Essa tentativa foi revertida por completo.
+
+### Mecanismo correto: dropdown da topbar principal, agrupado por `NavigationGroup`
+
+O painel Admin tem `->topNavigation()` habilitado
+(`app/Providers/Filament/AdminPanelProvider.php`, também citado em
+AUDITORIA-ESTRUTURA.md) — com isso, `Filament::getNavigation()`
+(`vendor/filament/filament/resources/views/livewire/topbar.blade.php`)
+itera todos os `NavigationGroup`s registrados no painel e, para cada
+grupo com label (nosso painel sempre dá label a todos via
+`->navigationGroups(...)` em `AdminPanelProvider`, um por caso do enum
+`Webkul\Support\Enums\NavigationGroup`), renderiza um
+`<x-filament::dropdown>` na topbar com o nome do grupo, contendo TODOS
+os itens de navegação (`NavigationItem`) que declaram esse mesmo
+`getNavigationGroup()`.
+
+**Isso é automático e não exige nenhuma configuração além de múltiplos
+Resources/Pages/Clusters de nível superior declararem o MESMO
+`getNavigationGroup()`** — não há necessidade de um Cluster "guarda-
+chuva" para isso. Confirmado renderizando o loop real do
+`topbar.blade.php` via `view()->render()` em tinker (autenticado com
+`Auth::guard('web')->login($user)` + `Filament::setCurrentPanel(...)`):
+cada `NavigationGroup` sempre vira um dropdown, e a lista de itens
+dentro dele é simplesmente `$group->getItems()` — nenhuma lógica
+especial correlaciona isso a "estar dentro de um Cluster".
+
+### A causa raiz real do menu vertical anterior
+
+`Filament\Resources\Resource\Concerns\HasNavigation::registerNavigationItems()`
+tem esta guarda logo no início:
+```php
+if (filled(static::getCluster())) {
+    return; // Resource clusterizado NÃO se registra sozinho na nav principal
+}
+```
+Ou seja: um Resource com `$cluster = XxxCluster::class` NUNCA aparece
+como item independente na navegação principal (nem no dropdown da
+topbar) — só o próprio Cluster aparece, como item único. Era
+exatamente isso que fazia o dropdown "Pessoas" ter só 1 item (o
+Cluster "Pessoas"), enquanto "Projetos" tinha 4 (Projetos, Tarefas,
+Configurações, Configurações) — porque nenhum Resource do plugin
+`webkul/projects` é clusterizado sob um "Project" Cluster (esse Cluster
+não existe) — `ProjectResource`/`TaskResource` declaram
+`getNavigationGroup() => NavigationGroup::Project` DIRETAMENTE, sem
+`$cluster`, e o Cluster `Configurations` (que agrupa Tag/Milestone/etc.
+como sub-hierarquia própria) TAMBÉM declara
+`getNavigationGroup() => NavigationGroup::Project` diretamente — os
+três compartilham o grupo como itens de nível superior "achatados",
+sem nenhum deles ser filho do outro. Confirmado o MESMO padrão em
+`webkul/inventories`: `Operations`, `Products`, `Configurations`,
+`Reporting`, `PluginSettings` (5 Clusters) e a Page `Overview` TODOS
+declaram `getNavigationGroup() => NavigationGroup::Inventory`
+diretamente — não existe um Cluster "Inventory" que os envolva.
+
+### Correção aplicada
+
+`PessoasCluster` e `ComercialCluster` foram **removidos** (arquivos
+`plugins/perseu/pessoas/src/Filament/Clusters/PessoasCluster.php` e
+`plugins/perseu/comercial/src/Filament/Clusters/ComercialCluster.php`
+apagados, junto dos lang files dedicados a eles em
+`resources/lang/{pt_BR,en}/clusters/{pessoas,comercial}.php`, que só
+continham o label do Cluster). Os seis Resources deixaram de ser
+clusterizados:
+- `CategoriaPessoaResource`, `PessoaFisicaResource`,
+  `PessoaJuridicaResource` (plugin Pessoas)
+- `ProjetoResource`, `SituacaoProjetoResource`, `TipoProjetoResource`
+  (plugin Comercial)
+
+removendo `protected static ?string $cluster = PessoasCluster::class;`
+(ou `ComercialCluster::class`) de cada um, e adicionando diretamente:
+```php
+public static function getNavigationGroup(): string|\UnitEnum
+{
+    return NavigationGroup::Pessoas; // ou ::Comercial
+}
+```
+(mesmo padrão de `ProjectResource`/`TaskResource`/`Configurations` em
+`webkul/projects` e dos 5 Clusters + `Overview` em
+`webkul/inventories`.)
+
+Como o slug de um Resource clusterizado ganha o prefixo do Cluster
+automaticamente (`Cluster::prependClusterSlug()`), e isso deixa de
+existir ao remover `$cluster`, cada Resource passou a declarar o slug
+completo manualmente — mesma técnica já usada por
+`ProjectResource::$slug = 'project/projects'` — para preservar as URLs
+exatamente como eram antes (confirmado via `route:list` depois da
+mudança, nenhuma URL mudou):
+- `CategoriaPessoaResource::$slug = 'pessoas/categoria-pessoas'`
+- `PessoaFisicaResource::$slug = 'pessoas/pessoas-fisicas'`
+- `PessoaJuridicaResource::$slug = 'pessoas/pessoas-juridicas'`
+- `ProjetoResource::$slug = 'comercial/projetos'`
+- `SituacaoProjetoResource::$slug = 'comercial/situacao-projetos'`
+- `TipoProjetoResource::$slug = 'comercial/tipo-projetos'`
+
+Os dois `config/filament-shield.php` (`perseu/pessoas` e
+`perseu/comercial`) tinham uma seção `'pages' => ['exclude' =>
+[PessoasCluster::class]]` (ou `ComercialCluster::class`) — necessária
+antes porque o Cluster "puro" (sem nenhuma Page autônoma apontando
+para ele) escapava da heurística de auto-exclusão do Shield e viraria
+um toggle de permissão morto na tela de Funções. Com o Cluster
+removido, essa seção inteira (import + `'pages'`) foi apagada — não há
+mais nenhum Cluster para excluir.
+
+Os diretórios `Filament/Clusters/Pessoas/Resources/*` e
+`Filament/Clusters/Comercial/Resources/*` foram MANTIDOS como estão
+(não foi feito rename de pasta/namespace) — Filament não usa convenção
+de pasta para resolver Cluster, só a propriedade `$cluster` (ver
+`Filament\Resources\Resource\Concerns\BelongsToCluster::getCluster()`,
+puramente `return static::$cluster;`), então o nome da pasta
+"Clusters/Pessoas"/"Clusters/Comercial" hoje é só um artefato
+cosmético do histórico do código, sem efeito funcional. Se algum dia
+incomodar, um rename de namespace é seguro mas não foi feito aqui para
+não ampliar o escopo desta correção.
+
+Verificado após a correção:
+1. `route:list` — todas as URLs preservadas
+   (`admin/pessoas/pessoas-fisicas`, `admin/comercial/projetos`, etc.).
+2. Renderização real do loop do `topbar.blade.php` em tinker — o
+   dropdown "Pessoas" passou a ter 3 itens (Categorias, Pessoas
+   Físicas, Pessoas Jurídicas) e "Comercial" passou a ter 3 itens
+   (Projetos, Situações, Tipos de Projeto), no mesmo formato que
+   "Projetos" (4 itens) — a estrutura pedida.
+3. `getCachedSubNavigation()` das páginas de listagem reais
+   (`ListPessoasFisicas`, `ListProjetos`) passou a retornar 0 grupos e
+   `getCluster()` passou a retornar `null` — confirmando que o menu
+   lateral/abas em pílula da tentativa 1 desapareceu por completo
+   (mesmo estado de `ProjectResource`/`TaskResource`, que nunca tiveram
+   esse bloco).
+
+### Regra para qualquer Resource/Page/Cluster novo do Perseu que deva compartilhar módulo com outros
+
+Para um conjunto de Resources/Pages aparecerem juntos como itens do
+MESMO dropdown na topbar (padrão "Projetos"/"Estoque"/"Pessoas"/
+"Comercial"): **NÃO os agrupe sob um Cluster comum** — declare
+`getNavigationGroup()` apontando para o MESMO caso de
+`Webkul\Support\Enums\NavigationGroup` diretamente em cada um, sem
+`$cluster`. Um Cluster continua sendo a ferramenta certa quando o
+objetivo é OUTRO: uma sub-hierarquia dentro de um item já "achatado"
+(ex.: `Configurations` dentro do grupo Project/Inventory, agrupando
+vários Resources de configuração que por sua vez não precisam aparecer
+soltos na topbar) — nesse caso sim, `$cluster = Configurations::class`
+nos Resources filhos e `getNavigationGroup()` só no Cluster.
+
+Continua valendo, para QUALQUER caso de `NavigationGroup` novo
+(Cluster ou não): sempre declarar `getNavigationGroup()` explicitamente
+em pelo menos um dos itens que o usam (criando o caso + label/ícone +
+traduções nos 4 idiomas em `lang/{pt_BR,en,es,ar}/admin.php` se ainda
+não existir um adequado). Nunca deixar um Cluster/Resource de nível
+superior sem `getNavigationGroup()` — cai num grupo anônimo (label
+`null`) compartilhado com qualquer outro item igualmente sem grupo,
+escondendo-o do dropdown da topbar como entrada própria.

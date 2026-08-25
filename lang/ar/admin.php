@@ -12,6 +12,8 @@ return [
         'maintenance'   => 'الصيانة',
         'manufacturing' => 'التصنيع',
         'project'       => 'المشاريع',
+        'pessoas'       => 'الأشخاص',
+        'comercial'     => 'المبيعات',
         'employee'      => 'الموظفين',
         'time-off'      => 'الإجازات',
         'recruitment'   => 'التوظيف',

@@ -22,7 +22,6 @@ use Illuminate\Database\Eloquent\Model;
 use Perseu\Comercial\Filament\Clusters\Comercial\Resources\ProjetoResource\Pages\CreateProjeto;
 use Perseu\Comercial\Filament\Clusters\Comercial\Resources\ProjetoResource\Pages\EditProjeto;
 use Perseu\Comercial\Filament\Clusters\Comercial\Resources\ProjetoResource\Pages\ListProjetos;
-use Perseu\Comercial\Filament\Clusters\ComercialCluster;
 use Perseu\Comercial\Models\Projeto;
 use Perseu\Pessoas\Enums\TipoEndereco;
 use Perseu\Pessoas\Models\Contato;
@@ -30,6 +29,7 @@ use Perseu\Pessoas\Models\Endereco;
 use Perseu\Pessoas\Models\PessoaFisica;
 use Perseu\Pessoas\Models\PessoaJuridica;
 use Perseu\Pessoas\Support\ViaCepLookup;
+use Webkul\Support\Enums\NavigationGroup;
 
 class ProjetoResource extends Resource
 {
@@ -37,7 +37,12 @@ class ProjetoResource extends Resource
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-clipboard-document-list';
 
-    protected static ?string $cluster = ComercialCluster::class;
+    protected static ?string $slug = 'comercial/projetos';
+
+    public static function getNavigationGroup(): string|\UnitEnum
+    {
+        return NavigationGroup::Comercial;
+    }
 
     public static function getModelLabel(): string
     {

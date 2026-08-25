@@ -12,6 +12,8 @@ return [
         'maintenance'   => 'Mantenimiento',
         'manufacturing' => 'Fabricación',
         'project'       => 'Proyecto',
+        'pessoas'       => 'Personas',
+        'comercial'     => 'Comercial',
         'employee'      => 'Empleados',
         'time-off'      => 'Ausencias',
         'recruitment'   => 'Contrataciones',

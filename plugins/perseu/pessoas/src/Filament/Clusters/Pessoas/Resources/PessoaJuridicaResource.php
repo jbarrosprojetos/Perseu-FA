@@ -20,10 +20,10 @@ use Perseu\Pessoas\Filament\Clusters\Pessoas\Resources\PessoaJuridicaResource\Pa
 use Perseu\Pessoas\Filament\Clusters\Pessoas\Resources\PessoaJuridicaResource\Pages\ListPessoasJuridicas;
 use Perseu\Pessoas\Filament\Clusters\Pessoas\Resources\PessoaJuridicaResource\RelationManagers\ContatosRelationManager;
 use Perseu\Pessoas\Filament\Clusters\Pessoas\Resources\PessoaJuridicaResource\RelationManagers\EnderecosRelationManager;
-use Perseu\Pessoas\Filament\Clusters\PessoasCluster;
 use Perseu\Pessoas\Models\PessoaJuridica;
 use Perseu\Pessoas\Rules\CnpjValido;
 use Perseu\Pessoas\Traits\HasCompactFieldWidth;
+use Webkul\Support\Enums\NavigationGroup;
 
 class PessoaJuridicaResource extends Resource
 {
@@ -33,9 +33,12 @@ class PessoaJuridicaResource extends Resource
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-building-office-2';
 
-    protected static ?string $cluster = PessoasCluster::class;
+    protected static ?string $slug = 'pessoas/pessoas-juridicas';
 
-    protected static ?string $slug = 'pessoas-juridicas';
+    public static function getNavigationGroup(): string|\UnitEnum
+    {
+        return NavigationGroup::Pessoas;
+    }
 
     public static function getModelLabel(): string
     {

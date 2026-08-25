@@ -27,6 +27,10 @@ enum NavigationGroup: string implements HasIcon, HasLabel
 
     case Project = 'project';
 
+    case Pessoas = 'pessoas';
+
+    case Comercial = 'comercial';
+
     case Employee = 'employee';
 
     case TimeOff = 'time-off';
@@ -61,6 +65,8 @@ enum NavigationGroup: string implements HasIcon, HasLabel
             self::Invoice       => 'icon-invoices',
             self::Accounting    => 'icon-accounting',
             self::Project       => 'icon-projects',
+            self::Pessoas       => 'heroicon-o-users',
+            self::Comercial     => 'heroicon-o-briefcase',
             self::Employee      => 'icon-employees',
             self::TimeOff       => 'icon-time-offs',
             self::Recruitment   => 'icon-recruitments',

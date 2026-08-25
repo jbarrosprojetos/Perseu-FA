@@ -13,8 +13,8 @@ use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Perseu\Comercial\Filament\Clusters\Comercial\Resources\TipoProjetoResource\Pages\ManageTiposProjeto;
-use Perseu\Comercial\Filament\Clusters\ComercialCluster;
 use Perseu\Comercial\Models\TipoProjeto;
+use Webkul\Support\Enums\NavigationGroup;
 
 class TipoProjetoResource extends Resource
 {
@@ -22,7 +22,12 @@ class TipoProjetoResource extends Resource
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-tag';
 
-    protected static ?string $cluster = ComercialCluster::class;
+    protected static ?string $slug = 'comercial/tipo-projetos';
+
+    public static function getNavigationGroup(): string|\UnitEnum
+    {
+        return NavigationGroup::Comercial;
+    }
 
     public static function getModelLabel(): string
     {
