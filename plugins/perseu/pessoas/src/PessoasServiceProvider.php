@@ -7,9 +7,11 @@ use Illuminate\Support\Facades\Gate;
 use Perseu\Pessoas\Models\CategoriaPessoa;
 use Perseu\Pessoas\Models\PessoaFisica;
 use Perseu\Pessoas\Models\PessoaJuridica;
+use Perseu\Pessoas\Models\Setor;
 use Perseu\Pessoas\Policies\CategoriaPessoaPolicy;
 use Perseu\Pessoas\Policies\PessoaFisicaPolicy;
 use Perseu\Pessoas\Policies\PessoaJuridicaPolicy;
+use Perseu\Pessoas\Policies\SetorPolicy;
 use Webkul\PluginManager\Console\Commands\InstallCommand;
 use Webkul\PluginManager\Console\Commands\UninstallCommand;
 use Webkul\PluginManager\Package;
@@ -35,6 +37,8 @@ class PessoasServiceProvider extends PackageServiceProvider
                 '2026_08_20_100008_create_contatos_table',
                 '2026_08_22_100000_add_e_cliente_to_categorias_pessoa_table',
                 '2026_08_22_100001_add_e_fornecedor_to_categorias_pessoa_table',
+                '2026_08_26_100000_create_setores_table',
+                '2026_08_26_100001_create_pessoa_juridica_setor_table',
             ])
             ->runsMigrations()
             ->hasInstallCommand(function (InstallCommand $command) {
@@ -48,6 +52,7 @@ class PessoasServiceProvider extends PackageServiceProvider
         Gate::policy(CategoriaPessoa::class, CategoriaPessoaPolicy::class);
         Gate::policy(PessoaFisica::class, PessoaFisicaPolicy::class);
         Gate::policy(PessoaJuridica::class, PessoaJuridicaPolicy::class);
+        Gate::policy(Setor::class, SetorPolicy::class);
     }
 
     public function packageRegistered(): void

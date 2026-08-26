@@ -82,6 +82,14 @@ class PessoaJuridicaResource extends Resource
                     ->searchable()
                     ->columnSpanFull(),
 
+                Select::make('setores')
+                    ->label(__('pessoas::filament/resources/pessoa-juridica.form.setores'))
+                    ->relationship(name: 'setores', titleAttribute: 'descricao')
+                    ->multiple()
+                    ->preload()
+                    ->searchable()
+                    ->columnSpanFull(),
+
                 static::flexRow([
                     static::compact(
                         TextInput::make('cnpj')
@@ -163,6 +171,9 @@ class PessoaJuridicaResource extends Resource
                     ->badge(),
                 TextColumn::make('categorias.descricao')
                     ->label(__('pessoas::filament/resources/pessoa-juridica.table.columns.categorias'))
+                    ->badge(),
+                TextColumn::make('setores.descricao')
+                    ->label(__('pessoas::filament/resources/pessoa-juridica.table.columns.setores'))
                     ->badge(),
                 TextColumn::make('created_at')
                     ->label(__('pessoas::filament/resources/pessoa-juridica.table.columns.created-at'))

@@ -11,6 +11,7 @@ return [
 
     'form' => [
         'categorias'          => 'Categorias',
+        'setores'             => 'Setores',
         'razao-social'        => 'Razão Social',
         'nome-fantasia'       => 'Nome Fantasia',
         'cnpj'                => 'CNPJ',
@@ -31,6 +32,7 @@ return [
             'telefone'           => 'Telefone',
             'regime-tributario'  => 'Regime Tributário',
             'categorias'         => 'Categorias',
+            'setores'            => 'Setores',
             'created-at'         => 'Criado em',
         ],
 

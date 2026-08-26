@@ -37,6 +37,11 @@ class PessoaJuridica extends Model
         return $this->belongsToMany(CategoriaPessoa::class, 'pessoa_juridica_categoria');
     }
 
+    public function setores(): BelongsToMany
+    {
+        return $this->belongsToMany(Setor::class, 'pessoa_juridica_setor');
+    }
+
     public function enderecos(): BelongsToMany
     {
         return $this->belongsToMany(Endereco::class, 'pessoa_juridica_endereco')
