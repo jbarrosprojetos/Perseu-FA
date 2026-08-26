@@ -7,7 +7,6 @@ use Filament\Forms\Components\Toggle;
 use Filament\Pages\SettingsPage;
 use Filament\Schemas\Schema;
 use Webkul\Project\Settings\TimeSettings;
-use Webkul\Support\Enums\NavigationGroup;
 use Webkul\Support\Filament\Clusters\Settings;
 
 class ManageTime extends SettingsPage
@@ -20,9 +19,9 @@ class ManageTime extends SettingsPage
 
     protected static ?string $cluster = Settings::class;
 
-    public static function getNavigationGroup(): string|\UnitEnum
+    public static function getNavigationGroup(): string
     {
-        return NavigationGroup::Project;
+        return __('admin.navigation.project');
     }
 
     public function getBreadcrumbs(): array

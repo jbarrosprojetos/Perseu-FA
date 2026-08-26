@@ -9,7 +9,6 @@ use Filament\Schemas\Schema;
 use Illuminate\Support\HtmlString;
 use Webkul\Project\Filament\Clusters\Configurations\Resources\TaskStageResource;
 use Webkul\Project\Settings\TaskSettings;
-use Webkul\Support\Enums\NavigationGroup;
 use Webkul\Support\Filament\Clusters\Settings;
 
 class ManageTasks extends SettingsPage
@@ -22,9 +21,9 @@ class ManageTasks extends SettingsPage
 
     protected static ?string $cluster = Settings::class;
 
-    public static function getNavigationGroup(): string|\UnitEnum
+    public static function getNavigationGroup(): string
     {
-        return NavigationGroup::Project;
+        return __('admin.navigation.project');
     }
 
     public function getBreadcrumbs(): array
