@@ -88,6 +88,16 @@ class TaskResource extends Resource
 
     protected static ?string $recordTitleAttribute = 'title';
 
+    public static function getModelLabel(): string
+    {
+        return __('projects::filament/resources/task.model-label');
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return __('projects::filament/resources/task.plural-model-label');
+    }
+
     public static function getNavigationLabel(): string
     {
         return __('projects::filament/resources/task.navigation.title');
@@ -773,7 +783,7 @@ class TaskResource extends Resource
                                         TextEntry::make('allocated_hours')
                                             ->label(__('projects::filament/resources/task.infolist.sections.time-tracking.entries.allocated-time'))
                                             ->icon('heroicon-o-clock')
-                                            ->suffix(' Hours')
+                                            ->suffix(__('projects::filament/resources/task.infolist.sections.time-tracking.entries.allocated-time-suffix'))
                                             ->placeholder('—')
                                             ->formatStateUsing(function ($state) {
                                                 $hours = floor($state);
@@ -889,12 +899,12 @@ class TaskResource extends Resource
     public static function getRelations(): array
     {
         return [
-            RelationGroup::make('Timesheets', [
+            RelationGroup::make(fn () => __('projects::filament/resources/task/relation-managers/timesheets.title'), [
                 TimesheetsRelationManager::class,
             ])
                 ->icon('heroicon-o-clock'),
 
-            RelationGroup::make('Sub Tasks', [
+            RelationGroup::make(fn () => __('projects::filament/resources/task/relation-managers/sub-tasks.title'), [
                 SubTasksRelationManager::class,
             ])
                 ->icon('heroicon-o-clipboard-document-list'),

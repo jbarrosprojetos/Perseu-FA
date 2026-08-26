@@ -3,6 +3,10 @@
 return [
     'title' => 'المهام',
 
+    'model-label' => 'المهمة',
+
+    'plural-model-label' => 'المهام',
+
     'navigation' => [
         'title' => 'المهام',
     ],
@@ -194,6 +198,7 @@ return [
 
                 'entries' => [
                     'allocated-time'        => 'الوقت المخصص',
+                    'allocated-time-suffix' => ' ساعة',
                     'time-spent'            => 'الوقت المستغرق',
                     'time-spent-suffix'     => ' ساعة',
                     'time-remaining'        => 'الوقت المتبقي',

@@ -1,6 +1,8 @@
 <?php
 
 return [
+    'title' => 'Timesheets',
+
     'form' => [
         'date'                   => 'Date',
         'employee'               => 'Employee',

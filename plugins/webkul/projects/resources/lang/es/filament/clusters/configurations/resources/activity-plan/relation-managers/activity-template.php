@@ -1,6 +1,8 @@
 <?php
 
 return [
+    'title' => 'Plantillas de actividad',
+
     'form' => [
         'sections' => [
             'activity-details' => [

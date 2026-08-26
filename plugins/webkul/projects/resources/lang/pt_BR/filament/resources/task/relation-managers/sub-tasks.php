@@ -1,6 +1,8 @@
 <?php
 
 return [
+    'title' => 'Subtarefas',
+
     'table' => [
         'header-actions' => [
             'create' => [

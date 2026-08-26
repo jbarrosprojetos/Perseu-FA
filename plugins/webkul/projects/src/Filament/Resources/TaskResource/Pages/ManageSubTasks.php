@@ -33,6 +33,11 @@ class ManageSubTasks extends ManageRelatedRecords
         return __('projects::filament/resources/task/pages/manage-sub-tasks.title');
     }
 
+    public static function getRelationshipTitle(): string
+    {
+        return __('projects::filament/resources/task/pages/manage-sub-tasks.title');
+    }
+
     public function form(Schema $schema): Schema
     {
         return TaskResource::form($schema);

@@ -1,6 +1,8 @@
 <?php
 
 return [
+    'title' => 'Modelos de atividade',
+
     'form' => [
         'sections' => [
             'activity-details' => [

@@ -1,6 +1,8 @@
 <?php
 
 return [
+    'title' => 'المراحل الرئيسية',
+
     'table' => [
         'header-actions' => [
             'create' => [

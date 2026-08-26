@@ -13,6 +13,11 @@ class TaskStagesRelationManager extends RelationManager
 {
     protected static string $relationship = 'taskStages';
 
+    public static function getRelationshipTitle(): string
+    {
+        return __('projects::filament/resources/project/relation-managers/task-stages.title');
+    }
+
     public function form(Schema $schema): Schema
     {
         return TaskStageResource::form($schema);

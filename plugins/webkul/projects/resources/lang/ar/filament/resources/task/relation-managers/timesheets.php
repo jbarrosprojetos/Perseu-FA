@@ -1,6 +1,8 @@
 <?php
 
 return [
+    'title' => 'جداول الوقت',
+
     'form' => [
         'date'                   => 'التاريخ',
         'employee'               => 'الموظف',

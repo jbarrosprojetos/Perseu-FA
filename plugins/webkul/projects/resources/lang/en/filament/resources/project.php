@@ -1,6 +1,10 @@
 <?php
 
 return [
+    'model-label' => 'Project',
+
+    'plural-model-label' => 'Projects',
+
     'navigation' => [
         'title' => 'Projects',
     ],
@@ -59,13 +63,14 @@ return [
 
     'table' => [
         'columns' => [
-            'name'            => 'Name',
-            'customer'        => 'Customer',
-            'start-date'      => 'Start Date',
-            'end-date'        => 'End Date',
-            'planned-date'    => 'Planned Date',
-            'remaining-hours' => 'Remaining Hours',
-            'project-manager' => 'Project Manager',
+            'name'                   => 'Name',
+            'customer'               => 'Customer',
+            'start-date'             => 'Start Date',
+            'end-date'               => 'End Date',
+            'planned-date'           => 'Planned Date',
+            'remaining-hours'        => 'Remaining Hours',
+            'remaining-hours-suffix' => ' Hours',
+            'project-manager'        => 'Project Manager',
         ],
 
         'groups' => [

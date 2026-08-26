@@ -1,6 +1,8 @@
 <?php
 
 return [
+    'title' => 'قوالب الأنشطة',
+
     'form' => [
         'sections' => [
             'activity-details' => [

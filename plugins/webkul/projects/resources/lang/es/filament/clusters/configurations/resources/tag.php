@@ -1,6 +1,10 @@
 <?php
 
 return [
+    'model-label' => 'Etiqueta',
+
+    'plural-model-label' => 'Etiquetas',
+
     'navigation' => [
         'title' => 'Etiquetas',
     ],

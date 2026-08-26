@@ -31,6 +31,11 @@ class ManageTimesheets extends ManageRelatedRecords
         return __('projects::filament/resources/task/pages/manage-timesheets.title');
     }
 
+    public static function getRelationshipTitle(): string
+    {
+        return __('projects::filament/resources/task/pages/manage-timesheets.title');
+    }
+
     /**
      * @param  array<string, mixed>  $parameters
      */

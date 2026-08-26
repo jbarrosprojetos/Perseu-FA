@@ -1,6 +1,10 @@
 <?php
 
 return [
+    'model-label' => 'Tag',
+
+    'plural-model-label' => 'Tags',
+
     'navigation' => [
         'title' => 'Tags',
     ],

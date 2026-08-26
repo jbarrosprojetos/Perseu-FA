@@ -37,6 +37,11 @@ class ManageTasks extends ManageRelatedRecords
         return __('projects::filament/resources/project/pages/manage-tasks.title');
     }
 
+    public static function getRelationshipTitle(): string
+    {
+        return TaskResource::getPluralModelLabel();
+    }
+
     protected function getHeaderActions(): array
     {
         return [

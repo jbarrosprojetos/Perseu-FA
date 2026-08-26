@@ -1,6 +1,10 @@
 <?php
 
 return [
+    'model-label' => 'Plan de actividades',
+
+    'plural-model-label' => 'Planes de actividades',
+
     'navigation' => [
         'title' => 'Planes de actividades',
     ],

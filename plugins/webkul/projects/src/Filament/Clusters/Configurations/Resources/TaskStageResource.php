@@ -38,6 +38,18 @@ class TaskStageResource extends Resource
 
     protected static ?string $cluster = Configurations::class;
 
+    protected static bool $hasTitleCaseModelLabel = false;
+
+    public static function getModelLabel(): string
+    {
+        return __('projects::filament/clusters/configurations/resources/task-stage.model-label');
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return __('projects::filament/clusters/configurations/resources/task-stage.plural-model-label');
+    }
+
     public static function getNavigationLabel(): string
     {
         return __('projects::filament/clusters/configurations/resources/task-stage.navigation.title');

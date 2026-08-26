@@ -24,6 +24,11 @@ class SubTasksRelationManager extends RelationManager
 {
     protected static string $relationship = 'subTasks';
 
+    public static function getRelationshipTitle(): string
+    {
+        return __('projects::filament/resources/task/relation-managers/sub-tasks.title');
+    }
+
     public function form(Schema $schema): Schema
     {
         return TaskResource::form($schema);

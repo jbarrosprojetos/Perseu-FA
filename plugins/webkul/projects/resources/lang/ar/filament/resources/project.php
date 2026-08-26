@@ -1,6 +1,10 @@
 <?php
 
 return [
+    'model-label' => 'المشروع',
+
+    'plural-model-label' => 'المشاريع',
+
     'navigation' => [
         'title' => 'المشاريع',
     ],
@@ -59,13 +63,14 @@ return [
 
     'table' => [
         'columns' => [
-            'name'            => 'الاسم',
-            'customer'        => 'العميل',
-            'start-date'      => 'تاريخ البداية',
-            'end-date'        => 'تاريخ النهاية',
-            'planned-date'    => 'التاريخ المخطط',
-            'remaining-hours' => 'الساعات المتبقية',
-            'project-manager' => 'مدير المشروع',
+            'name'                   => 'الاسم',
+            'customer'               => 'العميل',
+            'start-date'             => 'تاريخ البداية',
+            'end-date'               => 'تاريخ النهاية',
+            'planned-date'           => 'التاريخ المخطط',
+            'remaining-hours'        => 'الساعات المتبقية',
+            'remaining-hours-suffix' => ' ساعة',
+            'project-manager'        => 'مدير المشروع',
         ],
 
         'groups' => [

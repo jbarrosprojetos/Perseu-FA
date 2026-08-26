@@ -41,6 +41,11 @@ class ManageMilestones extends ManageRelatedRecords
         return __('projects::filament/resources/project/pages/manage-milestones.title');
     }
 
+    public static function getRelationshipTitle(): string
+    {
+        return MilestoneResource::getPluralModelLabel();
+    }
+
     public function form(Schema $schema): Schema
     {
         return MilestoneResource::form($schema);

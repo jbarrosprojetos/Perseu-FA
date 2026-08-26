@@ -32,6 +32,16 @@ class TagResource extends Resource
 
     protected static ?string $cluster = Configurations::class;
 
+    public static function getModelLabel(): string
+    {
+        return __('projects::filament/clusters/configurations/resources/tag.model-label');
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return __('projects::filament/clusters/configurations/resources/tag.plural-model-label');
+    }
+
     public static function getNavigationLabel(): string
     {
         return __('projects::filament/clusters/configurations/resources/tag.navigation.title');

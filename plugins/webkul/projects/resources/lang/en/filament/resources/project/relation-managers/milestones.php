@@ -1,6 +1,8 @@
 <?php
 
 return [
+    'title' => 'Milestones',
+
     'table' => [
         'header-actions' => [
             'create' => [

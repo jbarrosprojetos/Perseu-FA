@@ -82,6 +82,16 @@ class ProjectResource extends Resource
 
     protected static ?string $recordTitleAttribute = 'name';
 
+    public static function getModelLabel(): string
+    {
+        return __('projects::filament/resources/project.model-label');
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return __('projects::filament/resources/project.plural-model-label');
+    }
+
     public static function getNavigationLabel(): string
     {
         return __('projects::filament/resources/project.navigation.title');
@@ -271,7 +281,7 @@ class ProjectResource extends Resource
                         TextColumn::make('planned_date')
                             ->icon('heroicon-o-calendar')
                             ->tooltip(__('projects::filament/resources/project.table.columns.planned-date'))
-                            ->state(fn (Project $record): string => $record->start_date->format('d M Y').' - '.$record->end_date->format('d M Y')),
+                            ->state(fn (Project $record): string => $record->start_date->translatedFormat('d M Y').' - '.$record->end_date->translatedFormat('d M Y')),
                     ])
                         ->visible(fn (Project $record) => filled($record->start_date) && filled($record->end_date)),
                     Stack::make([
@@ -280,7 +290,7 @@ class ProjectResource extends Resource
                             ->badge()
                             ->color('success')
                             ->color(fn (Project $record): string => $record->remaining_hours < 0 ? 'danger' : 'success')
-                            ->state(fn (Project $record): string => $record->remaining_hours.' Hours')
+                            ->state(fn (Project $record): string => $record->remaining_hours.__('projects::filament/resources/project.table.columns.remaining-hours-suffix'))
                             ->tooltip(__('projects::filament/resources/project.table.columns.remaining-hours')),
                     ])
                         ->visible(fn (Project $record) => static::getTimeSettings()->enable_timesheets && $record->allow_milestones && $record->remaining_hours),
@@ -559,7 +569,7 @@ class ProjectResource extends Resource
                                                     return '—';
                                                 }
 
-                                                return $record->start_date->format('d M Y').' - '.$record->end_date->format('d M Y');
+                                                return $record->start_date->translatedFormat('d M Y').' - '.$record->end_date->translatedFormat('d M Y');
                                             }),
 
                                         TextEntry::make('allocated_hours')
@@ -697,12 +707,12 @@ class ProjectResource extends Resource
     public static function getRelations(): array
     {
         return [
-            RelationGroup::make('Task Stages', [
+            RelationGroup::make(fn () => __('projects::filament/resources/project/relation-managers/task-stages.title'), [
                 TaskStagesRelationManager::class,
             ])
                 ->icon('heroicon-o-squares-2x2'),
 
-            RelationGroup::make('Milestones', [
+            RelationGroup::make(fn () => __('projects::filament/resources/project/relation-managers/milestones.title'), [
                 MilestonesRelationManager::class,
             ])
                 ->icon('heroicon-o-flag'),

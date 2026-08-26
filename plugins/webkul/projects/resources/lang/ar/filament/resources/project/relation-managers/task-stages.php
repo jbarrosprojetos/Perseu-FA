@@ -1,6 +1,8 @@
 <?php
 
 return [
+    'title' => 'مراحل المهام',
+
     'table' => [
         'header-actions' => [
             'create' => [

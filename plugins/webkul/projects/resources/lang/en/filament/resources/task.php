@@ -3,6 +3,10 @@
 return [
     'title' => 'Tasks',
 
+    'model-label' => 'Task',
+
+    'plural-model-label' => 'Tasks',
+
     'navigation' => [
         'title' => 'Tasks',
     ],
@@ -194,6 +198,7 @@ return [
 
                 'entries' => [
                     'allocated-time'        => 'Allocated Time',
+                    'allocated-time-suffix' => ' Hours',
                     'time-spent'            => 'Time Spent',
                     'time-spent-suffix'     => ' Hours',
                     'time-remaining'        => 'Time Remaining',

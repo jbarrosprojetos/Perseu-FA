@@ -22,6 +22,11 @@ class TimesheetsRelationManager extends RelationManager
 {
     protected static string $relationship = 'timesheets';
 
+    public static function getRelationshipTitle(): string
+    {
+        return __('projects::filament/resources/task/relation-managers/timesheets.title');
+    }
+
     public static function canViewForRecord(Model $ownerRecord, string $pageClass): bool
     {
         if (! settings(TimeSettings::class)->enable_timesheets) {

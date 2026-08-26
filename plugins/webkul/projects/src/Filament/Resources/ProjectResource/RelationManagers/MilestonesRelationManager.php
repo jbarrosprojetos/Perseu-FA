@@ -15,6 +15,11 @@ class MilestonesRelationManager extends RelationManager
 {
     protected static string $relationship = 'milestones';
 
+    public static function getRelationshipTitle(): string
+    {
+        return __('projects::filament/resources/project/relation-managers/milestones.title');
+    }
+
     public static function canViewForRecord(Model $ownerRecord, string $pageClass): bool
     {
         return ProjectResource::getTaskSettings()->enable_milestones && $ownerRecord->allow_milestones;

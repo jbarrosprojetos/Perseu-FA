@@ -1,6 +1,8 @@
 <?php
 
 return [
+    'title' => 'Activity Templates',
+
     'form' => [
         'sections' => [
             'activity-details' => [

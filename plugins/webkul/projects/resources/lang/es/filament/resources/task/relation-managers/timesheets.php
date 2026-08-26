@@ -1,6 +1,8 @@
 <?php
 
 return [
+    'title' => 'Partes de horas',
+
     'form' => [
         'date'                   => 'Fecha',
         'employee'               => 'Empleado',

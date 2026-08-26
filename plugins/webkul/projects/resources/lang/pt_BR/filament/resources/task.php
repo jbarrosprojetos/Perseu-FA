@@ -3,6 +3,10 @@
 return [
     'title' => 'Tarefas',
 
+    'model-label' => 'Tarefa',
+
+    'plural-model-label' => 'Tarefas',
+
     'navigation' => [
         'title' => 'Tarefas',
     ],
@@ -194,6 +198,7 @@ return [
 
                 'entries' => [
                     'allocated-time'        => 'Tempo alocado',
+                    'allocated-time-suffix' => ' horas',
                     'time-spent'            => 'Tempo gasto',
                     'time-spent-suffix'     => ' horas',
                     'time-remaining'        => 'Tempo restante',

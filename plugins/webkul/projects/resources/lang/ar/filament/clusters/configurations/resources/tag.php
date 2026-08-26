@@ -1,6 +1,10 @@
 <?php
 
 return [
+    'model-label' => 'الوسم',
+
+    'plural-model-label' => 'الوسوم',
+
     'navigation' => [
         'title' => 'الوسوم',
     ],

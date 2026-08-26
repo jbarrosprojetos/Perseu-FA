@@ -1,6 +1,8 @@
 <?php
 
 return [
+    'title' => 'Marcos',
+
     'table' => [
         'header-actions' => [
             'create' => [

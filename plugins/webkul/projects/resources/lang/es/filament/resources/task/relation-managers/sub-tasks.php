@@ -1,6 +1,8 @@
 <?php
 
 return [
+    'title' => 'Subtareas',
+
     'table' => [
         'header-actions' => [
             'create' => [

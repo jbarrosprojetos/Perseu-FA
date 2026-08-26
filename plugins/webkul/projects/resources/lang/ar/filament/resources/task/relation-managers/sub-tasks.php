@@ -1,6 +1,8 @@
 <?php
 
 return [
+    'title' => 'المهام الفرعية',
+
     'table' => [
         'header-actions' => [
             'create' => [

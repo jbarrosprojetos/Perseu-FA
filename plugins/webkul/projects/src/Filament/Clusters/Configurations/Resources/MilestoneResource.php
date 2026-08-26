@@ -46,6 +46,16 @@ class MilestoneResource extends Resource
         return parent::getEloquentQuery()->whereHas('project');
     }
 
+    public static function getModelLabel(): string
+    {
+        return __('projects::filament/clusters/configurations/resources/milestone.model-label');
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return __('projects::filament/clusters/configurations/resources/milestone.plural-model-label');
+    }
+
     public static function getNavigationLabel(): string
     {
         return __('projects::filament/clusters/configurations/resources/milestone.navigation.title');

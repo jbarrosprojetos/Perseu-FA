@@ -1,6 +1,8 @@
 <?php
 
 return [
+    'title' => 'Apontamentos de horas',
+
     'form' => [
         'date'                   => 'Data',
         'employee'               => 'Colaborador',

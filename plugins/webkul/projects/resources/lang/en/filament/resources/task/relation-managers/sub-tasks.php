@@ -1,6 +1,8 @@
 <?php
 
 return [
+    'title' => 'Sub Tasks',
+
     'table' => [
         'header-actions' => [
             'create' => [

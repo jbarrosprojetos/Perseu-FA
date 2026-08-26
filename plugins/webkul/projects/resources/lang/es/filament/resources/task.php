@@ -3,6 +3,10 @@
 return [
     'title' => 'Tareas',
 
+    'model-label' => 'Tarea',
+
+    'plural-model-label' => 'Tareas',
+
     'navigation' => [
         'title' => 'Tareas',
     ],
@@ -194,6 +198,7 @@ return [
 
                 'entries' => [
                     'allocated-time'        => 'Tiempo asignado',
+                    'allocated-time-suffix' => ' Horas',
                     'time-spent'            => 'Tiempo dedicado',
                     'time-spent-suffix'     => ' Horas',
                     'time-remaining'        => 'Tiempo restante',

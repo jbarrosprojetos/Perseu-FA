@@ -1,6 +1,8 @@
 <?php
 
 return [
+    'title' => 'Etapas da tarefa',
+
     'table' => [
         'header-actions' => [
             'create' => [
