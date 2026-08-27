@@ -16,10 +16,17 @@ return [
     ],
 
     'regime-tributario' => [
+        'nao-informado'    => 'Not informed',
         'simples-nacional' => 'Simples Nacional',
         'lucro-presumido'  => 'Presumed profit',
         'lucro-real'       => 'Actual profit',
         'mei'              => 'Individual microentrepreneur (MEI)',
+    ],
+
+    'indicador-contribuinte-icms' => [
+        'contribuinte'     => 'Taxpayer',
+        'isento'           => 'Exempt',
+        'nao-contribuinte' => 'Non-taxpayer',
     ],
 
     'tipo-endereco' => [

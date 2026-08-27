@@ -739,3 +739,246 @@ não existir um adequado). Nunca deixar um Cluster/Resource de nível
 superior sem `getNavigationGroup()` — cai num grupo anônimo (label
 `null`) compartilhado com qualquer outro item igualmente sem grupo,
 escondendo-o do dropdown da topbar como entrada própria.
+
+## Integração BrasilAPI em Pessoa Jurídica: busca de CNPJ para viabilizar NF-e (2026-08-27, ampliada em 2026-08-28)
+
+`PessoaJuridicaResource::form()` busca automaticamente os dados
+cadastrais da empresa na BrasilAPI (`GET
+https://brasilapi.com.br/api/cnpj/v1/{cnpj}`, pública, sem
+autenticação, fonte minhaReceita/Receita Federal) assim que o campo
+CNPJ perde o foco com 14 dígitos válidos — mesmo padrão de UX de
+`ViaCepLookup` (usado pela busca de CEP nos Relation Managers de
+Endereços): `->live(onBlur: true)` + `->afterStateUpdated()`.
+
+- `Perseu\Pessoas\Support\BrasilApiCnpjLookup::fill(Set $set, Get $get,
+  ?string $cnpj)` faz a chamada (timeout de 8s, try/catch, `Cache::remember`
+  por 10 min — uma resposta `null`, seja por 404 ou erro de rede, não
+  fica em cache de fato, já que `Cache::get` não distingue "chave
+  ausente" de "valor null", então uma falha temporária não é mascarada
+  numa nova tentativa) e usa `Set` para preencher `razao_social`,
+  `nome_fantasia`, `telefone` (`ddd_telefone_1`, com fallback para
+  `ddd_telefone_2` se o principal vier vazio — `ddd_fax` nunca é usado),
+  `email`, `cnae`+`cnae_descricao` (código formatado a partir de
+  `cnae_fiscal`, inteiro puro na resposta da API, para o padrão mascarado
+  `9999-9/99` já usado pelo campo; descrição de `cnae_fiscal_descricao`
+  guardada à parte para exibir como `->helperText()` do campo `cnae`),
+  `data_abertura`, `porte`+`descricao_porte` e, quando possível inferir
+  com segurança, `regime_tributario`.
+- **`porte`/`descricao_porte`: nomes INVERTIDOS na resposta real da API**
+  em relação ao padrão `cnae_fiscal`/`cnae_fiscal_descricao` que o nome
+  sugeriria — confirmado com uma chamada real antes de mapear (ver
+  seção "Reaproveitamento de utilitários..." sobre a mesma prática já
+  seguida para o mapeamento de CNPJ original). A API devolve `porte` como
+  TEXTO (`"DEMAIS"`, `"MICRO EMPRESA"`...) e `codigo_porte` como o código
+  numérico — o oposto do que o nome do campo sugere. `BrasilApiCnpjLookup`
+  mapeia `codigo_porte` → nossa coluna `porte` (o código) e o `porte` da
+  API → nossa coluna `descricao_porte` (o texto), documentado inline no
+  código para não confundir quem for reler isso depois.
+- **Situação Cadastral é a exceção à regra de "só preenche vazio"** — ao
+  contrário de todos os outros campos (razão social, telefone, CNAE,
+  porte, regime tributário), `situacao_cadastral`/
+  `descricao_situacao_cadastral` são **sempre sobrescritos** a cada busca
+  bem-sucedida, e **limpos** (`null`) quando o CNPJ é inválido/não
+  encontrado. Faz sentido porque é um campo 100% somente leitura (nunca
+  digitado pelo usuário, só reflete a Receita Federal) — não haveria
+  "valor manual do usuário" para proteger, e manter um valor de uma busca
+  antiga (de um CNPJ diferente do atual) seria enganoso.
+- Demais campos seguem a regra de sempre: **nunca sobrescreve um campo já
+  preenchido** — cada `Set` é precedido por um `blank($get(...))`. Não
+  existe no Filament uma forma simples de "perguntar antes de
+  sobrescrever" sem interromper o fluxo automático; "só preenche vazio"
+  foi a opção escolhida por ser a mais segura sem quebrar a automação. O
+  mesmo `form()` é usado por `CreatePessoaJuridica` e
+  `EditPessoaJuridica`, então a busca funciona igual nos dois casos —
+  trocar o CNPJ depois, em edição, dispara a mesma busca de novo.
+- Se a API retornar 404 (CNPJ inexistente) ou falhar/der timeout, o
+  campo CNPJ mostra um aviso em vermelho via `->hint(fn (Get $get) =>
+  $get('cnpj_lookup_erro'))->hintColor('danger')` — `hint()`/
+  `hintColor()` (`Filament\Forms\Components\Concerns\HasHint`) é o
+  mecanismo nativo do Filament para texto reativo colorido ao lado do
+  label. `cnpj_lookup_erro` é uma chave de estado "solta" (sem
+  `Hidden::make()` declarando o campo) — `Set`/`Get` do Filament operam
+  sobre o array de dados do componente Livewire por dot-path, então
+  escrever/ler uma chave nunca declarada como componente funciona
+  normalmente. O formulário nunca fica bloqueado nesse caso.
+- **`Select::options(EnumClass::class)` casta o estado do campo para a
+  INSTÂNCIA do enum, não o valor cru** — pegou o código de desprevenido
+  uma vez: `HasOptions::options()` chama `->enum($options)` internamente
+  quando recebe uma enum class, então `$get('regime_tributario')` dentro
+  de `BrasilApiCnpjLookup::fill()` retorna um `RegimeTributario` (objeto),
+  não um `int`. Um `(int) $get(...)` direto lança "Object... could not be
+  converted to int". Sempre desembrulhar com
+  `$valor instanceof MeuEnum ? $valor->value : $valor` antes de comparar/
+  castar um valor de Select-com-enum lido via `Get` a partir de OUTRO
+  campo (dentro do próprio field a Livewire/Filament já lida com isso
+  transparentemente — o problema só aparece ao ler via `Get` cross-field).
+- **Regime Tributário é um Select com opção "Não Informado" como padrão**
+  (`RegimeTributario::NaoInformado = 0`, `->default(0)`) — não uma
+  ausência/`null`. Como `blank(0) === false` no Laravel, a lógica de
+  "só preenche automaticamente se ainda não escolhido" não pode usar
+  `blank()` aqui; compara o valor desembrulhado contra
+  `RegimeTributario::NaoInformado->value` explicitamente. Preenchimento
+  automático: `opcao_pelo_mei` verdadeiro → MEI; senão
+  `opcao_pelo_simples` verdadeiro → Simples Nacional; senão fica em "Não
+  Informado" (Lucro Presumido vs. Lucro Real não são distinguíveis pela
+  resposta pública da API — usuário escolhe manualmente).
+- **Indicador de Contribuinte do ICMS** (`IndicadorContribuinteIcms`:
+  Contribuinte/Isento/Não Contribuinte) é só cadastro por enquanto —
+  corresponde ao futuro `indIEDest` da NF-e, mas sem nenhuma lógica de
+  emissão associada ainda. Nunca preenchido automaticamente (não existe
+  esse dado no retorno do CNPJ) e sem valor padrão pré-selecionado — é
+  sempre uma escolha manual do usuário. Indicador de Consumidor Final foi
+  avaliado e **não** foi implementado — decidido que pertence ao momento
+  da emissão/compra, não ao cadastro da pessoa; revisitar quando o módulo
+  de NF-e for implementado.
+- **Endereço é criado automaticamente no `Create`, sem NENHUM campo de
+  endereço na ficha principal** — o formulário de Pessoa Jurídica NUNCA
+  ganhou (e não deve ganhar) campos próprios de `cep`/`logradouro`/
+  `numero`/etc.; endereço continua sendo só a relação `enderecos`,
+  gerenciada pelo `EnderecosRelationManager` já registrado em
+  `PessoaJuridicaResource::getRelations()` (mesmo componente que
+  `PessoaFisicaResource` usa — CRUD completo, com busca de CEP via
+  `ViaCepLookup`, que só fica disponível como aba depois que o registro
+  é salvo, comportamento nativo do Filament para RelationManagers).
+  **Uma primeira versão desta correção (2026-08-27/28) errou isso**:
+  adicionou um bloco de campos de endereço "soltos"
+  (`->dehydrated(false)`) direto na ficha principal, visível mesmo antes
+  de salvar — corrigido removendo esse bloco por completo (nenhum campo
+  de endereço na ficha, nunca).
+  `CreatePessoaJuridica::afterCreate()` NÃO lê nada do formulário para
+  montar o Endereço — chama
+  `BrasilApiCnpjLookup::buscar($this->record->cnpj)` de novo (o
+  `Cache::remember` de 10 min da própria classe normalmente reaproveita
+  a mesma resposta já obtida quando o CNPJ foi digitado, sem nova
+  chamada de rede) e usa `BrasilApiCnpjLookup::enderecoFrom($data)` (método
+  público dedicado, único ponto que sabe extrair os campos de endereço de
+  uma resposta crua da API) para montar o array aceito por
+  `Endereco::create()`. Se `buscar()` retornar `null` (CNPJ não
+  encontrado, inválido, ou o campo nunca perdeu o foco), nenhum Endereço
+  é criado — o usuário cria manualmente pela aba de Endereços, como já
+  funcionava antes desta funcionalidade existir. O Endereço criado é
+  anexado à relação com `tipo = TipoEndereco::Comercial` e
+  `principal = true`, e fica imediatamente visível/editável na aba de
+  Endereços do próprio registro recém-criado. `afterCreate()` só existe
+  em `CreateRecord` (não em `EditRecord`), então não há como isso rodar
+  de novo numa edição nem risco de duplicar o Endereço a cada save.
+- Situação Cadastral é renderizada como um badge nativo do Filament
+  (`x-filament::badge`, via `Illuminate\Support\Facades\Blade::render()`
+  dentro de um `Placeholder::make(...)->content(...)`) em vez de HTML/CSS
+  hand-rolled — garante que a aparência acompanha o tema/versão do
+  Filament automaticamente. Cores conforme os códigos oficiais informados
+  para esta tarefa: `02` Ativa (success/verde), `03` Suspensa
+  (warning/amarelo), `04`/`05` Inapta/Nula (danger/vermelho), `01`/`08`
+  Baixada (gray). Dois campos `Hidden::make()` (`situacao_cadastral` e
+  `descricao_situacao_cadastral`) guardam os dados reais — o Placeholder
+  em si é só a representação visual, lida via `Get` a partir desses
+  hidden fields.
+- Dados que a API de CNPJ retorna mas **ainda não têm campo
+  correspondente** no cadastro (decisão de produto pendente de
+  avaliação, não implementação): capital social (`capital_social`),
+  sócios/QSA (`qsa`), CNAEs secundários (`cnaes_secundarios` — só o CNAE
+  principal é mapeado), datas de opção/exclusão do Simples/MEI (só o
+  resultado final do regime é guardado, não as datas).
+
+### NCM removido do cadastro de Pessoa Jurídica (2026-08-28)
+
+A primeira versão desta integração (2026-08-27) também adicionava um
+campo `ncm` (Select com busca assíncrona na BrasilAPI) em Pessoa
+Jurídica. **Foi um equívoco de escopo, revertido no dia seguinte**: NCM
+(Nomenclatura Comum do Mercosul) é uma classificação de
+**produto/mercadoria**, não de empresa — não pertence ao cadastro de
+Pessoa Jurídica. Revertido via nova migration
+(`2026_08_28_100000_drop_ncm_from_pessoas_juridicas_table.php` — a
+migration original de criação da coluna,
+`2026_08_27_100000_add_ncm_to_pessoas_juridicas_table.php`, **não** foi
+editada, já que tinha sido commitada/rodada; reverter uma migration já
+aplicada é sempre uma migration nova, nunca uma edição retroativa da
+antiga), removendo também o campo do `form()`, do `$fillable` do model e
+as chaves de tradução `ncm`.
+
+`Perseu\Pessoas\Support\BrasilApiNcmLookup` **foi mantido no código**
+(não deletado) — tem um comentário no topo do arquivo marcando
+"RESERVADO PARA USO FUTURO" — porque a lógica em si (busca assíncrona na
+BrasilAPI, `GET /api/ncm/v1`) é reaproveitável quando o futuro cadastro
+de Produto/Material for criado, que é onde NCM realmente pertence. Só o
+ponto de uso (`getSearchResultsUsing`/`getOptionLabelUsing` num Select)
+precisa ser reconectado lá — a classe em si não muda.
+
+Pendências de outras APIs da BrasilAPI avaliadas mas fora de escopo
+(feriados nacionais, bancos/PIX) — ver `PENDENCIAS-INTEGRACOES.md`.
+
+## Excluir Pessoa Jurídica em cascata (Endereços/Contatos) + CNPJ de registro excluído (2026-08-28)
+
+**Bug relatado**: excluir uma Pessoa Jurídica e recriar o cadastro com o
+mesmo CNPJ trazia de volta o Endereço antigo. **Causa raiz confirmada
+por teste controlado** (não a hipótese inicialmente suspeitada): não
+existia (e nunca existiu) nenhuma lógica de `updateOrCreate`/restauração
+silenciosa no fluxo de criação — `CreatePessoaJuridica` sempre usa
+`create()` puro, sempre gera um `id` novo. O problema real era outro,
+em duas partes que juntas produziam o sintoma:
+
+1. **Excluir uma Pessoa Jurídica (mesmo só soft-delete) nunca excluía
+   Endereços/Contatos vinculados** — eles ficavam "vivos" no banco,
+   ainda ligados via pivot/FK a um registro que só estava na lixeira.
+   Não havia nenhum model event, observer, nem lógica no Resource
+   cuidando disso — confirmado lendo `PessoaJuridica.php` (sem
+   `boot()`) e o Resource (só `DeleteAction::make()` padrão, sem
+   customização).
+2. A validação `->unique(ignoreRecord: true)` do campo `cnpj` usa
+   `Illuminate\Validation\Rule::unique()`, que consulta a tabela crua
+   (sem o `SoftDeletingScope` do Eloquent) — ou seja, **um CNPJ de
+   registro soft-deleted já bloqueava a recriação**, só que com uma
+   mensagem genérica ("já se encontra registrado") sem explicar o
+   motivo real. Se a recriação já estava bloqueada, como o Endereço
+   antigo reaparecia? Reproduzido durante os próprios testes
+   desta correção: bastou restaurar manualmente (via tinker,
+   `->restore()`) um registro soft-deleted que já tinha essa "lixeira
+   fantasma" — algo plausível de ter acontecido durante os testes desta
+   semana (o projeto ainda não tem Lixeira/Restore funcional na UI, só
+   acesso via tinker/DB) — para os Endereços órfãos reaparecerem
+   instantaneamente, já que a relação nunca tinha sido desfeita. A causa
+   raiz de fundo é (1): sem isso corrigido, QUALQUER restauração futura
+   (manual ou por uma Lixeira que venha a ser implementada) reproduziria
+   o mesmo sintoma.
+
+**Correção 1 — cascata em `Perseu\Pessoas\Models\PessoaJuridica::boot()`**:
+listener em `static::deleting(...)` (dispara tanto em soft-delete quanto
+em `forceDelete()` — `SoftDeletes::delete()` ainda passa pelos eventos
+normais do Model) que:
+- Apaga todos os `Contato` da relação (`hasMany` direto por
+  `pessoa_juridica_id` — sempre pertence a uma única Pessoa Jurídica,
+  `->delete()` em massa é seguro).
+- Para cada `Endereco` da relação (`BelongsToMany`, que o schema permite
+  compartilhar entre múltiplas Pessoas Física/Jurídica mesmo que nada no
+  sistema hoje crie isso na prática): desvincula da Pessoa Jurídica
+  (`detach()`) e só apaga o registro de fato se, depois disso, nenhuma
+  outra Pessoa Física/Jurídica ainda o referenciar — evita apagar um
+  Endereço que porventura esteja em uso por outro cadastro.
+
+  Nem Endereço nem Contato usam `SoftDeletes` (ver "Estrutura do plugin
+  de Pessoas"), então a limpeza é sempre definitiva (`->delete()` real),
+  mesmo quando a própria Pessoa Jurídica está só indo pra lixeira — não
+  faz sentido preservar dados "vivos" de um cadastro pai que nem existe
+  mais ativamente; se o usuário restaurar a Pessoa Jurídica depois,
+  reconstrói Endereço/Contato do zero (mesma UX de excluir e recadastrar
+  hoje).
+
+**Correção 2 — mensagem clara para CNPJ de registro excluído**: o
+`->unique()` do campo `cnpj` ganhou
+`modifyRuleUsing: fn (Unique $rule) => $rule->whereNull('deleted_at')`
+— volta a considerar só registros ATIVOS (comportamento que a maioria
+dos devs assumiria por padrão, mas não é o default do Laravel). Um novo
+`Perseu\Pessoas\Rules\CnpjNaoExcluido` (mesmo padrão de `CnpjValido`)
+assume especificamente o caso "existe um soft-deleted com este CNPJ",
+com mensagem própria orientando o usuário a restaurar ou apagar
+definitivamente antes de recriar — situação que vai continuar
+acontecendo até a decisão maior sobre Lixeira/Restore de Pessoa
+Jurídica ser tomada (fora de escopo desta correção).
+
+**Escopo**: só `Perseu\Pessoas\Models\PessoaJuridica`. `PessoaFisica`
+tem exatamente a mesma estrutura (`SoftDeletes` + `enderecos()`
+`BelongsToMany` sem cascata) e provavelmente tem o mesmo problema
+latente, mas isso não foi corrigido aqui — o bug relatado era
+especificamente sobre Pessoa Jurídica, e não foi confirmado/testado
+para Pessoa Física. Reavaliar se/quando um bug análogo for reportado
+lá.

@@ -6,6 +6,8 @@ use Filament\Support\Contracts\HasLabel;
 
 enum RegimeTributario: int implements HasLabel
 {
+    case NaoInformado = 0;
+
     case SimplesNacional = 1;
 
     case LucroPresumido = 2;
@@ -17,6 +19,7 @@ enum RegimeTributario: int implements HasLabel
     public function getLabel(): string
     {
         return match ($this) {
+            self::NaoInformado    => __('pessoas::enums.regime-tributario.nao-informado'),
             self::SimplesNacional => __('pessoas::enums.regime-tributario.simples-nacional'),
             self::LucroPresumido  => __('pessoas::enums.regime-tributario.lucro-presumido'),
             self::LucroReal       => __('pessoas::enums.regime-tributario.lucro-real'),
