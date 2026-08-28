@@ -1,8 +1,8 @@
 <?php
 
-use Perseu\Comercial\Filament\Clusters\Comercial\Resources\ProjetoResource;
-use Perseu\Comercial\Filament\Clusters\Comercial\Resources\SituacaoProjetoResource;
-use Perseu\Comercial\Filament\Clusters\Comercial\Resources\TipoProjetoResource;
+use Perseu\Comercial\Filament\Clusters\Comercial\Resources\ObraResource;
+use Perseu\Comercial\Filament\Clusters\Comercial\Resources\SituacaoObraResource;
+use Perseu\Comercial\Filament\Clusters\Comercial\Resources\TipoObraResource;
 
 $basic = ['view_any', 'view', 'create', 'update'];
 $delete = ['delete', 'delete_any'];
@@ -12,9 +12,9 @@ $restore = ['restore', 'restore_any'];
 return [
     'resources' => [
         'manage' => [
-            SituacaoProjetoResource::class => [...$basic, ...$delete],
-            TipoProjetoResource::class     => [...$basic, ...$delete],
-            ProjetoResource::class         => [...$basic, ...$delete, ...$restore, ...$forceDelete],
+            SituacaoObraResource::class => [...$basic, ...$delete],
+            TipoObraResource::class     => [...$basic, ...$delete],
+            ObraResource::class         => [...$basic, ...$delete, ...$restore, ...$forceDelete],
         ],
     ],
 ];

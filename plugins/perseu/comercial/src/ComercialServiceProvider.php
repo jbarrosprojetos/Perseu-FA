@@ -4,12 +4,12 @@ namespace Perseu\Comercial;
 
 use Filament\Panel;
 use Illuminate\Support\Facades\Gate;
-use Perseu\Comercial\Models\Projeto;
-use Perseu\Comercial\Models\SituacaoProjeto;
-use Perseu\Comercial\Models\TipoProjeto;
-use Perseu\Comercial\Policies\ProjetoPolicy;
-use Perseu\Comercial\Policies\SituacaoProjetoPolicy;
-use Perseu\Comercial\Policies\TipoProjetoPolicy;
+use Perseu\Comercial\Models\Obra;
+use Perseu\Comercial\Models\SituacaoObra;
+use Perseu\Comercial\Models\TipoObra;
+use Perseu\Comercial\Policies\ObraPolicy;
+use Perseu\Comercial\Policies\SituacaoObraPolicy;
+use Perseu\Comercial\Policies\TipoObraPolicy;
 use Webkul\PluginManager\Console\Commands\InstallCommand;
 use Webkul\PluginManager\Console\Commands\UninstallCommand;
 use Webkul\PluginManager\Package;
@@ -29,6 +29,7 @@ class ComercialServiceProvider extends PackageServiceProvider
                 '2026_08_22_110002_create_projeto_numero_sequencias_table',
                 '2026_08_22_110003_create_projetos_table',
                 '2026_08_22_110004_create_projeto_situacao_table',
+                '2026_08_28_120000_rename_projeto_to_obra',
             ])
             ->runsMigrations()
             ->hasDependency('auditoria')
@@ -40,9 +41,9 @@ class ComercialServiceProvider extends PackageServiceProvider
 
     public function packageBooted(): void
     {
-        Gate::policy(SituacaoProjeto::class, SituacaoProjetoPolicy::class);
-        Gate::policy(TipoProjeto::class, TipoProjetoPolicy::class);
-        Gate::policy(Projeto::class, ProjetoPolicy::class);
+        Gate::policy(SituacaoObra::class, SituacaoObraPolicy::class);
+        Gate::policy(TipoObra::class, TipoObraPolicy::class);
+        Gate::policy(Obra::class, ObraPolicy::class);
     }
 
     public function packageRegistered(): void

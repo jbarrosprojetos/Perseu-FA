@@ -13,7 +13,7 @@ use Throwable;
  * nome neutro (não amarrado a "Relation Manager") — qualquer formulário do
  * projeto com esses mesmos campos pode reaproveitar (ex: o
  * createOptionForm de Endereço em
- * Perseu\Comercial\...\ProjetoResource::form(), sem precisar herdar tipo/
+ * Perseu\Comercial\...\ObraResource::form(), sem precisar herdar tipo/
  * principal ou form()/table() de Relation Manager, que não fazem sentido
  * fora desse contexto).
  */

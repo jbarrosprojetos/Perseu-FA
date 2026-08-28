@@ -548,25 +548,124 @@ Decidido manter o plugin "projects" do AureusERP instalado (não é
 mais só teste), para servir dois propósitos: (1) tarefas/iniciativas
 internas criadas manualmente pela direção (ex: mutirão de limpeza,
 inventário, prospecção de clientes) e (2) tarefas automáticas geradas
-pelo nosso Comercial\Projeto, vinculadas a uma Obra real.
+pela nossa Comercial\Obra (ver "Rename Projeto → Obra" abaixo — nome
+já resolvido), vinculadas a uma Obra real.
 
-Duas questões em aberto, a decidir DEPOIS que o plugin estiver
-estável e em uso real (não decidir prematuramente):
+Questão em aberto, a decidir DEPOIS que o plugin estiver estável e em
+uso real (não decidir prematuramente): vínculo entre nossa
+Perseu\Comercial\Obra e o Project do plugin de tarefas — Opção A
+(criar um Project espelho por Obra, mais organizado, exige
+sincronização) vs. Opção B (um Project único "guarda-chuva", mais
+simples, referência só em texto). Definir quando formos implementar a
+automação de criação de tarefas, analisando o momento certo de
+disparo (ex: mudança de Situação da Obra).
 
-1. Vínculo entre nosso Perseu\Comercial\Projeto e o Project do plugin
-   de tarefas: Opção A (criar um Project espelho por Obra, mais
-   organizado, exige sincronização) vs. Opção B (um Project único
-   "guarda-chuva", mais simples, referência só em texto). Definir
-   quando formos implementar a automação de criação de tarefas,
-   analisando o momento certo de disparo (ex: mudança de Situação do
-   Projeto).
+(A segunda questão que existia aqui — nome final do cadastro — está
+resolvida, ver seção seguinte.)
 
-2. Nome final: cogitando renomear nosso Perseu\Comercial\Projeto para
-   "Obra" ou "Proposta" (mantendo o plugin de tarefas como
-   "Projetos"/"Projects"), OU manter nosso nome como está e renomear
-   o plugin de tarefas para algo tipo "Tarefas". Decisão a tomar após
-   uso real de ambos, para ver qual nomenclatura reflete melhor o
-   dia a dia da empresa.
+## Rename "Projeto" → "Obra" no plugin `perseu/comercial` (2026-08-28)
+
+Decisão de nomenclatura citada acima como pendente desde o handoff
+original do projeto está **resolvida**: o cadastro de negócio chamado
+"Projeto" virou **"Obra"**, que é a função real desse cadastro (obras
+de marcenaria da F.A. Marcenaria) — não só o texto da tela, um rename
+completo (Model, tabela, colunas, namespace, rotas, permissões,
+traduções). Decisão consciente durante a implementação: o rename
+cobriu também `SituacaoProjeto`→`SituacaoObra` e `TipoProjeto`→
+`TipoObra` (a tarefa original só citava o cadastro principal
+explicitamente, mas deixar "Situação do Projeto"/"Tipo do Projeto" na
+tela depois do cadastro principal virar "Obra" seria inconsistente —
+confirmado com o usuário antes de ampliar o escopo).
+
+**Continua valendo, sem mudança**: o plugin de Tarefas
+(`webkul/projects`) tem sua própria entidade "Project"/"Task" em
+inglês, **totalmente separada** — não foi tocado nesta tarefa (ver
+`ESTUDO-PLUGIN-PROJECTS.md`) e não deve ser confundido com este
+rename.
+
+### O que mudou
+
+| Antes | Depois |
+|---|---|
+| `Perseu\Comercial\Models\Projeto` | `Perseu\Comercial\Models\Obra` |
+| `Perseu\Comercial\Models\SituacaoProjeto` | `Perseu\Comercial\Models\SituacaoObra` |
+| `Perseu\Comercial\Models\TipoProjeto` | `Perseu\Comercial\Models\TipoObra` |
+| `Perseu\Comercial\Services\GeradorNumeroProjeto` | `Perseu\Comercial\Services\GeradorNumeroObra` |
+| `ProjetoResource`/`SituacaoProjetoResource`/`TipoProjetoResource` | `ObraResource`/`SituacaoObraResource`/`TipoObraResource` (+ Pages, Policies) |
+| tabela `projetos` | tabela `obras` |
+| tabela `situacoes_projeto` | tabela `situacoes_obra` |
+| tabela `tipos_projeto` | tabela `tipos_obra` |
+| tabela `projeto_numero_sequencias` | tabela `obra_numero_sequencias` |
+| tabela `projeto_situacao` | tabela `obra_situacao` |
+| coluna `projetos.tipo_projeto_id` | `obras.tipo_obra_id` |
+| coluna `projetos.numero_projeto` | `obras.numero_obra` |
+| coluna `obra_numero_sequencias.tipo_projeto_id` | `tipo_obra_id` |
+| colunas `projeto_situacao.projeto_id`/`situacao_projeto_id` | `obra_situacao.obra_id`/`situacao_obra_id` |
+| slug `comercial/projetos` | slug `comercial/obras` |
+
+**Numeração automática (prefixo AAT####) não mudou** — o código de
+`GeradorNumeroObra::gerar()` é idêntico ao antigo
+`GeradorNumeroProjeto::gerar()`, só o nome da classe/tabela mudou; o
+prefixo letra vem de `TipoObra->codigo` (mesmo mecanismo de sempre,
+testado gerando uma Obra nova depois do rename: `26T0001` — ano +
+código do tipo + sequencial, igual a antes).
+
+### Migration de rename — `Schema::rename()`/`renameColumn()`, nunca drop/recriar
+
+`2026_08_28_120000_rename_projeto_to_obra.php`: tabelas primeiro
+(`Schema::rename()`), colunas depois (`Schema::table(...)
+->renameColumn()`, já com o NOME NOVO da tabela). FKs entre as tabelas
+renomeadas continuam funcionando sem precisar dropar/recriar —
+MySQL/MariaDB atualiza a constraint automaticamente para apontar pro
+novo nome de tabela/coluna quando `RENAME TABLE`/`RENAME COLUMN` são
+usados (confirmado consultando `information_schema.KEY_COLUMN_USAGE`
+depois de rodar a migration: a FK de `obras.tipo_obra_id` já apontava
+pra `tipos_obra.id` corretamente). Único resíduo cosmético: os NOMES
+das constraints em si continuam com o prefixo antigo (ex.:
+`projetos_tipo_projeto_id_foreign`) — MySQL/MariaDB não renomeia o
+nome da constraint automaticamente nesse cenário, só o que ela
+referencia. Sem efeito funcional (nome de constraint não é visível na
+UI nem usado em código); não foi corrigido por ser cosmético e exigir
+DROP/ADD CONSTRAINT (mais invasivo que o benefício justifica).
+
+A migration antiga que criava a tabela (`..._create_projetos_table`)
+**não foi editada** — já tinha rodado; reverter/renomear uma migration
+já aplicada é sempre uma migration nova.
+
+### Permissões Shield — geradas de novo, antigas removidas (não deixadas soltas)
+
+`shield:generate --resource=ObraResource,SituacaoObraResource,TipoObraResource`
+gerou as novas chaves (`view_any_comercial_obra`,
+`view_any_comercial_situacao::obra`, `view_any_comercial_tipo::obra`,
+etc. — o `::` vem da convenção de geração de chave deste projeto pra
+nomes de Resource com mais de uma palavra, ver seção de Auditoria
+acima). `shield:generate` sozinho **não sincroniza com a role Admin**
+(diferente do fluxo completo de `{plugin}:install`, que faz isso como
+parte do processo) — precisou de um `$admin->givePermissionTo(...)`
+manual logo em seguida. As 22 permissões antigas (`_projeto`,
+`_situacao::projeto`, `_tipo::projeto`, guards `web` e `sanctum`, 44
+linhas no total) foram apagadas da tabela `permissions` — não
+deixadas como lixo. `Permission::delete()` via Eloquent deu erro
+("Class name must be a valid object or a string") especificamente nas
+linhas de guard `sanctum` (funcionou normalmente pras de guard `web`)
+— causa não investigada a fundo (aparenta ser um hook do próprio
+Shield relacionado a esse guard), contornado apagando as linhas
+restantes via SQL direto (`DELETE FROM permissions WHERE name LIKE
+'%projeto%'` + limpeza correspondente em `role_has_permissions`) em
+vez do Eloquent.
+
+### Auditoria/Lixeira sobreviveram ao rename sem reconfiguração
+
+`LogsBusinessActivity` (trait, ver seção de Auditoria) e
+`ActivitylogRelationManager` continuaram funcionando normalmente só
+por estarem presentes em `Obra`/`ObraResource` com os nomes novos —
+nada precisou ser reconfigurado "do zero", confirmado criando uma Obra
+de teste, editando, e conferindo o log de atividade (`causer`/
+`changes` corretos) e o ciclo completo de Lixeira (soft-delete →
+aparece no `TrashedFilter` → `Restaurar` → `Excluir Permanentemente`,
+com o log de atividade da própria exclusão continuando em
+`activity_log`, tabela separada, mesmo depois do registro sumir de
+`obras`).
 
 ## Navegação de módulos com múltiplos itens irmãos: grupo compartilhado "achatado", não Cluster — histórico e mecanismo correto (2026-08-24)
 
