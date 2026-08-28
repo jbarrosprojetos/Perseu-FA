@@ -2,8 +2,14 @@
 
 namespace Perseu\Pessoas\Filament\Clusters\Pessoas\Resources;
 
+use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Actions\ForceDeleteAction;
+use Filament\Actions\ForceDeleteBulkAction;
+use Filament\Actions\RestoreAction;
+use Filament\Actions\RestoreBulkAction;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -13,6 +19,7 @@ use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Perseu\Pessoas\Enums\EstadoCivil;
@@ -24,6 +31,7 @@ use Perseu\Pessoas\Filament\Clusters\Pessoas\Resources\PessoaFisicaResource\Rela
 use Perseu\Pessoas\Models\PessoaFisica;
 use Perseu\Pessoas\Rules\CpfValido;
 use Perseu\Pessoas\Traits\HasCompactFieldWidth;
+use Rmsramos\Activitylog\RelationManagers\ActivitylogRelationManager;
 use Webkul\Support\Enums\NavigationGroup;
 
 class PessoaFisicaResource extends Resource
@@ -177,6 +185,10 @@ class PessoaFisicaResource extends Resource
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
+            ->filters([
+                TrashedFilter::make()
+                    ->label(__('pessoas::filament/resources/pessoa-fisica.table.filters.trashed')),
+            ])
             ->recordActions([
                 EditAction::make()
                     ->successNotification(
@@ -192,6 +204,27 @@ class PessoaFisicaResource extends Resource
                             ->title(__('pessoas::filament/resources/pessoa-fisica.table.actions.delete.notification.title'))
                             ->body(__('pessoas::filament/resources/pessoa-fisica.table.actions.delete.notification.body')),
                     ),
+                RestoreAction::make()
+                    ->successNotification(
+                        Notification::make()
+                            ->success()
+                            ->title(__('pessoas::filament/resources/pessoa-fisica.table.actions.restore.notification.title'))
+                            ->body(__('pessoas::filament/resources/pessoa-fisica.table.actions.restore.notification.body')),
+                    ),
+                ForceDeleteAction::make()
+                    ->successNotification(
+                        Notification::make()
+                            ->success()
+                            ->title(__('pessoas::filament/resources/pessoa-fisica.table.actions.force-delete.notification.title'))
+                            ->body(__('pessoas::filament/resources/pessoa-fisica.table.actions.force-delete.notification.body')),
+                    ),
+            ])
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
+                    RestoreBulkAction::make(),
+                    ForceDeleteBulkAction::make(),
+                ]),
             ]);
     }
 
@@ -208,6 +241,7 @@ class PessoaFisicaResource extends Resource
     {
         return [
             EnderecosRelationManager::class,
+            ActivitylogRelationManager::class,
         ];
     }
 }

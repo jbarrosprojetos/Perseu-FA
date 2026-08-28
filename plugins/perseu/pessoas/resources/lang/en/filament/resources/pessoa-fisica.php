@@ -35,6 +35,10 @@ return [
             'created-at'   => 'Created At',
         ],
 
+        'filters' => [
+            'trashed' => 'Deleted',
+        ],
+
         'actions' => [
             'edit' => [
                 'notification' => [
@@ -47,6 +51,20 @@ return [
                 'notification' => [
                     'title' => 'Individual deleted',
                     'body'  => 'The individual has been deleted successfully.',
+                ],
+            ],
+
+            'restore' => [
+                'notification' => [
+                    'title' => 'Individual restored',
+                    'body'  => 'The individual has been restored successfully.',
+                ],
+            ],
+
+            'force-delete' => [
+                'notification' => [
+                    'title' => 'Individual permanently deleted',
+                    'body'  => 'The individual and its related data (addresses) have been permanently deleted.',
                 ],
             ],
         ],

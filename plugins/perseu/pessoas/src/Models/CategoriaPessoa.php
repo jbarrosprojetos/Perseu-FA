@@ -4,9 +4,12 @@ namespace Perseu\Pessoas\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Perseu\Auditoria\Traits\LogsBusinessActivity;
 
 class CategoriaPessoa extends Model
 {
+    use LogsBusinessActivity;
+
     protected $table = 'categorias_pessoa';
 
     protected $fillable = [

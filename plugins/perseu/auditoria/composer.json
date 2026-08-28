@@ -1,0 +1,23 @@
+{
+    "name": "perseu/auditoria",
+    "description": "Auditoria (log de atividade) para os cadastros de negócio do Perseu",
+    "authors": [
+        {
+            "name": "Perseu",
+            "email": "support@aureuserp.in"
+        }
+    ],
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Perseu\\Auditoria\\AuditoriaServiceProvider"
+            ],
+            "aliases": {}
+        }
+    },
+    "autoload": {
+        "psr-4": {
+            "Perseu\\Auditoria\\": "src/"
+        }
+    }
+}

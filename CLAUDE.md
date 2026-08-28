@@ -980,5 +980,263 @@ tem exatamente a mesma estrutura (`SoftDeletes` + `enderecos()`
 `BelongsToMany` sem cascata) e provavelmente tem o mesmo problema
 latente, mas isso não foi corrigido aqui — o bug relatado era
 especificamente sobre Pessoa Jurídica, e não foi confirmado/testado
-para Pessoa Física. Reavaliar se/quando um bug análogo for reportado
-lá.
+para Pessoa Física.
+
+**Atualização (2026-08-28, tarefa de Auditoria/Lixeira):** a lacuna
+acima foi fechada — ver seção "Auditoria (log de atividade) + Lixeira
+completa", que também reavaliou e CORRIGIU um detalhe importante desta
+correção original: o hook trocou de `deleting` para `forceDeleting`
+(deixando de rodar num soft-delete comum), porque a Lixeira completa
+feita naquela tarefa depende de Endereço/Contato permanecerem intactos
+enquanto o registro pai só está soft-deleted (pra `Restaurar`
+funcionar de verdade).
+
+## Auditoria (log de atividade) + Lixeira completa (2026-08-28)
+
+Antes desta tarefa o Perseu não tinha NENHUMA auditoria (nem
+`created_by`/`updated_by`, nem log de nenhum tipo) e o soft delete
+existente (`PessoaJuridica`/`PessoaFisica`/`Projeto`) não tinha Lixeira
+funcional na UI — só marcava `deleted_at`, sem filtro pra ver
+excluídos nem ação de restaurar/apagar definitivamente. Essas duas
+lacunas foram resolvidas juntas: `spatie/laravel-activitylog` +
+`rmsramos/activitylog` (plugin Filament v5 pronto pra ele) via um novo
+plugin próprio `perseu/auditoria`, e a Lixeira completada nos 3
+Resources que já usavam `SoftDeletes`.
+
+### Plugin `perseu/auditoria`
+
+Segue exatamente o mesmo esqueleto de `perseu/pessoas`
+(`Webkul\PluginManager\PackageServiceProvider`, ver
+GUIA-CRIACAO-PLUGIN.md) — **sem migrations próprias**: as migrations
+do pacote spatie (`activity_log`) foram publicadas para
+`database/migrations/` do próprio app (`php artisan vendor:publish
+--tag=activitylog-migrations`) e rodam via `artisan migrate` normal,
+de propósito fora do ciclo de instalar/desinstalar do plugin-manager —
+é infraestrutura compartilhada por QUALQUER plugin que audite Models,
+não dado específico do plugin `auditoria`; desinstalar o plugin não
+deveria arriscar dropar a tabela de log de outros módulos.
+
+`perseu/pessoas` e `perseu/comercial` ganharam
+`->hasDependency('auditoria')` nos respectivos ServiceProviders (os
+Models deles referenciam `Perseu\Auditoria\Traits\LogsBusinessActivity`
+diretamente — sem o plugin de auditoria instalado, essas classes
+quebrariam).
+
+### `Perseu\Auditoria\Traits\LogsBusinessActivity` — ponto único de configuração
+
+Em vez de cada Model escrever seu próprio `getActivitylogOptions()`
+(Spatie), todo Model de cadastro de negócio só faz `use
+LogsBusinessActivity;`, que aplica o padrão do projeto:
+`logFillable()` (audita os mesmos campos que já são
+mass-assignable — um campo novo no `$fillable` já entra na auditoria
+automaticamente, sem editar nada de auditoria) + `logOnlyDirty()` +
+`dontSubmitEmptyLogs()` (só grava log quando algo realmente mudou).
+`causer` (quem fez) e `event` (created/updated/deleted) são
+automáticos do Spatie. Aplicado em TODOS os Models de cadastro de
+negócio hoje existentes: `perseu/pessoas` (`PessoaJuridica`,
+`PessoaFisica`, `CategoriaPessoa`, `Setor`, `Endereco`, `Contato`) e
+`perseu/comercial` (`Projeto`, `SituacaoProjeto`, `TipoProjeto`) — ou
+seja, TODOS os Models são auditados, mesmo os 4 sem Lixeira/aba
+própria (ver limitação abaixo), porque auditar não depende de
+SoftDeletes nem de ter uma página de Edit dedicada.
+
+`config('activitylog.subject_returns_soft_deleted_models')` foi
+mudado de `false` (padrão do pacote) para `true` — sem isso, a aba de
+Atividades de um registro perderia a referência ao "assunto" assim que
+ele fosse soft-deleted (`$activity->subject` viraria `null`), o que
+não faz sentido dado que o sistema usa soft delete extensivamente.
+
+### Página de Auditoria dentro de Configurações (não item de topo próprio)
+
+`rmsramos/activitylog` cria, por padrão, seu próprio item de
+navegação de nível superior. A tarefa pediu especificamente
+Configurações → Auditoria (mesmo padrão de "Marca"/`ManageBranding`),
+não um menu próprio. Mecanismo: `Perseu\Auditoria\Filament\Resources\
+AuditoriaResource extends \Rmsramos\Activitylog\Resources\Activitylog\
+ActivitylogResource` com `protected static ?string $cluster =
+Webkul\Support\Filament\Clusters\Settings::class;` — a mesma técnica
+que `Webkul\Support\Filament\Resources\ActivityTypeResource` já usa
+(um Resource "de verdade" clusterizado, achado como referência viva —
+`ManageBranding` é uma `SettingsPage` ligada a uma classe de Settings
+do `filament/spatie-laravel-settings-plugin`, base errada pra uma tela
+com tabela/filtros/timeline como esta). Registrado via
+`ActivitylogPlugin::make()->resource(AuditoriaResource::class)` (troca
+o Resource padrão do pacote pelo nosso — só o nosso fica registrado,
+não os dois).
+
+**`getPages()` precisou ser sobrescrito com Pages próprias**
+(`ListAuditoria`/`ViewAuditoria`, cada uma só reapontando
+`$resource`/`getResource()` para `AuditoriaResource::class`): as Pages
+originais do pacote (`Rmsramos\Activitylog\Resources\Activitylog\
+Pages\*`) têm esse valor FIXO na classe base `ActivitylogResource` —
+herdar `getPages()` sem reapontar faria as rotas/permissões
+resolverem pro Resource de topo do pacote, não pro nosso clusterizado.
+
+**Bug corrigido durante a implementação**: `Panel::configureUsing()`
+(usado em `packageRegistered()`) aplica a callback a TODOS os painéis
+registrados, não só o admin — sem um `if ($panel->getId() !== 'admin')
+{ return; }` antes de `$panel->plugin(ActivitylogPlugin::make())`, a
+tela de log de atividade também aparecia registrada no painel
+`customer`, o que não faz sentido (cliente não deveria ver auditoria
+interna do sistema). Confirmado via `route:list` antes/depois do
+fix (`settings/activitylogs` no painel customer sumiu).
+
+**Bug 2 corrigido depois (2026-08-28, correção pontual)**: o menu
+"Auditoria" mostrava a chave crua de tradução
+(`Auditoria::filament/resources/auditoria.plural-model-label`) em vez
+do texto "Auditoria". Causa raiz: `AuditoriaServiceProvider::
+packageRegistered()` montava o `ActivitylogPlugin` com
+`->label(__(...))`/`->pluralLabel(__(...))` — `__()` **avaliado
+imediatamente**, não dentro de uma Closure. `packageRegistered()`
+roda a partir de `PackageServiceProvider::register()`
+(spatie/laravel-package-tools), e a fase `register()` de TODOS os
+service providers do Laravel sempre termina ANTES da fase `boot()` de
+qualquer um — só no `boot()` (`bootPackageTranslations()`, disparado
+por `->hasTranslations()`) o namespace `auditoria::` é de fato
+registrado no `Translator`. Ou seja, o `__()` eager rodava sempre
+ANTES do namespace existir, retornava a própria chave (comportamento
+padrão do Laravel pra tradução "não encontrada") — e pior: o
+`Translator` cacheia esse resultado vazio por
+namespace+grupo+locale pro resto do request
+(`Illuminate\Translation\Translator::$loaded`), então mesmo chamadas
+LEGÍTIMAS feitas bem depois no mesmo request (`AuditoriaResource::
+getPluralModelLabel()`, chamada de verdade só na hora de montar a
+navegação, já com tudo registrado) recebiam a mesma resposta
+envenenada — não era uma questão de "tentar nesse método
+específico", o cache já estava poluído antes de qualquer tentativa
+legítima rodar.
+
+Diagnosticado comparando `app('translator')->getLoader()->load(...)`
+(sempre lê do disco, funcionava) com `__()`/`Translator::get()`
+(sempre falhava, mesmo isoladamente) — a diferença apontou direto pro
+cache interno do Translator, não pro arquivo/chave/registro do
+namespace em si (que estavam corretos o tempo todo).
+
+**Correção**: trocar `->label(__(...))` por
+`->label(fn () => __(...))` (idem `pluralLabel`) — `ActivitylogPlugin::
+label()`/`pluralLabel()` aceitam `string|Closure`, e `getLabel()`/
+`getPluralLabel()` só avaliam a Closure quando o valor é realmente
+lido (`$this->evaluate($this->label)`), bem depois do `boot()` de
+todos os providers já ter terminado. **Regra geral pra qualquer
+`ServiceProvider` deste projeto**: nunca chamar `__()` (ou qualquer
+outra coisa que dependa de algo registrado só no `boot()`, como uma
+config ou binding de outro pacote) diretamente dentro de
+`packageRegistered()`/`register()` — só dentro de uma Closure lida
+depois, ou dentro de `packageBooted()`/`boot()`.
+
+### Permissões (Shield) — chaves reais, não as citadas na tarefa original
+
+A tarefa original citava `view_any_activity_log`/`view_activity_log`
+como exemplo — a convenção REAL de geração de chaves deste projeto
+(`Webkul\PluginManager\PermissionManager::managePermissions()`) deriva
+a chave do nome/namespace do **Resource**, não do Model subjacente:
+pra um Resource `Perseu\Auditoria\Filament\Resources\AuditoriaResource`
+(plugin `auditoria`), o resultado é `view_any_auditoria_auditoria` /
+`view_auditoria_auditoria` (confirmado rodando `auditoria:install` e
+consultando a tabela `permissions` — não adivinhado da leitura do
+algoritmo). `config/filament-shield.php` do plugin declara só
+`['view_any', 'view']` pra esse Resource — log de atividade é gerado
+pelo sistema, nunca criado/editado/excluído manualmente pela UI.
+
+`Perseu\Auditoria\Policies\ActivityPolicy` (`Gate::policy(Activity::class,
+ActivityPolicy::class)`, registrado em `packageBooted()`) controla ao
+mesmo tempo a página de Auditoria E a aba "Atividades" embutida em
+Pessoa Jurídica/Física/Projeto — **sem nenhum código extra na aba**:
+`RelationManager::canViewForRecord()` (padrão do Filament, ver
+`vendor/filament/filament/src/Resources/RelationManagers/RelationManager.php`)
+já resolve o Model da relação (`activities()`, fornecido pelo trait
+`LogsActivity` do Spatie) e chama `authorize('viewAny', Activity::class)`
+sozinho — isso já É a "permissão separada de ver/editar o próprio
+registro" pedida na tarefa: um usuário pode editar uma Pessoa Jurídica
+sem ver sua aba de Atividades, e vice-versa, dependendo só de
+`view_any_auditoria_auditoria`. Testado criando uma role/usuário sem
+essa permissão: a aba não aparece no HTML da página de edição, mas a
+página em si continua acessível (o usuário tem permissão de
+ver/editar a PJ, só não a de auditoria).
+
+Os Resources de Pessoa Jurídica/Física/Projeto **já tinham**
+`restore`/`restore_any`/`force_delete`/`force_delete_any` declarados
+em `config/filament-shield.php` e sincronizados com a role Admin de
+uma tarefa anterior — só faltava a UI (`TrashedFilter`/`RestoreAction`/
+`ForceDeleteAction`) de fato usar essas permissões, que é o que esta
+tarefa completou.
+
+**Atribuir a novas roles no futuro** (hoje só existe o usuário Admin):
+Configurações → Funções → criar/editar uma Função → marcar os toggles
+de permissão desejados (`Ver qualquer Log de Atividade`/`Ver Log de
+Atividade` pra habilitar a aba de Atividades e a página de Auditoria;
+`Restaurar`/`Restaurar Todos`/`Excluir Permanentemente`/`Excluir
+Permanentemente Todos` de Pessoa Jurídica/Física/Projeto pra habilitar
+a Lixeira desses cadastros) → atribuir a Função ao usuário (Segurança
+→ Usuários → editar → aba de Roles). Mesmo painel usado pra outras
+permissões do sistema, nada específico de auditoria além de saber
+quais toggles marcar.
+
+### Lixeira completa — `TrashedFilter` + `RestoreAction` + `ForceDeleteAction`
+
+Aplicado em `PessoaJuridicaResource`, `PessoaFisicaResource` e
+`ProjetoResource` (os 3 Resources cujo Model usa `SoftDeletes` E tem
+página de Edit dedicada — ver limitação abaixo): `Filament\Tables\
+Filters\TrashedFilter` (classe nativa do Filament, não um helper
+próprio — confirmado lendo o pacote: é uma `TernaryFilter` com
+`true`=`withTrashed()`, `false`=`onlyTrashed()`,
+branco=`withoutTrashed()`) em `->filters([...])`, e
+`RestoreAction`/`ForceDeleteAction` em `->recordActions([...])` +
+`RestoreBulkAction`/`ForceDeleteBulkAction`/`DeleteBulkAction` num
+`BulkActionGroup` em `->toolbarActions([...])` — mesmo padrão visual
+usado pelos Models originais do AureusERP (ex.:
+`Webkul\Employee\Filament\Clusters\Configurations\Resources\SkillTypeResource\
+RelationManagers\SkillsRelationManager`, achada como referência viva
+via grep — sem essa referência real, um exemplo do próprio código
+(`WorkLocationResource`) tinha `RestoreAction`/`ForceDeleteAction` SEM
+`TrashedFilter`, o que deixaria as duas ações inalcançáveis, já que
+sem o filtro o registro soft-deleted nunca aparece na tabela pra
+começo de conversa — não copiado por estar incompleto).
+
+### Limitação conhecida — `CategoriaPessoa`/`Setor`/`SituacaoProjeto`/`TipoProjeto` não têm Lixeira nem aba de Atividades
+
+A tarefa original citava Categoria/Setor como já usando `SoftDeletes`
+— **não usam** (confirmado por grep antes de implementar, não
+assumido). Além disso, os 4 Resources desses Models
+(`CategoriaPessoaResource`, `SetorResource`, `SituacaoProjetoResource`,
+`TipoProjetoResource`) usam o padrão `ManageRecords` do Filament (uma
+página só, criar/editar via modal) — estruturalmente incompatível com
+RelationManager (a aba de Atividades exige uma página de Edit/View
+dedicada, que esses 4 não têm). Decisão consciente (confirmada com o
+usuário durante a implementação): não expandir o escopo desta tarefa
+pra também adicionar `SoftDeletes` a esses 4 Models e reestruturar os
+Resources pra List+Edit separados — os 4 Models JÁ SÃO auditados
+(`LogsBusinessActivity`, ver acima), só não têm Lixeira nem aba visual
+de Atividades. Reavaliar como uma decisão própria se/quando isso virar
+necessidade real (mesmo espírito da seção "Flags de sistema em
+Categoria de Pessoa" — não expandir schema/estrutura preventivamente).
+
+### Convenção para todo Model de cadastro de negócio criado a partir de agora
+
+1. Usar `SoftDeletes` (`Illuminate\Database\Eloquent\SoftDeletes`).
+2. Usar `Perseu\Auditoria\Traits\LogsBusinessActivity` (não escrever
+   `getActivitylogOptions()` à mão, a não ser que o Model precise de
+   algo diferente do padrão — aí sobrescrever o método depois do
+   `use`, que vence normalmente por resolução de trait do PHP).
+3. Se o Model participa de uma relação `BelongsToMany` com `Endereco`
+   e/ou `HasMany` com `Contato` (ou dado análogo sem SoftDeletes
+   próprio): usar `Perseu\Pessoas\Traits\CascadesRelatedDataOnForceDelete`
+   (ou o padrão equivalente — `forceDeleting`, nunca `deleting`, pra
+   não quebrar a Lixeira) pra não deixar dados órfãos numa exclusão
+   definitiva.
+4. O Resource correspondente precisa ter página de Edit/View dedicada
+   (não `ManageRecords`) pra poder ganhar `TrashedFilter` +
+   `RestoreAction`/`ForceDeleteAction` + `ActivitylogRelationManager`
+   na aba de Atividades — se o cadastro for simples o bastante pra
+   usar `ManageRecords` (like Categoria/Setor), aceitar que ele fica
+   sem Lixeira/aba visual (mas continua auditado) até uma decisão
+   consciente de reestruturar, não implementar isso por padrão em todo
+   cadastro novo sem necessidade real.
+5. Adicionar `RestoreAction`/`ForceDeleteAction`/`RestoreBulkAction`/
+   `ForceDeleteBulkAction` + `TrashedFilter` no `table()` do Resource,
+   e `Rmsramos\Activitylog\RelationManagers\ActivitylogRelationManager::class`
+   em `getRelations()`.
+6. Declarar `restore`/`restore_any`/`force_delete`/`force_delete_any`
+   no `config/filament-shield.php` do plugin (junto do básico), e
+   rodar `shield:generate` (ou reinstalar o plugin) pra sincronizar com
+   a role Admin.

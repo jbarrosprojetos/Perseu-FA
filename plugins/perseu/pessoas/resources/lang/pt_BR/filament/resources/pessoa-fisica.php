@@ -35,6 +35,10 @@ return [
             'created-at'   => 'Criado em',
         ],
 
+        'filters' => [
+            'trashed' => 'Excluídos',
+        ],
+
         'actions' => [
             'edit' => [
                 'notification' => [
@@ -47,6 +51,20 @@ return [
                 'notification' => [
                     'title' => 'Pessoa física excluída',
                     'body'  => 'A pessoa física foi excluída com sucesso.',
+                ],
+            ],
+
+            'restore' => [
+                'notification' => [
+                    'title' => 'Pessoa física restaurada',
+                    'body'  => 'A pessoa física foi restaurada com sucesso.',
+                ],
+            ],
+
+            'force-delete' => [
+                'notification' => [
+                    'title' => 'Pessoa física excluída definitivamente',
+                    'body'  => 'A pessoa física e seus dados relacionados (endereços) foram excluídos definitivamente.',
                 ],
             ],
         ],

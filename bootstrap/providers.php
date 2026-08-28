@@ -3,6 +3,7 @@
 use App\Providers\AppServiceProvider;
 use App\Providers\Filament\AdminPanelProvider;
 use App\Providers\Filament\CustomerPanelProvider;
+use Perseu\Auditoria\AuditoriaServiceProvider;
 use Perseu\Comercial\ComercialServiceProvider;
 use Webkul\Account\AccountServiceProvider;
 use Webkul\Accounting\AccountingServiceProvider;
@@ -39,6 +40,7 @@ return [
     AdminPanelProvider::class,
     CustomerPanelProvider::class,
     AccountingServiceProvider::class,
+    AuditoriaServiceProvider::class,
     AccountServiceProvider::class,
     AnalyticServiceProvider::class,
     BarcodeServiceProvider::class,

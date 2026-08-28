@@ -6,11 +6,15 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Perseu\Auditoria\Traits\LogsBusinessActivity;
 use Perseu\Pessoas\Enums\EstadoCivil;
 use Perseu\Pessoas\Enums\Sexo;
+use Perseu\Pessoas\Traits\CascadesRelatedDataOnForceDelete;
 
 class PessoaFisica extends Model
 {
+    use CascadesRelatedDataOnForceDelete;
+    use LogsBusinessActivity;
     use SoftDeletes;
 
     protected $table = 'pessoas_fisicas';

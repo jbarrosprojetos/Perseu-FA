@@ -2,8 +2,14 @@
 
 namespace Perseu\Comercial\Filament\Clusters\Comercial\Resources;
 
+use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Actions\ForceDeleteAction;
+use Filament\Actions\ForceDeleteBulkAction;
+use Filament\Actions\RestoreAction;
+use Filament\Actions\RestoreBulkAction;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Radio;
 use Filament\Forms\Components\Select;
@@ -16,6 +22,7 @@ use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -29,6 +36,7 @@ use Perseu\Pessoas\Models\Endereco;
 use Perseu\Pessoas\Models\PessoaFisica;
 use Perseu\Pessoas\Models\PessoaJuridica;
 use Perseu\Pessoas\Support\ViaCepLookup;
+use Rmsramos\Activitylog\RelationManagers\ActivitylogRelationManager;
 use Webkul\Support\Enums\NavigationGroup;
 
 class ProjetoResource extends Resource
@@ -413,6 +421,10 @@ class ProjetoResource extends Resource
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
+            ->filters([
+                TrashedFilter::make()
+                    ->label(__('comercial::filament/resources/projeto.table.filters.trashed')),
+            ])
             ->recordActions([
                 EditAction::make()
                     ->successNotification(
@@ -428,6 +440,27 @@ class ProjetoResource extends Resource
                             ->title(__('comercial::filament/resources/projeto.table.actions.delete.notification.title'))
                             ->body(__('comercial::filament/resources/projeto.table.actions.delete.notification.body')),
                     ),
+                RestoreAction::make()
+                    ->successNotification(
+                        Notification::make()
+                            ->success()
+                            ->title(__('comercial::filament/resources/projeto.table.actions.restore.notification.title'))
+                            ->body(__('comercial::filament/resources/projeto.table.actions.restore.notification.body')),
+                    ),
+                ForceDeleteAction::make()
+                    ->successNotification(
+                        Notification::make()
+                            ->success()
+                            ->title(__('comercial::filament/resources/projeto.table.actions.force-delete.notification.title'))
+                            ->body(__('comercial::filament/resources/projeto.table.actions.force-delete.notification.body')),
+                    ),
+            ])
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
+                    RestoreBulkAction::make(),
+                    ForceDeleteBulkAction::make(),
+                ]),
             ]);
     }
 
@@ -437,6 +470,13 @@ class ProjetoResource extends Resource
             'index'  => ListProjetos::route('/'),
             'create' => CreateProjeto::route('/create'),
             'edit'   => EditProjeto::route('/{record}/edit'),
+        ];
+    }
+
+    public static function getRelations(): array
+    {
+        return [
+            ActivitylogRelationManager::class,
         ];
     }
 }

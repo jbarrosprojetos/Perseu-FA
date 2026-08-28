@@ -31,6 +31,7 @@ class ComercialServiceProvider extends PackageServiceProvider
                 '2026_08_22_110004_create_projeto_situacao_table',
             ])
             ->runsMigrations()
+            ->hasDependency('auditoria')
             ->hasInstallCommand(function (InstallCommand $command) {
                 $command->runsMigrations();
             })

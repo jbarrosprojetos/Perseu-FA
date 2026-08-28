@@ -41,6 +41,7 @@ class PessoasServiceProvider extends PackageServiceProvider
                 '2026_08_26_100001_create_pessoa_juridica_setor_table',
             ])
             ->runsMigrations()
+            ->hasDependency('auditoria')
             ->hasInstallCommand(function (InstallCommand $command) {
                 $command->runsMigrations();
             })

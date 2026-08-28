@@ -40,6 +40,10 @@ return [
             'created-at'         => 'Criado em',
         ],
 
+        'filters' => [
+            'trashed' => 'Excluídos',
+        ],
+
         'actions' => [
             'edit' => [
                 'notification' => [
@@ -52,6 +56,20 @@ return [
                 'notification' => [
                     'title' => 'Pessoa jurídica excluída',
                     'body'  => 'A pessoa jurídica foi excluída com sucesso.',
+                ],
+            ],
+
+            'restore' => [
+                'notification' => [
+                    'title' => 'Pessoa jurídica restaurada',
+                    'body'  => 'A pessoa jurídica foi restaurada com sucesso.',
+                ],
+            ],
+
+            'force-delete' => [
+                'notification' => [
+                    'title' => 'Pessoa jurídica excluída definitivamente',
+                    'body'  => 'A pessoa jurídica e seus dados relacionados (endereços, contatos) foram excluídos definitivamente.',
                 ],
             ],
         ],

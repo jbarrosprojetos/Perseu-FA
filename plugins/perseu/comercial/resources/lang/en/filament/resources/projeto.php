@@ -50,6 +50,10 @@ return [
             'data-cadastro'  => 'Registration Date',
         ],
 
+        'filters' => [
+            'trashed' => 'Deleted',
+        ],
+
         'actions' => [
             'edit' => [
                 'notification' => [
@@ -62,6 +66,20 @@ return [
                 'notification' => [
                     'title' => 'Project deleted',
                     'body'  => 'The project has been deleted successfully.',
+                ],
+            ],
+
+            'restore' => [
+                'notification' => [
+                    'title' => 'Project restored',
+                    'body'  => 'The project has been restored successfully.',
+                ],
+            ],
+
+            'force-delete' => [
+                'notification' => [
+                    'title' => 'Project permanently deleted',
+                    'body'  => 'The project has been permanently deleted.',
                 ],
             ],
         ],

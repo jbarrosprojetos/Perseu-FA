@@ -2,8 +2,14 @@
 
 namespace Perseu\Pessoas\Filament\Clusters\Pessoas\Resources;
 
+use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Actions\ForceDeleteAction;
+use Filament\Actions\ForceDeleteBulkAction;
+use Filament\Actions\RestoreAction;
+use Filament\Actions\RestoreBulkAction;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Placeholder;
@@ -16,6 +22,7 @@ use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Blade;
@@ -33,6 +40,7 @@ use Perseu\Pessoas\Rules\CnpjNaoExcluido;
 use Perseu\Pessoas\Rules\CnpjValido;
 use Perseu\Pessoas\Support\BrasilApiCnpjLookup;
 use Perseu\Pessoas\Traits\HasCompactFieldWidth;
+use Rmsramos\Activitylog\RelationManagers\ActivitylogRelationManager;
 use Webkul\Support\Enums\NavigationGroup;
 
 class PessoaJuridicaResource extends Resource
@@ -268,6 +276,10 @@ class PessoaJuridicaResource extends Resource
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
+            ->filters([
+                TrashedFilter::make()
+                    ->label(__('pessoas::filament/resources/pessoa-juridica.table.filters.trashed')),
+            ])
             ->recordActions([
                 EditAction::make()
                     ->successNotification(
@@ -283,6 +295,27 @@ class PessoaJuridicaResource extends Resource
                             ->title(__('pessoas::filament/resources/pessoa-juridica.table.actions.delete.notification.title'))
                             ->body(__('pessoas::filament/resources/pessoa-juridica.table.actions.delete.notification.body')),
                     ),
+                RestoreAction::make()
+                    ->successNotification(
+                        Notification::make()
+                            ->success()
+                            ->title(__('pessoas::filament/resources/pessoa-juridica.table.actions.restore.notification.title'))
+                            ->body(__('pessoas::filament/resources/pessoa-juridica.table.actions.restore.notification.body')),
+                    ),
+                ForceDeleteAction::make()
+                    ->successNotification(
+                        Notification::make()
+                            ->success()
+                            ->title(__('pessoas::filament/resources/pessoa-juridica.table.actions.force-delete.notification.title'))
+                            ->body(__('pessoas::filament/resources/pessoa-juridica.table.actions.force-delete.notification.body')),
+                    ),
+            ])
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
+                    RestoreBulkAction::make(),
+                    ForceDeleteBulkAction::make(),
+                ]),
             ]);
     }
 
@@ -300,6 +333,7 @@ class PessoaJuridicaResource extends Resource
         return [
             EnderecosRelationManager::class,
             ContatosRelationManager::class,
+            ActivitylogRelationManager::class,
         ];
     }
 }

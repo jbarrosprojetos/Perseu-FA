@@ -680,3 +680,51 @@ chaves e estrutura dos arquivos. Plugins novos devem passar nessa checagem.
 9. Rodar `php artisan {nome}:install` (gera migrations, seeders e as
    permissões do Shield).
 10. Validar com `php artisan translations:check`.
+
+## 9. Auditoria + Lixeira (convenção para todo Model de cadastro de negócio)
+
+Desde a criação do plugin `perseu/auditoria` (ver CLAUDE.md, seção
+"Auditoria (log de atividade) + Lixeira completa"), todo Model NOVO de
+cadastro de negócio (Pessoas, Comercial, ou qualquer plugin `perseu/*`
+futuro) deve, por padrão:
+
+1. Usar `Illuminate\Database\Eloquent\SoftDeletes`.
+2. Usar `Perseu\Auditoria\Traits\LogsBusinessActivity` (`use
+   LogsBusinessActivity;` no Model — não escrever
+   `getActivitylogOptions()` manualmente, a não ser que precise de algo
+   diferente do padrão do projeto).
+3. Se o Model tem uma relação `BelongsToMany` de Endereço e/ou `HasMany`
+   de Contato (ou dado análogo sem `SoftDeletes` próprio): usar
+   `Perseu\Pessoas\Traits\CascadesRelatedDataOnForceDelete` (ou o mesmo
+   padrão — hook em `forceDeleting`, NUNCA em `deleting`, pra não
+   apagar dado relacionado ao simplesmente mover o registro pai pra
+   lixeira) — sem isso, uma exclusão definitiva deixa Endereço/Contato
+   órfãos no banco.
+4. O Resource correspondente precisa ter página de Edit/View dedicada
+   (`getPages()` com `'edit' => EditXxx::route(...)`, não o padrão
+   `ManageRecords` de página única) — é isso que viabiliza a aba de
+   Atividades (RelationManager exige uma página própria de
+   registro). Um cadastro simples o bastante pra usar `ManageRecords`
+   (ex.: uma tabela de tags/categorias) fica sem Lixeira/aba visual por
+   limitação estrutural — ainda assim auditado (item 2 não depende de
+   `SoftDeletes` nem de página de Edit), mas sem UI de restaurar/ver
+   atividades. Reestruturar pra List+Edit só quando houver necessidade
+   real de Lixeira/Atividades nesse cadastro específico, não
+   preventivamente.
+5. No `table()` do Resource: `Filament\Tables\Filters\TrashedFilter`
+   em `->filters([...])`, `RestoreAction`/`ForceDeleteAction` em
+   `->recordActions([...])`, e `RestoreBulkAction`/
+   `ForceDeleteBulkAction`/`DeleteBulkAction` num `BulkActionGroup` em
+   `->toolbarActions([...])` — mesmo padrão do AureusERP original (ver
+   ex.: `SkillsRelationManager` do plugin `employees`).
+6. `Rmsramos\Activitylog\RelationManagers\ActivitylogRelationManager::class`
+   em `getRelations()` do Resource — a aba de Atividades. Não precisa
+   de nenhuma policy/permissão extra no Resource: a visibilidade já é
+   controlada centralmente por `Perseu\Auditoria\Policies\ActivityPolicy`
+   (`view_any_auditoria_auditoria`), separada da permissão de ver/editar
+   o próprio registro.
+7. `config/filament-shield.php` do plugin: incluir `restore`/
+   `restore_any`/`force_delete`/`force_delete_any` (junto do
+   `$basic`/`$delete` já usuais) pro Resource em questão, e rodar
+   `shield:generate` (ou reinstalar o plugin) pra sincronizar essas
+   permissões com a role Admin.

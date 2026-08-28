@@ -40,6 +40,10 @@ return [
             'created-at'         => 'Created At',
         ],
 
+        'filters' => [
+            'trashed' => 'Deleted',
+        ],
+
         'actions' => [
             'edit' => [
                 'notification' => [
@@ -52,6 +56,20 @@ return [
                 'notification' => [
                     'title' => 'Legal entity deleted',
                     'body'  => 'The legal entity has been deleted successfully.',
+                ],
+            ],
+
+            'restore' => [
+                'notification' => [
+                    'title' => 'Legal entity restored',
+                    'body'  => 'The legal entity has been restored successfully.',
+                ],
+            ],
+
+            'force-delete' => [
+                'notification' => [
+                    'title' => 'Legal entity permanently deleted',
+                    'body'  => 'The legal entity and its related data (addresses, contacts) have been permanently deleted.',
                 ],
             ],
         ],

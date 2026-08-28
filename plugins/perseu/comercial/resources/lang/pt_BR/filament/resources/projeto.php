@@ -50,6 +50,10 @@ return [
             'data-cadastro'  => 'Data de Cadastro',
         ],
 
+        'filters' => [
+            'trashed' => 'Excluídos',
+        ],
+
         'actions' => [
             'edit' => [
                 'notification' => [
@@ -62,6 +66,20 @@ return [
                 'notification' => [
                     'title' => 'Projeto excluído',
                     'body'  => 'O projeto foi excluído com sucesso.',
+                ],
+            ],
+
+            'restore' => [
+                'notification' => [
+                    'title' => 'Projeto restaurado',
+                    'body'  => 'O projeto foi restaurado com sucesso.',
+                ],
+            ],
+
+            'force-delete' => [
+                'notification' => [
+                    'title' => 'Projeto excluído definitivamente',
+                    'body'  => 'O projeto foi excluído definitivamente.',
                 ],
             ],
         ],

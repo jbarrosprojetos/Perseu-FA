@@ -4,9 +4,12 @@ namespace Perseu\Pessoas\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Perseu\Auditoria\Traits\LogsBusinessActivity;
 
 class Contato extends Model
 {
+    use LogsBusinessActivity;
+
     protected $table = 'contatos';
 
     protected $fillable = [

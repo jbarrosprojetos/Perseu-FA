@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Perseu\Auditoria\Traits\LogsBusinessActivity;
 use Perseu\Comercial\Services\GeradorNumeroProjeto;
 use Perseu\Pessoas\Models\Endereco;
 use Perseu\Pessoas\Models\PessoaFisica;
@@ -13,6 +14,7 @@ use Perseu\Pessoas\Models\PessoaJuridica;
 
 class Projeto extends Model
 {
+    use LogsBusinessActivity;
     use SoftDeletes;
 
     protected $table = 'projetos';

@@ -30,7 +30,9 @@
         "malzariey/filament-daterangepicker-filter": "^5.0",
         "milon/barcode": "^13.0",
         "nativephp/mobile": "^3.3",
+        "rmsramos/activitylog": "^4.0",
         "spatie/eloquent-sortable": "^5.0",
+        "spatie/laravel-activitylog": "^4.12",
         "spatie/laravel-query-builder": "^7.0",
         "wikimedia/composer-merge-plugin": "^2.1"
     },
