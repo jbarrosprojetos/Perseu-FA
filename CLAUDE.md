@@ -1657,3 +1657,567 @@ achatado/descartado por complexidade.
    navegação completa (`Filament::getNavigation()`) conferidos
    antes/depois — nenhum outro grupo afetado; `ddev artisan
    optimize:clear` executado ao final.
+
+## Central de Auditoria: filtro por usuário + escopo real do filtro de busca (2026-08-29)
+
+Adicionado `getCauserFilterComponent()` em `AuditoriaResource` — um
+`SelectFilter::make('causer_id')->searchable()->options(...)`, listando
+`Webkul\Security\Models\User` por nome. `causer_id` é coluna real de
+`activity_log`, então (mesmo raciocínio já usado pro filtro
+`subject_type`) não precisou de `->query()` customizado — o
+comportamento padrão do `SelectFilter` já faz `where('causer_id',
+$valor)` sozinho. Não restringe também por `causer_type`: uma consulta
+direta (`SELECT DISTINCT causer_type FROM activity_log`) confirmou só
+dois valores possíveis neste banco — vazio (ações sem usuário
+autenticado, ex. seeders/tinker, 11 das 70 linhas hoje) ou
+`Webkul\Security\Models\User` — o projeto não chama `causedBy()`
+manualmente em lugar nenhum (confirmado por grep), o Spatie Activitylog
+detecta o causer sozinho a partir do usuário autenticado no guard
+padrão, então não existe hoje um cenário de `causer_id` ambíguo entre
+dois tipos de causer diferentes. Validado combinando o filtro com
+módulo/cadastro/evento simultaneamente (`tableFilters.causer_id.value`
++ outro filtro ao mesmo tempo via `Livewire::test()->set(...)`) contra
+contagem direta no banco — interseção `AND` correta em todos os casos
+testados.
+
+### Escopo real do filtro de busca textual ("Nome, razão social, número...")
+
+Registrado aqui pra não precisar reler `SubjectTypeCatalog::applyBusca()`
+do zero da próxima vez que a pergunta "o que esse filtro pesquisa"
+aparecer — a lista abaixo é exatamente o `match` daquele método (uma
+tabela de decisão fixa por tipo de `subject`, já que `whereHasMorph`
+não pesquisa a mesma coluna em todo tipo):
+
+| Cadastro | Coluna(s) pesquisada(s) |
+|---|---|
+| Obra | `descricao`, `numero_obra` |
+| Tipo de Obra, Situação de Obra, Categoria de Pessoa, Setor | `descricao` |
+| Pessoa Física | `nome` |
+| Pessoa Jurídica | `razao_social`, `nome_fantasia`, `cnpj` |
+| Endereço | `logradouro`, `bairro`, `municipio` |
+| Contato | `cargo` |
+
+Ou seja: **só pesquisa dentro dos 9 Models de cadastro de negócio
+auditados** (o mesmo mapa de `SubjectTypeCatalog`) — não pesquisa
+nomes de usuário/causer (esse é o filtro de Usuário, separado, acima),
+nem qualquer dado fora desses Models (ex.: nome da empresa/tenant que
+usa o sistema, que vive em `Webkul\Security\Models\Company`/Branding,
+não em `Pessoa Jurídica` nem em nenhum Model auditado).
+
+**Causa confirmada do "Sem registros" ao buscar "fa marcenaria"**
+(reproduzido exatamente via `Livewire::test()->set('tableFilters.busca.valor',
+'fa marcenaria')`, retornou `total=0`, batendo com o relato do
+usuário): nenhum dos 2 registros de Pessoa Jurídica cadastrados hoje
+(`razao_social`/`nome_fantasia` = "JULIO CESAR DE BARROS
+15955943889"/"PROJETO STUDIO" e "SMARTFIT ESCOLA DE GINASTICA E DANCA
+S.A"/"SMART FIT") nem nenhuma `Obra.descricao` contém o texto "fa
+marcenaria" ou "marcenaria" (confirmado com `LIKE '%marcenaria%'`
+direto no banco, zero linhas nas 3 tabelas relevantes). **"F.A.
+Marcenaria" é a empresa DONA do sistema (o tenant, registrada como
+`Company`/Branding — ver seção sobre Favicon/Logo), não um cliente ou
+fornecedor cadastrado como Pessoa Jurídica** — não há nenhum registro
+de negócio com esse nome pra encontrar hoje. Não é um bug do filtro;
+o "Sem registros" está correto dado os dados reais atuais. Se um
+cliente/fornecedor real chamado algo parecido com "F.A. Marcenaria"
+for cadastrado como Pessoa Jurídica no futuro, a busca vai encontrá-lo
+normalmente pela `razao_social`/`nome_fantasia`.
+
+Sugestão feita ao usuário (não implementada — pendia de confirmação, ver
+tarefa original): melhorar o label "Nome, razão social, número..." pra
+algo mais explicativo (ex.: "Buscar por nome, razão social ou número
+da Obra") e/ou adicionar `->helperText(...)` no campo do filtro,
+citando explicitamente que a busca é sobre OS CADASTROS (Obra, Pessoa
+Física/Jurídica etc.), não sobre a empresa que usa o sistema nem sobre
+o usuário que fez a ação.
+
+## Busca da Central de Auditoria unificada na caixa "Pesquisar" padrão (2026-08-29)
+
+A sugestão da tarefa anterior (melhorar o label do filtro dedicado)
+virou uma decisão maior: o `Filter` separado "Nome, razão social,
+número..." foi **removido**, e a mesma lógica de busca
+(`SubjectTypeCatalog::applyBusca()`) passou a alimentar a caixa
+"Pesquisar" padrão do Filament (topo da tabela) — as duas caixas de
+busca (a padrão do Filament + o filtro dedicado) confundiam o usuário
+sobre qual fazia o quê.
+
+### Mecanismo: `->searchable(query: ...)` na coluna, não um Filter
+
+`getSubjectReferenceColumnComponent()` (coluna "Registro") ganhou
+`->searchable(query: fn (Builder $query, string $search): Builder =>
+SubjectTypeCatalog::applyBusca($query, $search))`. Isso funciona porque
+`Filament\Tables\Columns\Concerns\CanBeSearchable::searchable()` aceita
+um segundo parâmetro `Closure $query` — quando presente,
+`InteractsWithTableQuery::applySearchConstraint()` chama ESSE closure
+em vez de montar a comparação padrão por nome de coluna (o que
+quebraria aqui: a coluna é `subject_reference`, um nome inventado só
+pra `getStateUsing()`, não existe de verdade em `activity_log`).
+`Table::searchPlaceholder(__('...search_placeholder'))` substitui o
+placeholder genérico "Pesquisar" por um texto explicando o que a busca
+cobre (`Buscar por nome, razão social ou número da Obra...`).
+
+### Case-insensitive: já vinha "de graça" da collation, sem precisar de `LOWER()`
+
+Antes de mexer em código, foi conferido se este projeto tem algum
+padrão já estabelecido de busca case-insensitive — achado no próprio
+Filament: `Filament\Support\generate_search_term_expression()` (usada
+pela busca padrão de QUALQUER `TextColumn::searchable()` sem `query:`
+customizado) só força `Str::lower()` no termo quando o driver do banco
+é `pgsql`; pra `mysql`/`mariadb` (este projeto), o padrão é confiar na
+collation da própria coluna. Uma checagem com `SHOW FULL COLUMNS`
+em cada uma das 14 colunas reais que `applyBusca()` compara
+(`obras.descricao`/`numero_obra`, `pessoas_fisicas.nome`,
+`pessoas_juridicas.razao_social`/`nome_fantasia`/`cnpj`,
+`tipos_obra.descricao`, `situacoes_obra.descricao`,
+`categorias_pessoa.descricao`, `setores.descricao`,
+`enderecos.logradouro`/`bairro`/`municipio`, `contatos.cargo`)
+confirmou que TODAS usam `utf8mb4_unicode_ci` — uma collation
+case-insensitive por definição (sufixo `_ci`), o que o MySQL/MariaDB já
+respeita em comparações `LIKE` sem qualquer `LOWER()` extra. Confirmado
+empiricamente também (não só por collation): `PessoaJuridica::where('razao_social',
+'like', '%smartfit%')` (minúsculo) encontrou normalmente
+"SMARTFIT ESCOLA DE GINASTICA E DANCA S.A" (maiúsculo). **Não foi
+adicionado `LOWER()` nos dois lados** — seria redundante (o
+comportamento já é case-insensitive) e inconsistente com o próprio
+padrão do Filament pra MySQL/MariaDB, que também não adiciona.
+Se um dia uma coluna nova entrar em `applyBusca()` com collation
+diferente (`_bin`/`_cs`, raríssimo neste projeto — nenhuma migration
+força collation própria hoje), essa premissa deixa de valer e precisa
+ser revista.
+
+### Validado (via `Livewire::test()->set('tableSearch', ...)`, dados reais)
+
+1. Busca minúscula "smartfit" encontrou a Pessoa Jurídica cuja razão
+   social é "SMARTFIT ESCOLA DE GINASTICA E DANCA S.A" (maiúscula).
+2. Busca por parte do número de uma Obra ("2630" de "2630001")
+   encontrou o log correto.
+3. Filtro dedicado "Nome, razão social, número..." confirmado ausente
+   do HTML renderizado; placeholder novo confirmado presente.
+4. Busca + `modulo`, busca + `causer_id` combinados: interseção `AND`
+   correta (inclusive um caso em que o mesmo termo curto batia com um
+   registro de Comercial E um de Pessoas ao mesmo tempo — cada filtro
+   de módulo restringiu certo pro seu lado).
+5. Navegação completa (`Filament::getNavigation()`) conferida — nenhum
+   grupo afetado; `ddev artisan optimize:clear` executado ao final.
+
+## Botão "Editar" morto no detalhe do log de Auditoria — removido via config oficial do pacote (2026-08-29)
+
+Na tela de detalhe de um log (Configurações → Auditoria → Visualizar),
+o card "Mudanças" tinha um botão "Editar" que não fazia nada ao
+clicar. Investigado até a origem: é o `Action::make('edit')` de
+`Rmsramos\Activitylog\Resources\Activitylog\Schemas\ActivitylogForm`
+(vendor do pacote) — **não é "editar o log"**, é um link pensado pra
+abrir a tela de edição do REGISTRO ORIGINAL afetado (ícone de olho,
+mas rótulo hardcoded `__('activitylog::action.edit')` = "Editar" em
+pt_BR — inconsistência já existente no próprio pacote, não introduzida
+por nós).
+
+**Causa raiz confirmada (não só suposta) por que sempre ficava morto
+neste projeto**: `ActivitylogResource::getResourceUrl()` monta o nome
+da rota via convenção fixa `filament.{painel}.resources.{plural-kebab-
+do-basename}.edit` (ex.: pra `Perseu\Comercial\Models\Obra`, tenta
+`filament.admin.resources.obras.edit`) — mas TODOS os nossos Resources
+auditados são clusterizados (Obras dentro do Cluster `Obras`, Pessoa
+Física/Jurídica dentro do Cluster `Pessoas`), então a rota real sempre
+leva o slug do Cluster no meio (`filament.admin.comercial.resources.obras.edit`,
+ver seção do Cluster "Obras" acima). `route()` lança
+`RouteNotFoundException`, capturada internamente, e o método sempre
+devolve `'#'` — confirmado chamando `ActivitylogResource::getResourceUrl()`
+manualmente num log de um registro AINDA VIVO (não excluído): mesmo
+com o registro existindo e `canViewResource()` retornando `true`, a
+URL ainda saía `'#'`. Não é um problema de permissão nem de registro
+excluído — é estrutural (o pacote não tem suporte a Resources
+clusterizados/com slug customizado nessa convenção).
+
+**Correção**: `ActivitylogPlugin::isResourceActionHidden(true)`
+(extensão OFICIAL do pacote pra isso, não um fork do Schema) adicionada
+no encadeamento de `ActivitylogPlugin::make()` em
+`AuditoriaServiceProvider::packageRegistered()`. Decisão consciente de
+ESCONDER (não consertar o link): mesmo que a URL funcionasse, um log
+de auditoria não deveria oferecer edição do registro original a partir
+dali — contraria o propósito de imutabilidade da auditoria. As outras
+duas ações do mesmo card ("Restaurar" — reverte pra um valor anterior
+de um log de `updated`; "Restaurar Modelo" — desfaz um soft-delete a
+partir do log de `deleted`) têm flags de visibilidade PRÓPRIAS
+(`getIsRestoreActionHidden()`/`canRestoreSubjectFromSoftDelete()`) e
+não foram afetadas — confirmado com `git stash` (antes/depois) que só
+o "Editar" sumiu, o resto do card (Usuário, Assunto, Descrição,
+Mudanças) continua idêntico.
+
+## Restaurar um registro excluído a partir da Auditoria — levantamento, NÃO implementado (2026-08-29)
+
+Pedido explícito de só investigar e relatar, sem implementar nada
+agora. Registrado aqui pra não perder o levantamento.
+
+### Onde restaurar hoje
+
+Não existe atalho a partir da Auditoria — é preciso ir até o Resource
+do cadastro específico, aplicar o `TrashedFilter` ("Lixeira") e usar
+`RestoreAction`/`RestoreBulkAction` ali. Caminho de clique real (3
+Resources que têm essa Lixeira hoje — ver "Auditoria (log de
+atividade) + Lixeira completa"):
+- Obra: Comercial → Obras → filtro "Lixeira" (`without_trashed`/
+  `with_trashed`/`only_trashed`) → botão "Restaurar" na linha.
+- Pessoa Física/Jurídica: Pessoas → Pessoas Físicas/Jurídicas → mesmo
+  filtro → "Restaurar".
+- Os outros 6 Models auditados (Tipo/Situação de Obra, Categoria,
+  Setor, Endereço, Contato) não têm Lixeira nenhuma hoje (limitação já
+  registrada antes) — não há pra onde "restaurar" esses via UI, só via
+  tinker/DB direto.
+
+### Atalho "Ir para a Lixeira deste cadastro" a partir de um log `deleted` — viável, esforço pequeno
+
+Confirmado por leitura do código-fonte do Filament (não só suposição):
+`Filament\Resources\Pages\ListRecords` declara
+`#[Url(as: 'filters')] public ?array $tableFilters` — ou seja, o
+Livewire já sincroniza o estado dos filtros da tabela com a query
+string `?filters[...]=...` da própria URL, mecanismo OFICIAL do
+Filament (usado por ele mesmo pra "links de filtro compartilháveis"),
+não algo que precisaríamos construir do zero. `TrashedFilter` é um
+`TernaryFilter` com `queries(true: withTrashed(), false: onlyTrashed(),
+blank: withoutTrashed())` — ou seja, o estado que interessa aqui
+(“somente excluídos”) corresponde a `value = false`. Um link do tipo
+`ObraResource::getUrl('index', ['filters' => ['trashed' => ['value' => false]]])`
+deveria abrir a listagem de Obras já com "Somente excluídos" aplicado
+(a codificação exata de `false` na query string — `0`, `false`, chave
+ausente — não foi validada ponta-a-ponta num teste de HTTP real nesta
+tarefa, só confirmada a existência do mecanismo via código-fonte;
+checar isso num teste de navegador de verdade é o primeiro passo se
+formos implementar).
+
+Pra existir de fato, faltaria:
+1. Um mapa FQCN → Resource::class (pequeno, só pros 3 Models que têm
+   Lixeira hoje — Obra, PessoaFisica, PessoaJuridica) — natural
+   extensão de `SubjectTypeCatalog`, mas cuidado pra não confundir com
+   o mapa de rótulos/módulo já existente (nome de método separado, ex.
+   `resourceUrlFor()`, pra não modelos sem Lixeira acabarem com um link
+   quebrado).
+2. Uma `Action` visível só quando `$record->event === 'deleted'` E o
+   `subject_type` está nesse novo mapa — no header da página
+   `ViewAuditoria` (mais natural, já que é aí que se vê o evento
+   "Excluído") ou como ação de linha em `ListAuditoria`.
+
+**Estimativa**: pequena — algumas horas, a maior parte só validando a
+codificação exata da query string do `TrashedFilter` num navegador
+real (`Livewire::test()`/tinker não simulam fielmente o ciclo de
+request HTTP que popula `#[Url]`, confirmado tentando e não
+conseguindo reproduzir de forma confiável nesta investigação — validar
+isso é trabalho de implementação, não de levantamento).
+
+### Regra pra quando uma ação de restaurar/reverter A PARTIR da Auditoria for implementada (registrado, não implementado)
+
+Se um dia a Auditoria ganhar uma ação que restaure/reverta o registro
+DIRETAMENTE dali (diferente do atalho acima, que só leva pra tela do
+Resource — lá as ações já existentes de `RestoreAction`/`ForceDeleteAction`
+já têm suas próprias confirmações padrão do Filament):
+
+**Essa ação deve exigir confirmação prévia (`->requiresConfirmation()`)
+com uma modal que informe, no mínimo**:
+1. Qual registro será afetado — cadastro (rótulo de
+   `SubjectTypeCatalog::label()`) + referência
+   (`SubjectTypeCatalog::referenceFor()`, ex.: "Obra 2610001 — Nome da
+   Obra"), não só o ID técnico.
+2. O que exatamente a ação vai mudar (ex.: "vai restaurar os valores
+   anteriores a esta edição" pra um `updated`, ou "vai desfazer a
+   exclusão (soft delete) deste registro" pra um `deleted`).
+3. Um alerta explícito sobre possível inconsistência de
+   relacionamentos: registros com `CascadesRelatedDataOnForceDelete`/
+   lógica equivalente em `forceDeleting` (`PessoaJuridica`/
+   `PessoaFisica`, ver seção "Excluir Pessoa Jurídica em cascata") já
+   apagaram Endereços/Contatos numa exclusão DEFINITIVA — restaurar um
+   registro que passou por isso não traz esses dados relacionados de
+   volta, e a modal precisa deixar isso claro pro usuário não assumir
+   que "restaurar" devolve o registro 100% como era antes.
+
+Motivo de registrar isso agora sem implementar: a lógica de cascata
+(`forceDeleting`) já existe e é fácil de esquecer o alerta quando a
+funcionalidade de restaurar-a-partir-da-Auditoria for implementada de
+fato — melhor a regra já estar escrita aqui do que descoberta de novo
+na hora.
+
+## Lixeira Central (Configurações → Lixeira) agregando Excluídos de todos os cadastros (2026-08-29)
+
+Nova página `Perseu\Auditoria\Filament\Pages\Lixeira`
+(`plugins/perseu/auditoria/src/Filament/Pages/Lixeira.php`), ao lado de
+"Auditoria" no cluster de Configurações — lista os registros
+soft-deleted de TODOS os cadastros com Lixeira hoje numa tabela só,
+com Restaurar/Excluir Permanentemente por linha e em lote.
+
+### Escopo real: só 3 Models (confirmado por grep, não pela lista de exemplo da tarefa)
+
+A tarefa citava "Obra, Pessoa Jurídica, Pessoa Física, Categoria,
+Setor" como exemplo — **Categoria de Pessoa e Setor NÃO usam
+`SoftDeletes`** (confirmado com `grep -rl "use SoftDeletes"
+plugins/perseu/*/src/Models/*.php`: só `Obra`, `PessoaJuridica`,
+`PessoaFisica`), mesma limitação já documentada na seção "Limitação
+conhecida" de uma tarefa anterior. `Perseu\Auditoria\Support\TrashCatalog::models()`
+é a lista oficial (subconjunto de `SubjectTypeCatalog`, que cobre os 9
+Models AUDITADOS — a maioria sem Lixeira de UI) — adicionar um Model
+novo aqui quando ele ganhar `SoftDeletes` + Lixeira de UI no próprio
+Resource no futuro.
+
+### Por que NÃO é uma `VIEW` de banco com `UNION ALL` — dependência circular de plugins
+
+Antes de escrever código, foi avaliada a abordagem "clássica" de
+agregação multi-tabela: uma `VIEW` SQL unindo `obras`/
+`pessoas_juridicas`/`pessoas_fisicas` (com `WHERE deleted_at IS NOT
+NULL`), com um Model de leitura por cima — daria paginação/ordenação
+nativa do SQL de graça. **Descartada**: essa `VIEW` teria que viver
+numa migration de algum plugin, e o candidato óbvio (`perseu/auditoria`,
+onde `SubjectTypeCatalog` já importa Models de `comercial`/`pessoas`)
+já é DEPENDÊNCIA de `comercial`/`pessoas`
+(`->hasDependency('auditoria')` nos dois, por causa do trait
+`LogsBusinessActivity` — ver `ComercialServiceProvider`/
+`PessoasServiceProvider`). Se `auditoria` também declarasse
+`->hasDependency('comercial')`/`->hasDependency('pessoas')` (pra
+ordenar a criação da `VIEW` depois das tabelas que ela referencia),
+seria um CICLO (`comercial → auditoria → comercial`) — o
+`Webkul\PluginManager\Models\Plugin` (`plugin_dependencies`, pivot de
+UI/gestão de plugins) não foi desenhado pra suportar isso. Nota
+técnica à parte: migrations do Laravel rodam por ordem de TIMESTAMP no
+nome do arquivo, não por `hasDependency()` (isso só afeta a UI de
+gestão de plugins/ordem de instalação) — então o problema real não era
+de ORDEM DE EXECUÇÃO da migration, e sim do GRAFO DE DEPENDÊNCIA
+declarado ficar inconsistente/circular.
+
+### Mecanismo real: `Table::records(Closure)` — hook oficial do Filament v4 pra tabelas sem Eloquent Builder
+
+`Filament\Tables\Table\Concerns\HasRecords::records(Closure $dataSource)`
+é o mecanismo OFICIAL (não workaround) do Filament v4 pra uma tabela
+cuja fonte de dados não é uma query Eloquent simples — quando presente,
+`Table::hasQuery()` retorna `false`, e
+`Concerns\HasRecords::getTableRecords()` (`filament/tables`, lido no
+vendor antes de implementar) chama o closure passando o estado atual
+como parâmetros NOMEADOS (`filters`, `sortColumn`, `sortDirection`,
+`page`, `recordsPerPage`, `search`, `columnSearches`) em vez de montar
+uma `Builder` — a aplicação desse estado (filtrar/ordenar/paginar) fica
+inteiramente por conta do closure. Confirmado também que
+`getSelectedTableRecords()` (`HasBulkActions`) já tem um ramo próprio
+pra `! hasQuery()` (usa os registros já retornados por `records()`,
+filtrados pelas chaves selecionadas) — bulk actions funcionam sem
+nenhuma configuração extra.
+
+Cada linha da tabela é um **array** (`Filament\Support\ArrayRecord`,
+chave `'__key'` por padrão), não uma instância real de Model — os 3
+Models têm PKs numéricas que colidem entre si (Obra #5 e Pessoa
+Jurídica #5 são registros DIFERENTES) — a chave de cada linha é
+sintética: `"{$slugDoModel}-{$id}"` (ex.: `"obra-5"`,
+`"pessoajuridica-11"`).
+
+### Trade-off consciente: pagina em PHP, não em SQL
+
+`buildPaginator()` busca TODOS os registros excluídos que passam nos
+filtros ativos (não só a página pedida) pras 3 fontes, junta numa
+`Collection` só, ordena em PHP (`sortBy`/`sortByDesc` conforme a coluna
+clicada), e só DEPOIS fatia a página com `->slice()` +
+`LengthAwarePaginator` manual. Correto pro volume real deste sistema
+(Lixeira de ERP interno — dezenas/poucas centenas de linhas, não
+milhões) — errado em escala muito maior, onde a alternativa de `VIEW`
+(resolvendo a dependência circular de outro jeito, ex.: migration no
+próprio app, fora do ciclo de plugins, mesmo padrão já usado pra
+`activity_log`) voltaria a valer a pena. Não implementado assim agora
+por ser complexidade desnecessária pro volume atual.
+
+### Reaproveitamento de lógica — o requisito mais crítico da tarefa
+
+**Nem `Filament\Actions\RestoreAction`/`ForceDeleteAction` prontas
+(usadas nos Resources individuais) foram reaproveitadas AQUI
+diretamente** — essas classes assumem que `$record` recebido pelas
+suas closures internas é o Model de verdade (chamam `$record->restore()`
+literalmente); como nossas linhas são arrays, isso quebraria
+(`Call to a member function restore() on array`). Em vez disso,
+`Action::make('restaurar')`/`Action::make('excluir_definitivamente')`
+próprias resolvem o Model real
+(`resolveModel()`: `$model::onlyTrashed()->find($id)`) e chamam
+`->restore()`/`->forceDelete()` NELE — **é isso que satisfaz "reaproveitar
+a lógica, não duplicar"**: a cascata de Endereços/Contatos ao excluir
+definitivamente uma Pessoa Jurídica/Física mora no `forceDeleting` do
+PRÓPRIO Model (`boot()`, ver seção "Excluir Pessoa Jurídica em
+cascata"/"Auditoria... Lixeira completa"), então chamar `->forceDelete()`
+no Model real dispara essa lógica automaticamente, de onde quer que a
+chamada venha (Resource individual OU Lixeira Central) — reescrever a
+cascata aqui teria sido exatamente o risco de "registro fantasma" que
+a tarefa pediu pra evitar.
+
+**Validado de ponta a ponta** (não só lido no código): criados uma
+Obra e uma Pessoa Jurídica de teste (a PJ com Endereço + Contato
+vinculados de propósito), soft-deletadas, confirmado que ambas
+aparecem juntas na Lixeira; `Restaurar` via
+`Livewire::test()->callTableAction('restaurar', $key)` devolveu a Obra
+pro estado normal (visível de novo em Comercial → Obras);
+`Excluir Permanentemente` na Pessoa Jurídica removeu o Endereço e o
+Contato vinculados junto (cascata funcionando, mesma verificada nas
+tarefas anteriores) — nenhum dado ficou "fantasma". Ação em lote
+testada com uma Obra E uma Pessoa Jurídica selecionadas AO MESMO
+TEMPO, tanto pra Restaurar quanto pra Excluir Permanentemente — as
+duas foram processadas corretamente numa única chamada.
+
+### Permissão — sem Resource/Policy própria, de propósito
+
+Pedido explícito da tarefa: NÃO criar uma permissão genérica
+"gerenciar lixeira de tudo". `Lixeira` não é um `Filament\Resources\Resource`
+(não tem Model próprio pra ser dono de uma Policy) — é um
+`Filament\Pages\Page implements Tables\Contracts\HasTable`, sem
+nenhuma entrada nova em `config/filament-shield.php`. Cada linha
+verifica a Policy JÁ REGISTRADA do Model real
+(`Gate::allows('restore', $modelReal)` / `Gate::allows('forceDelete',
+$modelReal)` — mesmíssimo `ObraPolicy`/`PessoaFisicaPolicy`/
+`PessoaJuridicaPolicy` que já controla `RestoreAction`/`ForceDeleteAction`
+no Resource individual). `canAccess()` da própria página (controla se
+"Lixeira" aparece na sidebar de Configurações) checa
+`restoreAny`/`forceDeleteAny` de QUALQUER um dos 3 Models — se o
+usuário não tiver nenhuma dessas 6 permissões, o item nem aparece.
+
+**Validado com um usuário/Role de teste temporários** (criados e
+apagados só pra este teste): Role com `restore_any_comercial_obra`
+(dá acesso à página) mas SEM `restore_comercial_obra`/
+`force_delete_comercial_obra`, e com permissão completa de restaurar/
+excluir definitivamente em Pessoa Jurídica. Resultado: a página abriu
+normalmente, as DUAS linhas (Obra e Pessoa Jurídica de teste)
+apareceram juntas, mas `Gate::allows('restore'|'forceDelete', ...)`
+confirmou `false` pra Obra e `true` pra Pessoa Jurídica — exatamente o
+comportamento esperado (visibilidade por linha, não por página
+inteira). Ação em lote com seleção mista (itens permitidos e não
+permitidos) soma quantos foram processados vs. pulados por falta de
+permissão numa notificação só, em vez de falhar silenciosamente ou
+travar a operação inteira.
+
+### "Excluído por" — cruzado com `activity_log`, em lote (não por linha)
+
+Pra cada tipo de Model presente na página atual, uma única query
+(`Activity::where('subject_type', $model)->where('event','deleted')->whereIn('subject_id', $ids)`)
+busca o log de exclusão mais recente de cada `subject_id` — no máximo
+3 queries extras por carregamento de página (uma por Model presente),
+não uma por linha. Quando não existe log de exclusão pra um registro
+(ex.: apagado antes da auditoria existir no sistema), a coluna mostra
+vazio sem erro.
+
+### Filtros: Módulo/Cadastro/Período — sem `->query()`, aplicados manualmente
+
+Igual à Auditoria, filtros por Módulo e Cadastro (`SubjectTypeCatalog`
+reaproveitado) e um novo filtro de período (`Excluído de`/`Excluído
+até`, mesma UX do filtro de data da Auditoria, aqui sobre `deleted_at`).
+**Diferença importante em relação à Auditoria**: como esta tabela não
+tem `Builder` (`records()`), o Filament NUNCA chama `->query()` de
+filtro nenhum aqui — confirmado lendo `HasRecords::getTableRecords()`
+antes de escrever o código. Os filtros só existem pra desenhar a UI
+(`SelectFilter`/`Filter` com `->options()`/`->form()`); a aplicação de
+fato é manual, lendo `$filters['modulo']['value']`/
+`$filters['subject_type']['value']`/`$filters['excluido_em']['excluido_de']`
+dentro de `collectRows()`. Sem caixa de busca textual unificada (ao
+contrário da Auditoria) — não foi pedida nesta tarefa, mantido o
+escopo do que foi solicitado (Módulo/Cadastro/Período).
+
+### Filtro "Excluídos" nos Resources individuais — MANTIDO, não removido
+
+A tarefa pediu explicitamente pra só remover o filtro "Excluídos"/ações
+de Restaurar/Excluir Permanentemente de dentro de cada Resource
+individual DEPOIS de confirmar com o usuário que a Lixeira Central já
+substitui bem esse acesso — **essa confirmação ainda não aconteceu**,
+então `ObraResource`/`PessoaFisicaResource`/`PessoaJuridicaResource`
+continuam com `TrashedFilter`/`RestoreAction`/`ForceDeleteAction`
+exatamente como antes. Revisitar isso só depois de uso real da Lixeira
+Central confirmar que ela é suficiente.
+
+## `forceDeleted` nunca foi logado pelo Spatie Activitylog — descoberto e corrigido, não só "renomeado" (2026-08-29)
+
+Usuário tentou buscar "defi" na caixa "Pesquisar" da Auditoria
+esperando achar os logs de "Excluído Definitivamente" (exclusão
+permanente, disparada pela Lixeira Central ou pelo `ForceDeleteAction`
+de cada Resource) — não achou nada, e o dropdown "Eventos" nem sequer
+listava essa opção.
+
+**Causa raiz não era rótulo/tradução faltando — era o evento nunca ter
+sido gravado**, confirmado por dois caminhos independentes antes de
+mexer em qualquer código: (1) lendo `vendor/spatie/laravel-activitylog/src/Traits/LogsActivity.php`,
+`eventsToBeRecorded()` só retorna `created`/`updated`/`deleted` (+
+`restored` se o Model usa `SoftDeletes`) — nenhuma menção a
+`forceDeleted` em lugar nenhum do pacote; (2) uma query direta
+(`Activity::distinct()->pluck('event')`) num banco com histórico real
+de vários `forceDelete()` (inclusive os da tarefa da Lixeira Central)
+só retornava `created/updated/deleted/restored`, nunca `forceDeleted`.
+`Illuminate\Database\Eloquent\SoftDeletes::forceDelete()` já dispara os
+eventos Eloquent `forceDeleting`/`forceDeleted` nativamente (é assim
+que `CascadesRelatedDataOnForceDelete` já se pendura em
+`forceDeleting` pra cascata de Endereço/Contato) — só não existia
+NENHUM listener registrando isso como uma `Activity`.
+
+### Correção: listener próprio em `forceDeleted`, fora da maquinaria do Spatie
+
+`Perseu\Auditoria\Traits\LogsBusinessActivity::bootLogsBusinessActivity()`
+(novo) registra `static::forceDeleted(function ($model) {
+activity()->causedBy(auth()->user())->performedOn($model)->event('forceDeleted')->log('forceDeleted');
+})` — só quando o Model usa `SoftDeletes`
+(`in_array(SoftDeletes::class, class_uses_recursive(static::class))`,
+checado ANTES de registrar: `forceDeleted()` é um método estático que
+só existe nesse trait, chamá-lo num Model sem `SoftDeletes` explodiria
+com "Call to undefined method"). Deliberadamente NÃO tentei encaixar
+isso em `eventsToBeRecorded()`/no fluxo interno do
+`LogsActivity::bootLogsActivity()` (que é `protected static`, herdado
+via `use LogsActivity` dentro do nosso próprio trait — PHP não dá
+`parent::` entre traits, então "estender" aquele método exigiria
+reescrever a lógica inteira dele aqui) — um listener PRÓPRIO e
+independente em `forceDeleted` é mais simples e não arrisca interações
+sutis com o mecanismo genérico do pacote, que assume um conjunto fixo
+de nomes de evento em vários pontos internos
+(`shouldLogEvent()`/`attributeValuesToBeLogged()`).
+
+Respeita o mesmo "kill switch" global do Spatie
+(`app(Spatie\Activitylog\ActivityLogStatus::class)->disabled()`, o
+mecanismo por trás de `activity()->withoutLogs(fn () => ...)`) — se
+algum código no futuro envolver um `forceDelete()` em
+`withoutLogs()`, este listener também respeita isso.
+
+**Validado criando uma Obra de teste, soft-deletando e force-deletando
+de verdade**: a `Activity` com `event = 'forceDeleted'` apareceu no
+banco com `causer` preenchido corretamente.
+
+### Rótulo traduzido — override de UMA chave via `lang/vendor/`, não fork do pacote
+
+O pacote de UI (`rmsramos/activitylog`) também nunca precisou de um
+rótulo pra um evento que nunca existia, então
+`vendor/rmsramos/activitylog/resources/lang/{pt_BR,en}/action.php` não
+tinham a chave `event.forceDeleted`. Em vez de publicar/duplicar o
+arquivo inteiro do pacote (grande, e divergiria em atualizações
+futuras), foram criados `lang/vendor/activitylog/{pt_BR,en}/action.php`
+com SÓ a chave nova — mecanismo padrão do Laravel
+(`Illuminate\Translation\FileLoader::loadNamespaceOverrides()`, que
+faz `array_replace_recursive()` do que estiver em
+`lang/vendor/{namespace}/{locale}/{grupo}.php` por CIMA da tradução
+original do pacote, não substituindo o arquivo inteiro) — confirmado
+que as chaves antigas (`created`/`deleted`/`updated`/`restored`,
+`modal`, `view` etc.) continuam funcionando normalmente depois do
+override. `pt_BR`: "excluído definitivamente" (via `ucwords()` já
+aplicado por `getEventColumnComponent()`, vira "Excluído
+Definitivamente" na tela — mesmo padrão dos outros eventos).
+
+### Busca ampliada: "Pesquisar" agora cobre Registro E Evento ao mesmo tempo
+
+`AuditoriaResource::getEventColumnComponent()` foi sobrescrito (antes
+herdava direto do pacote) só pra somar `->searchable(query: ...)`: o
+termo digitado é comparado contra o RÓTULO TRADUZIDO de cada evento
+("excluído definitivamente", não `forceDeleted`, já que é isso que o
+usuário digita), descobre quais valores TÉCNICOS batem, e faz
+`whereIn('event', [...])` — mesma técnica de "tradução inversa" já
+usada em outros lugares deste projeto. Quando nada bate, retorna
+`whereRaw('1 = 0')` (não a query sem alteração — um grupo `orWhere(fn
+($q) => ...)` vazio equivale a `true` em SQL, bateria com QUALQUER
+termo, não com nenhum — mesmo cuidado já tomado em
+`SubjectTypeCatalog::applyBusca()`).
+
+Como o Filament já soma com `OR` automático entre TODAS as colunas
+marcadas `searchable()` de uma tabela (`InteractsWithTableQuery::applySearchConstraint()`,
+o mesmo mecanismo que já une as buscas de múltiplas colunas nativas do
+Filament), bastou marcar a coluna `event` como buscável — nenhuma
+mudança foi necessária em `getSubjectReferenceColumnComponent()`
+(a busca por registro) pra elas conviverem na mesma caixa.
+
+**Validado reproduzindo exatamente o teste do usuário**: buscar "defi"
+agora encontra o(s) log(s) de exclusão definitiva (antes: zero
+resultados); buscar "Reg" continua sem resultado (não existe evento
+nem dado de registro contendo esse texto — comportamento correto, não
+um problema novo); buscar "restaurado" encontra todos os eventos de
+restauração; combinado com o filtro Módulo (`defi` + módulo=Comercial
+→ encontra; `defi` + módulo=Pessoas → não encontra, já que o teste foi
+numa Obra) confirma que busca por evento e filtros continuam
+interseccionando corretamente; a busca por nome/razão social/número
+(já existente) continua funcionando sem regressão.
