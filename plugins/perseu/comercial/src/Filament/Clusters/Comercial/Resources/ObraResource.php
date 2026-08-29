@@ -37,7 +37,6 @@ use Perseu\Pessoas\Models\Endereco;
 use Perseu\Pessoas\Models\PessoaFisica;
 use Perseu\Pessoas\Models\PessoaJuridica;
 use Perseu\Pessoas\Support\ViaCepLookup;
-use Rmsramos\Activitylog\RelationManagers\ActivitylogRelationManager;
 
 class ObraResource extends Resource
 {
@@ -469,13 +468,6 @@ class ObraResource extends Resource
             'index'  => ListObras::route('/'),
             'create' => CreateObra::route('/create'),
             'edit'   => EditObra::route('/{record}/edit'),
-        ];
-    }
-
-    public static function getRelations(): array
-    {
-        return [
-            ActivitylogRelationManager::class,
         ];
     }
 }

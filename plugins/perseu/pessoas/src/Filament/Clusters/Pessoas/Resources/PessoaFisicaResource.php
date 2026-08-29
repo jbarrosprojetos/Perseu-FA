@@ -31,7 +31,6 @@ use Perseu\Pessoas\Filament\Clusters\Pessoas\Resources\PessoaFisicaResource\Rela
 use Perseu\Pessoas\Models\PessoaFisica;
 use Perseu\Pessoas\Rules\CpfValido;
 use Perseu\Pessoas\Traits\HasCompactFieldWidth;
-use Rmsramos\Activitylog\RelationManagers\ActivitylogRelationManager;
 use Webkul\Support\Enums\NavigationGroup;
 
 class PessoaFisicaResource extends Resource
@@ -241,7 +240,6 @@ class PessoaFisicaResource extends Resource
     {
         return [
             EnderecosRelationManager::class,
-            ActivitylogRelationManager::class,
         ];
     }
 }

@@ -1516,3 +1516,144 @@ toggle morto "Obras Cluster" na tela de Funções).
    Cluster — mencionar caso surja de novo em outra tarefa.
 6. `route:list` e `shield:generate` conferidos antes/depois; `ddev
    artisan optimize:clear` executado ao final.
+
+## Central de Auditoria única, sem abas de "Atividades" nos registros individuais (2026-08-29)
+
+A aba "Atividades" (`ActivitylogRelationManager`) embutida em Pessoa
+Jurídica/Física/Obra foi **removida** — decisão consciente de não
+duplicar informação: a página central "Configurações → Auditoria" (já
+existente desde a tarefa anterior, ver seção acima) passou a ser o
+ÚNICO lugar do sistema pra ver histórico de atividade, com filtros
+para compensar a perda do atalho "aba dentro do próprio registro".
+
+### Onde a aba existia (levantado por grep antes de remover)
+
+Só 3 Resources chegaram a ter `ActivitylogRelationManager::class` em
+`getRelations()`: `ObraResource` (removido o método inteiro, ficava
+sozinho ali), `PessoaFisicaResource` e `PessoaJuridicaResource`
+(mantidos os outros Relation Managers de cada um —
+`EnderecosRelationManager`/`ContatosRelationManager`). Os Resources
+com padrão `ManageRecords` (`CategoriaPessoaResource`, `SetorResource`,
+`SituacaoObraResource`, `TipoObraResource`) NUNCA tiveram essa aba (ver
+"Limitação conhecida" na seção anterior) — nada a remover neles.
+
+### `Perseu\Auditoria\Support\SubjectTypeCatalog` — mapeamento único FQCN → rótulo/módulo/referência
+
+Levantados por grep (`grep -rl LogsBusinessActivity plugins/`) todos os
+9 Models realmente auditados hoje — confirmados também com uma query
+real em `activity_log.subject_type` (`SELECT DISTINCT subject_type`),
+já que este projeto NÃO define `Relation::morphMap()` (confirmado por
+grep), então a coluna grava o FQCN completo, não um alias curto:
+`Obra`, `TipoObra`, `SituacaoObra` (módulo "Comercial"); `PessoaFisica`,
+`PessoaJuridica`, `CategoriaPessoa`, `Setor`, `Endereco`, `Contato`
+(módulo "Pessoas"). A classe nova
+`plugins/perseu/auditoria/src/Support/SubjectTypeCatalog.php`
+centraliza:
+- `label()`/`subjectTypeOptions()` — rótulo amigável traduzido (chaves
+  em `auditoria::filament/resources/auditoria.subject_types.*`, texto
+  DUPLICADO de propósito em relação ao `model-label` de cada Resource
+  original — a central de Auditoria não deve chamar Resources de
+  outros plugins só pra montar seu próprio rótulo). Um Model auditado
+  no futuro e ainda não mapeado aqui não quebra nada — cai no fallback
+  `Str::of($fqcn)->classBasename()->headline()`, só não ganha filtro
+  dedicado nem referência amigável até ser adicionado ao mapa.
+- `moduloOptions()`/`subjectTypesForModulo()` — agrupamento de um nível
+  acima (Comercial/Pessoas), implementado por ser simples (só inverter
+  o mapa FQCN→módulo já necessário para outra coisa) — ver filtro
+  "Módulo" abaixo.
+- `referenceFor(?Model $subject)` — texto que identifica O REGISTRO
+  específico (não o tipo): `numero_obra` + `descricao` pra Obra,
+  `razao_social` pra Pessoa Jurídica, `nome` pra Pessoa Física,
+  `descricao` pra Tipo/Situação de Obra, Categoria e Setor,
+  `logradouro`+`numero` pra Endereço, e nome da `PessoaFisica`
+  vinculada (fallback pro `cargo`) pra Contato. Retorna `null` quando o
+  `subject` não existe mais (excluído em definitivo — `subject` já vem
+  eager-loaded com `withTrashed()` por
+  `ActivitylogResource::getEloquentQuery()`, então só é `null` mesmo
+  em exclusão definitiva, não soft-delete).
+- `applyBusca(Builder $query, string $termo)` — filtro de busca textual
+  (nome, razão social, número de Obra etc.) via `whereHasMorph('subject',
+  [...9 classes...], fn ($q, $type) => match($type) {...})`: como não
+  existe uma coluna própria em `activity_log` pra isso (é derivado do
+  model relacionado, campo diferente por tipo), esse é o mecanismo do
+  Eloquent desenhado exatamente pra "buscar num relacionamento
+  polimórfico, com condição diferente por tipo concreto".
+
+### `AuditoriaResource::table()` sobrescrito por completo, não encadeado
+
+`ActivitylogResource::table()` (rmsramos/activitylog) monta
+`->columns([...])->filters([...])` a partir de métodos estáticos
+reutilizáveis (`getCauserNameColumnComponent()`,
+`getEventColumnComponent()`, etc.) — mas chamar `parent::table($table)`
+e encadear mais `->filters([...])`/`->columns([...])` por cima
+SUBSTITUIRIA a lista anterior (não soma), então `AuditoriaResource::table()`
+foi reescrito do zero reaproveitando os métodos estáticos do pai
+individualmente (`static::getCauserNameColumnComponent()`, etc.) mais
+os novos abaixo:
+- `getSubjectTypeColumnComponent()` **sobrescrito** (mesmo nome do
+  pai): antes mostrava `Str::of($fqcn)->afterLast('\\')->headline() . ' # ' . $subject_id`
+  (nome de classe cru + id numérico) — agora mostra
+  `SubjectTypeCatalog::label()` (só o rótulo amigável do TIPO de
+  cadastro), porque `getSubjectReferenceColumnComponent()` (novo) passou
+  a cobrir a referência ao registro específico com texto melhor
+  (nome/razão social/número).
+- `getSubjectReferenceColumnComponent()` (novo) — `TextColumn` com
+  `getStateUsing()` (não é coluna real de `activity_log`), retorna
+  `SubjectTypeCatalog::referenceFor($record->subject)` ou uma mensagem
+  de "registro excluído definitivamente" quando não há mais subject.
+  Não é `->searchable()` (a busca por este texto é o filtro dedicado,
+  não a busca padrão da tabela — não existe coluna real pra indexar).
+- `getModuloFilterComponent()` (novo) — `SelectFilter` com `->query()`
+  próprio (`whereIn('subject_type', SubjectTypeCatalog::subjectTypesForModulo(...))`),
+  porque "módulo" não é uma coluna real — sem `->query()` customizado,
+  o comportamento padrão de `SelectFilter::apply()`
+  (`Filament\Tables\Filters\SelectFilter`) tentaria
+  `where('modulo', $valor)` e falharia (coluna não existe).
+- `getSubjectTypeFilterComponent()` (novo) — `SelectFilter` SEM
+  `->query()` custom: como `subject_type` É uma coluna real, o
+  comportamento padrão do `SelectFilter` (`where('subject_type', $valor)`)
+  já resolve sozinho.
+- `getBuscaRegistroFilterComponent()` (novo) — `Filter` com um
+  `TextInput` no form, delegando pra `SubjectTypeCatalog::applyBusca()`.
+
+Filtro "Módulo" (item opcional da tarefa) foi implementado por ser
+simples dado o design acima (o mapa FQCN→módulo já existia pra outra
+coisa, o filtro é só inverter esse mapa e aplicar `whereIn`) — não
+achatado/descartado por complexidade.
+
+### Validação (via `Livewire::test(ListAuditoria::class)`, autenticado, com os 68 logs reais já existentes no ambiente)
+
+1. `SubjectTypeCatalog::subjectTypeOptions()`/`moduloOptions()`
+   conferidos manualmente (9 tipos, 2 módulos, nenhum rótulo cru).
+2. HTML renderizado da listagem: nenhum FQCN vazado em texto visível
+   (só dentro de `value=""` de `<option>`, esperado); referências
+   reais aparecem certas na tabela (ex.: `2630001 — Smarta Itaoca` pra
+   uma Obra, razão social completa pra Pessoa Jurídica, nome da Pessoa
+   Física vinculada pra Contato).
+3. Filtro "Módulo=Comercial": 20 registros (bate com
+   `Activity::whereIn('subject_type', [Obra, TipoObra, SituacaoObra])->count()`
+   direto no banco). Filtro "Cadastro=Obra": 7 registros (bate com
+   `Activity::where('subject_type', Obra::class)->count()`). Filtro de
+   busca por um nome de Pessoa Física: achou corretamente um log de
+   Pessoa Jurídica cuja `razao_social` continha aquele nome (pessoa
+   física que também é MEI, registrada com o próprio nome na razão
+   social) — comportamento correto do `whereHasMorph`, não bug. Filtro
+   "Evento=created" nativo do pacote (não tocado nesta tarefa):
+   continuou batendo com a contagem direta no banco.
+4. Confirmado que as abas "Atividades" desapareceram de
+   `EditObra`/`EditPessoaFisica`/`EditPessoaJuridica` (mesmo teste de
+   `Livewire::test()->html()` que antes desta tarefa encontrava
+   "Auditoria" no HTML de Pessoa Física/Jurídica — ver achado
+   incidental da tarefa anterior — agora não encontra mais, confirmando
+   que a remoção teve efeito real, não é só a mesma limitação de
+   renderização já observada antes). Relation Managers que
+   PERMANECERAM (Endereços em ambos, Contatos em Pessoa Jurídica)
+   continuam presentes normalmente.
+5. Permissão de acesso à central: continua sendo só
+   `view_any_auditoria_auditoria`/`view_auditoria_auditoria`
+   (`ActivityPolicy`, docblock atualizado pra não citar mais a aba
+   removida) — nenhuma permissão nova criada, nenhuma removida.
+6. `route:list` (`admin/settings/activitylogs`, inalterada) e
+   navegação completa (`Filament::getNavigation()`) conferidos
+   antes/depois — nenhum outro grupo afetado; `ddev artisan
+   optimize:clear` executado ao final.

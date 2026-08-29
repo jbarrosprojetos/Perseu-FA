@@ -40,7 +40,6 @@ use Perseu\Pessoas\Rules\CnpjNaoExcluido;
 use Perseu\Pessoas\Rules\CnpjValido;
 use Perseu\Pessoas\Support\BrasilApiCnpjLookup;
 use Perseu\Pessoas\Traits\HasCompactFieldWidth;
-use Rmsramos\Activitylog\RelationManagers\ActivitylogRelationManager;
 use Webkul\Support\Enums\NavigationGroup;
 
 class PessoaJuridicaResource extends Resource
@@ -333,7 +332,6 @@ class PessoaJuridicaResource extends Resource
         return [
             EnderecosRelationManager::class,
             ContatosRelationManager::class,
-            ActivitylogRelationManager::class,
         ];
     }
 }
