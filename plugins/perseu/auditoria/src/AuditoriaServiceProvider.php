@@ -80,7 +80,28 @@ class AuditoriaServiceProvider extends PackageServiceProvider
                     ->resource(AuditoriaResource::class)
                     ->label(fn () => __('auditoria::filament/resources/auditoria.model-label'))
                     ->pluralLabel(fn () => __('auditoria::filament/resources/auditoria.plural-model-label'))
-                    ->navigationIcon('heroicon-o-shield-check'),
+                    ->navigationIcon('heroicon-o-shield-check')
+                    // Some botão "Editar" (na verdade um link pro registro
+                    // original — Action::make('edit') em
+                    // Rmsramos\Activitylog\Resources\Activitylog\Schemas\ActivitylogForm,
+                    // rótulo hardcoded como "Editar" mas ícone de olho/"view")
+                    // do card "Mudanças" na tela de detalhe do log. Extensão
+                    // OFICIAL do pacote pra isso (`ActivitylogPlugin::isResourceActionHidden()`),
+                    // não um fork do form — nunca funcionaria de qualquer
+                    // forma neste projeto: `ActivitylogResource::getResourceUrl()`
+                    // monta o nome da rota via convenção fixa
+                    // `filament.{painel}.resources.{plural-kebab}.edit`, que
+                    // não existe pra NENHUM dos nossos Resources clusterizados
+                    // (rota real leva o slug do Cluster no meio, ex.
+                    // `filament.admin.comercial.resources.obras.edit`) — a
+                    // troca falha (`RouteNotFoundException`, capturada) e
+                    // devolve sempre `'#'`, confirmado testando com
+                    // `ActivitylogResource::getResourceUrl()` num registro
+                    // real e vivo. Um log de auditoria também não deveria
+                    // permitir "editar" o registro original a partir dele de
+                    // qualquer forma — decisão consciente de esconder, não só
+                    // consertar o link morto.
+                    ->isResourceActionHidden(true),
             );
         });
     }
