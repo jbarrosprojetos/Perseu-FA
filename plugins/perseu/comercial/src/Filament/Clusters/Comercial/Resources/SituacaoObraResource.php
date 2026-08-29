@@ -13,8 +13,8 @@ use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Perseu\Comercial\Filament\Clusters\Comercial\Resources\SituacaoObraResource\Pages\ManageSituacoesObra;
+use Perseu\Comercial\Filament\Clusters\Obras;
 use Perseu\Comercial\Models\SituacaoObra;
-use Webkul\Support\Enums\NavigationGroup;
 
 class SituacaoObraResource extends Resource
 {
@@ -22,12 +22,11 @@ class SituacaoObraResource extends Resource
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-flag';
 
-    protected static ?string $slug = 'comercial/situacao-obras';
+    protected static ?string $cluster = Obras::class;
 
-    public static function getNavigationGroup(): string|\UnitEnum
-    {
-        return NavigationGroup::Comercial;
-    }
+    protected static ?string $slug = 'situacao-obras';
+
+    protected static ?int $navigationSort = 3;
 
     public static function getModelLabel(): string
     {

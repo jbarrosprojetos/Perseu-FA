@@ -13,8 +13,8 @@ use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Perseu\Comercial\Filament\Clusters\Comercial\Resources\TipoObraResource\Pages\ManageTiposObra;
+use Perseu\Comercial\Filament\Clusters\Obras;
 use Perseu\Comercial\Models\TipoObra;
-use Webkul\Support\Enums\NavigationGroup;
 
 class TipoObraResource extends Resource
 {
@@ -22,12 +22,11 @@ class TipoObraResource extends Resource
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-tag';
 
-    protected static ?string $slug = 'comercial/tipo-obras';
+    protected static ?string $cluster = Obras::class;
 
-    public static function getNavigationGroup(): string|\UnitEnum
-    {
-        return NavigationGroup::Comercial;
-    }
+    protected static ?string $slug = 'tipo-obras';
+
+    protected static ?int $navigationSort = 2;
 
     public static function getModelLabel(): string
     {

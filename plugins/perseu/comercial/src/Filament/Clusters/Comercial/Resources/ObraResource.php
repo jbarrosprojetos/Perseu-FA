@@ -29,6 +29,7 @@ use Illuminate\Database\Eloquent\Model;
 use Perseu\Comercial\Filament\Clusters\Comercial\Resources\ObraResource\Pages\CreateObra;
 use Perseu\Comercial\Filament\Clusters\Comercial\Resources\ObraResource\Pages\EditObra;
 use Perseu\Comercial\Filament\Clusters\Comercial\Resources\ObraResource\Pages\ListObras;
+use Perseu\Comercial\Filament\Clusters\Obras;
 use Perseu\Comercial\Models\Obra;
 use Perseu\Pessoas\Enums\TipoEndereco;
 use Perseu\Pessoas\Models\Contato;
@@ -37,7 +38,6 @@ use Perseu\Pessoas\Models\PessoaFisica;
 use Perseu\Pessoas\Models\PessoaJuridica;
 use Perseu\Pessoas\Support\ViaCepLookup;
 use Rmsramos\Activitylog\RelationManagers\ActivitylogRelationManager;
-use Webkul\Support\Enums\NavigationGroup;
 
 class ObraResource extends Resource
 {
@@ -45,12 +45,11 @@ class ObraResource extends Resource
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-clipboard-document-list';
 
-    protected static ?string $slug = 'comercial/obras';
+    protected static ?string $cluster = Obras::class;
 
-    public static function getNavigationGroup(): string|\UnitEnum
-    {
-        return NavigationGroup::Comercial;
-    }
+    protected static ?string $slug = 'obras';
+
+    protected static ?int $navigationSort = 1;
 
     public static function getModelLabel(): string
     {

@@ -1339,3 +1339,180 @@ Categoria de Pessoa" — não expandir schema/estrutura preventivamente).
    no `config/filament-shield.php` do plugin (junto do básico), e
    rodar `shield:generate` (ou reinstalar o plugin) pra sincronizar com
    a role Admin.
+
+## Cluster "Obras" no plugin `perseu/comercial` — sub-área com sidebar, distinta do Cluster removido em 26cfef4f7 (2026-08-29)
+
+Criado `Perseu\Comercial\Filament\Clusters\Obras`
+(`plugins/perseu/comercial/src/Filament/Clusters/Obras.php`), agrupando
+`ObraResource`/`TipoObraResource`/`SituacaoObraResource` numa área com
+sidebar lateral própria (Tipos de Obra, Situações de Obra, Obras),
+igual ao clique em "Configurações" no plugin de Tarefas. Antes de
+implementar, foi investigado a fundo o commit `26cfef4f7` ("Remove
+Clusters em favor de registro direto de Resources"), que tinha
+removido um `PessoasCluster`/`ComercialCluster` anterior — para
+confirmar que este Cluster novo não reintroduz o mesmo problema.
+
+### O que o commit `26cfef4f7` revelou (lido via `git show`, não suposto)
+
+O `PessoasCluster`/`ComercialCluster` antigos (`git show 26cfef4f7` —
+classes de 15 linhas, só `$navigationIcon` +
+`getNavigationLabel()`, sem `getNavigationGroup()` próprio) tinham um
+objetivo DIFERENTE do de hoje: fazer Categorias/Pessoas
+Físicas/Pessoas Jurídicas (e Projetos/Situações/Tipos de Projeto)
+aparecerem como itens FLAT/irmãos dentro do dropdown da topbar,
+replicando o padrão "Projetos" (que tem `ProjetoResource`,
+`TaskResource` e o Cluster `Configurations` como 3 itens irmãos dentro
+do MESMO dropdown "Project"). Só que um Cluster, por definição
+(`HasNavigation::registerNavigationItems()`: `if
+(filled(static::getCluster())) { return; }`), tira TODOS os seus
+Resources filhos da navegação principal — só o Cluster em si aparece
+lá, como item único. Resultado observado então: o dropdown "Pessoas"
+tinha 1 item só (o Cluster), enquanto "Projetos" tinha vários — o
+oposto do padrão desejado naquele momento. Os dois arquivos-histórico
+`tarefa-cluster-navegacao-horizontal.md`/`tarefa-navegacao-topbar-correta.md`
+(no próprio commit) documentam duas tentativas de correção erradas
+antes da remoção final (`SubNavigationPosition::Top`, que criava abas
+em pílula abaixo do cabeçalho — mecanismo errado) — a remoção do
+Cluster e o rename direto de `getNavigationGroup()` em cada Resource
+(ver seção "Navegação de módulos..." acima) foi a correção real.
+
+**Ou seja: o Cluster do Filament em si nunca teve um bug** — o
+problema era usar um Cluster (item único + sidebar) quando o resultado
+visual desejado era o OPOSTO (múltiplos itens irmãos na topbar, sem
+sidebar). São dois mecanismos de navegação genuinamente diferentes do
+Filament, cada um certo para um objetivo diferente.
+
+### Por que o Cluster "Obras" de hoje é seguro (objetivo é o OPOSTO do que causou o problema em 26cfef4f7)
+
+Desta vez o objetivo pedido é exatamente o que um Cluster resolve: UM
+item ("Obras") no dropdown "Comercial" da topbar, que ao ser clicado
+abre uma sidebar própria com os 3 cadastros — o mesmo padrão já usado
+e funcionando hoje por `Webkul\Support\Filament\Clusters\Settings`
+("Configurações") e por `Webkul\Project\Filament\Clusters\Configurations`
+("Configurações" dentro do grupo "Projetos", ver seção "Navegação de
+módulos..."). Não é o mesmo Cluster que foi removido usado do mesmo
+jeito — é a ferramenta certa aplicada ao caso para o qual ela já era
+recomendada (ver regra "Um Cluster continua sendo a ferramenta certa
+quando o objetivo é OUTRO: uma sub-hierarquia dentro de um item já
+achatado" na mesma seção). Efeito colateral aceito conscientemente: o
+dropdown "Comercial" da topbar passa a ter 1 item só ("Obras") em vez
+dos 3 itens irmãos que tinha antes desta tarefa — o roadmap de
+`CONCEITO-OBRA-PROPOSTA-PROJETO.md` (Proposta, Projeto) deve adicionar
+NOVOS itens irmãos ao Cluster "Obras" nesse mesmo dropdown no futuro,
+não substituir esta decisão.
+
+### Risco novo verificado e evitado: ícone do grupo + ícone do item dentro da sidebar do Cluster
+
+O commit `0035a3bef` ("Corrige erro 500 no cluster de Configurações do
+plugin de Tarefas") mostrou que a sidebar de QUALQUER Cluster lança
+`\Exception` (`vendor/filament/filament/resources/views/components/sidebar/group.blade.php`:
+"Navigation group [X] has an icon but one or more of its items also
+have icons...") quando um grupo de navegação DENTRO da sidebar do
+Cluster tem ícone (`NavigationGroup` enum, que carrega ícone) E os
+itens desse grupo também têm `$navigationIcon` próprio — que é
+exatamente o caso de `ObraResource`/`SituacaoObraResource`/
+`TipoObraResource` antes desta tarefa (cada um com `getNavigationGroup()
+=> NavigationGroup::Comercial`, que tem ícone, MAIS `$navigationIcon`
+próprio). Migrar os 3 Resources para dentro do Cluster `Obras` SEM
+remover esse `getNavigationGroup()` teria reintroduzido o mesmo 500 —
+só que na sidebar do Cluster "Obras", não na de "Configurações".
+
+**Correção aplicada**: `getNavigationGroup()` foi REMOVIDO dos 3
+Resources (não faz mais sentido de qualquer forma — dentro de um
+Cluster, quem aparece no dropdown da topbar é o Cluster, não o
+Resource; `getNavigationGroup()` de um Resource clusterizado só
+afetaria a sidebar INTERNA do Cluster). Confirmado por comparação
+direta de código: nenhum Resource dentro de
+`Webkul\Project\Filament\Clusters\Configurations` (`TaskStageResource`,
+`ProjectStageResource`, `MilestoneResource`, `TagResource`,
+`ActivityPlanResource`) declara `getNavigationGroup()` — mesmo padrão
+replicado aqui. Confirmado em runtime via tinker
+(`app(Obras::class)->getCachedSubNavigation()`): os 3 itens vêm dentro
+de um único `NavigationGroup` sintético com `label = null` (sem
+cabeçalho/ícone de grupo visível), então a exceção nunca é
+disparada — os `$navigationIcon` de cada Resource (`heroicon-o-
+clipboard-document-list`/`heroicon-o-tag`/`heroicon-o-flag`) aparecem
+normalmente ao lado de cada item da sidebar.
+
+### Slugs e ordem
+
+- `Obras::$slug = 'comercial'` (a URL do próprio Cluster,
+  `admin/comercial`, redireciona automaticamente pro primeiro item da
+  sidebar — `Cluster::mount()`).
+- `ObraResource::$slug = 'obras'`, `TipoObraResource::$slug =
+  'tipo-obras'`, `SituacaoObraResource::$slug = 'situacao-obras'` —
+  como a rota final de um Resource clusterizado é `{slug do Cluster}/
+  {slug do Resource}` (`HasRoutes::registerRoutes()`,
+  `$cluster::prependClusterSlug($panel, '')` + `getRoutePrefix()`
+  próprio), essa escolha faz as 3 URLs finais ficarem EXATAMENTE iguais
+  às de antes desta tarefa (`admin/comercial/obras`,
+  `admin/comercial/tipo-obras`, `admin/comercial/situacao-obras` —
+  confirmado via `route:list`), só a de Situação que também mudou de
+  nome do slug internamente (era `situacao-obras`, continua
+  `situacao-obras`) — nenhuma URL de resource realmente quebrou para
+  quem tivesse um link salvo.
+- Ordem na sidebar via `$navigationSort` (1 = Obras, 2 = Tipos de Obra,
+  3 = Situações — cadastro principal primeiro, cadastros de apoio
+  depois, pedido explícito da tarefa; o Cluster "Configurations" de
+  Tarefas não tem um "Resource principal" análogo pra comparar, então
+  não há um padrão establecido contrário a seguir aqui).
+
+### Breadcrumb — evitado o mesmo bug do commit `0035a3bef`/Configurations
+
+`Filament\Clusters\Cluster::getClusterBreadcrumb()` cai, por padrão,
+em `static::$title ?? str(class_basename)->beforeLast('Cluster')->kebab()
+->replace('-', ' ')->ucwords()` — puramente derivado do nome da classe,
+SEM tradução. Confirmado por leitura de código que é exatamente isso
+que faz o Cluster "Configurations" (`webkul/projects`) mostrar
+"Configurations >" em inglês no breadcrumb hoje (bug conhecido, fora
+de escopo desta tarefa, não corrigido) — a classe só sobrescreve
+`getNavigationLabel()`, não `getClusterBreadcrumb()`. `Obras` sobrescreve
+`getClusterBreadcrumb()` explicitamente, retornando
+`static::getNavigationLabel()` (que já usa `__('comercial::filament/clusters/obras.navigation.title')`)
+— confirmado em runtime via `app(ListObras::class)->getBreadcrumbs()` e
+`app(ManageTiposObra::class)->getBreadcrumbs()`: ambos mostram "Obras"
+corretamente, não o nome da classe nem inglês.
+
+### Shield — mesma exclusão de página "fantasma" já usada por PessoasCluster/ComercialCluster
+
+`Obras` é um Cluster "puro" (nenhuma Page própria declara `$cluster =
+Obras::class` além dos 3 Resources) — mesma situação de
+`PessoasCluster`/`ComercialCluster` antes de serem removidos (ver
+comentário mantido em `config/filament-shield.php`). Adicionado
+`'pages' => ['exclude' => [Obras::class]]` nesse config, exatamente
+como era feito antes — `shield:generate --resource=ObraResource,
+SituacaoObraResource,TipoObraResource` confirmou "Entities processed: 3"
+(não 4), e as 22 permissões geradas continuam com os mesmos nomes de
+antes (`view_any_comercial_obra`, etc. — nenhuma permissão nova, nenhum
+toggle morto "Obras Cluster" na tela de Funções).
+
+### Validado (via tinker, autenticado como o próprio usuário Admin)
+
+1. `Filament::getNavigation()`: grupo "Comercial" agora tem 1 item só
+   ("Obras" → `/admin/comercial`); todos os outros grupos (Dashboard,
+   Projetos, Pessoas, Módulos, Configurações, Ajuda) inalterados.
+2. `app(Obras::class)->getCachedSubNavigation()`: 3 itens na ordem
+   Obras/Tipos de Obra/Situações, sem exceção de ícone.
+3. `Livewire::test()` renderizou sem exceção `ListObras`,
+   `ManageTiposObra`, `ManageSituacoesObra` e `EditObra` (record
+   existente, id=2) — confirma que não há 500 em nenhuma das 4 páginas
+   dentro da nova estrutura.
+4. Numeração automática: `Obra::create([...])` (dentro de transação
+   revertida) gerou `numero_obra` normalmente
+   (`GeradorNumeroObra::gerar()`, chamado em `Obra::boot()`'s
+   `creating`, é 100% independente de rota/Cluster/navegação — nenhum
+   arquivo desse fluxo foi tocado nesta tarefa).
+5. **Achado incidental, fora de escopo, NÃO introduzido por esta
+   tarefa** (confirmado comparando o mesmo teste com `git stash` do
+   código desta tarefa aplicado/revertido): a aba "Auditoria"
+   (`ActivitylogRelationManager`) e o filtro de Lixeira
+   (`TrashedFilter`) de `ObraResource` não aparecem no HTML retornado
+   por `Livewire::test(...)->html()` mesmo ANTES desta tarefa — parece
+   uma particularidade de como esse teste renderiza
+   RelationManagers/painéis de filtro (possivelmente carregados via
+   Livewire aninhado/lazy), não um bug real da UI (a mesma checagem em
+   `EditPessoaJuridica` encontra "Auditoria" normalmente). Não
+   investigado a fundo por ser preexistente e não relacionado ao
+   Cluster — mencionar caso surja de novo em outra tarefa.
+6. `route:list` e `shield:generate` conferidos antes/depois; `ddev
+   artisan optimize:clear` executado ao final.
