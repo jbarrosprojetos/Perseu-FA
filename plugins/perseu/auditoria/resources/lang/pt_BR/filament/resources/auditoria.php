@@ -39,6 +39,10 @@ return [
             'subject_reference' => 'Registro',
             'subject_reference_unavailable' => 'Registro excluído definitivamente',
         ],
+        // Caixa "Pesquisar" padrão do Filament (topo da tabela) —
+        // busca unificada por nome/razão social/número, ver
+        // AuditoriaResource::getSubjectReferenceColumnComponent().
+        'search_placeholder' => 'Buscar por nome, razão social ou número da Obra...',
         'filters' => [
             'modulo' => [
                 'label' => 'Módulo',
@@ -46,9 +50,8 @@ return [
             'subject_type' => [
                 'label' => 'Cadastro',
             ],
-            'busca' => [
-                'label' => 'Buscar registro',
-                'valor' => 'Nome, razão social, número...',
+            'causer' => [
+                'label' => 'Usuário',
             ],
         ],
     ],

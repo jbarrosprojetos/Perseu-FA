@@ -156,12 +156,23 @@ class SubjectTypeCatalog
     }
 
     /**
-     * Aplica o termo de busca da central de Auditoria (nome, razão
-     * social, número de Obra etc.) via `whereHasMorph` — um único termo
-     * pesquisado na(s) coluna(s) certa(s) de cada tipo de subject
-     * mapeado, sem precisar de uma coluna própria na tabela
-     * `activity_log` (a referência é derivada do model relacionado, não
-     * armazenada).
+     * Aplica o termo digitado na caixa "Pesquisar" da central de
+     * Auditoria (nome, razão social, número de Obra etc.) via
+     * `whereHasMorph` — um único termo pesquisado na(s) coluna(s)
+     * certa(s) de cada tipo de subject mapeado, sem precisar de uma
+     * coluna própria na tabela `activity_log` (a referência é derivada
+     * do model relacionado, não armazenada). Ligado à busca global do
+     * Filament via `->searchable(query: ...)` na coluna
+     * `subject_reference`
+     * (`AuditoriaResource::getSubjectReferenceColumnComponent()`) — não
+     * é mais um `Filter` separado (existiu como um até 2026-08-29,
+     * removido por redundância com a caixa "Pesquisar").
+     *
+     * Todas as colunas comparadas aqui usam collation
+     * `utf8mb4_unicode_ci` neste banco (confirmado com `SHOW FULL
+     * COLUMNS`), então o `LIKE` já é case-insensitive sem precisar de
+     * `LOWER()` — ver nota mais completa em
+     * `getSubjectReferenceColumnComponent()`.
      */
     public static function applyBusca(Builder $query, string $termo): Builder
     {

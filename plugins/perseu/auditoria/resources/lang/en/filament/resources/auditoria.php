@@ -32,6 +32,7 @@ return [
             'subject_reference' => 'Record',
             'subject_reference_unavailable' => 'Permanently deleted record',
         ],
+        'search_placeholder' => 'Search by name, company name or Work number...',
         'filters' => [
             'modulo' => [
                 'label' => 'Module',
@@ -39,9 +40,8 @@ return [
             'subject_type' => [
                 'label' => 'Record type',
             ],
-            'busca' => [
-                'label' => 'Search record',
-                'valor' => 'Name, company name, number...',
+            'causer' => [
+                'label' => 'User',
             ],
         ],
     ],

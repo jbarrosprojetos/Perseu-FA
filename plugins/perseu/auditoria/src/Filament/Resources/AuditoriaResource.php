@@ -2,18 +2,18 @@
 
 namespace Perseu\Auditoria\Filament\Resources;
 
-use Filament\Forms\Components\TextInput;
 use Filament\Tables\Columns\Column;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Str;
 use Perseu\Auditoria\Filament\Resources\AuditoriaResource\Pages\ListAuditoria;
 use Perseu\Auditoria\Filament\Resources\AuditoriaResource\Pages\ViewAuditoria;
 use Perseu\Auditoria\Support\SubjectTypeCatalog;
 use Rmsramos\Activitylog\Resources\Activitylog\ActivitylogResource;
 use Spatie\Activitylog\Models\Activity;
+use Webkul\Security\Models\User;
 use Webkul\Support\Filament\Clusters\Settings;
 
 /**
@@ -46,15 +46,16 @@ use Webkul\Support\Filament\Clusters\Settings;
  * (`ActivitylogRelationManager`) foram removidas (informação
  * duplicada, já que esta lista mostra TUDO de qualquer módulo). Pra
  * compensar a perda do atalho "aba dentro do próprio registro", esta
- * página ganhou filtro por cadastro/módulo de origem
- * (`SubjectTypeCatalog`) e um filtro de busca textual (nome, razão
- * social, número de Obra etc., via `whereHasMorph` — não existe coluna
- * própria pra isso em `activity_log`, o valor é derivado do model
- * relacionado). `table()` sobrescreve o do pacote por completo (em vez
- * de tentar compor com os métodos estáticos do pai via `->filters()`/
- * `->columns()` encadeado, que SUBSTITUI a lista anterior em vez de
- * somar — checar `Filament\Tables\Concerns\HasFilters`/`HasColumns`
- * antes de tentar "aditivar" no futuro).
+ * página ganhou filtro por cadastro/módulo/usuário de origem
+ * (`SubjectTypeCatalog`) e busca textual (nome, razão social, número
+ * de Obra etc.) — inicialmente um `Filter` separado, depois unificada
+ * (2026-08-29) na caixa "Pesquisar" padrão do Filament, ver
+ * `getSubjectReferenceColumnComponent()`. `table()` sobrescreve o do
+ * pacote por completo (em vez de tentar compor com os métodos
+ * estáticos do pai via `->filters()`/`->columns()` encadeado, que
+ * SUBSTITUI a lista anterior em vez de somar — checar
+ * `Filament\Tables\Concerns\HasFilters`/`HasColumns` antes de tentar
+ * "aditivar" no futuro).
  */
 class AuditoriaResource extends ActivitylogResource
 {
@@ -97,13 +98,73 @@ class AuditoriaResource extends ActivitylogResource
                 config('filament-activitylog.resources.default_sort_column', 'created_at'),
                 config('filament-activitylog.resources.default_sort_direction', 'desc')
             )
+            ->searchPlaceholder(__('auditoria::filament/resources/auditoria.table.search_placeholder'))
             ->filters([
                 static::getModuloFilterComponent(),
                 static::getSubjectTypeFilterComponent(),
-                static::getBuscaRegistroFilterComponent(),
+                static::getCauserFilterComponent(),
                 static::getEventFilterComponent(),
                 static::getDateFilterComponent(),
             ]);
+    }
+
+    /**
+     * Sobrescreve o do pacote (`ActivitylogResource::getEventColumnComponent()`)
+     * só pra somar `->searchable(query: ...)` — pedido do usuário depois
+     * de tentar digitar "defi" (esperando achar "Excluído
+     * Definitivamente") na caixa "Pesquisar" e não achar nada, já que
+     * a busca só cobria os campos do registro de origem
+     * (`getSubjectReferenceColumnComponent()`). O termo digitado é
+     * comparado contra o RÓTULO TRADUZIDO de cada evento (o que o
+     * usuário vê na tela, ex. "excluído definitivamente"), não contra
+     * o valor técnico salvo em `event` (`forceDeleted`) — daí primeiro
+     * descobrir quais valores técnicos têm rótulo que bate com o termo,
+     * e só então `whereIn('event', [...])`. Mesmo `whereRaw('1 = 0')`
+     * de `SubjectTypeCatalog::applyBusca()` quando nada bate — devolver
+     * a query sem alteração faria o grupo `orWhere(fn ($q) => ...)`
+     * ficar vazio, o que equivale a "true" em SQL (bateria com
+     * qualquer termo, não com nenhum).
+     *
+     * Resultado: um único termo na caixa "Pesquisar" agora casa com
+     * QUALQUER UMA das duas coisas (Filament soma com `OR` automático
+     * entre colunas `searchable()` — `InteractsWithTableQuery::applySearchConstraint()`,
+     * mesmo mecanismo que já une múltiplas colunas buscáveis) — o
+     * registro de origem (`subject_reference`) OU o evento
+     * (`event`, aqui).
+     */
+    public static function getEventColumnComponent(): Column
+    {
+        return TextColumn::make('event')
+            ->label(__('activitylog::tables.columns.event.label'))
+            ->formatStateUsing(fn (?string $state) => $state ? ucwords(__('activitylog::action.event.' . $state)) : '-')
+            ->badge()
+            ->color(fn (?string $state): string => match ($state) {
+                'draft'        => 'gray',
+                'updated'      => 'warning',
+                'created'      => 'success',
+                'deleted'      => 'danger',
+                'forceDeleted' => 'danger',
+                'restored'     => 'info',
+                default        => 'primary',
+            })
+            ->searchable(query: function (Builder $query, string $search): Builder {
+                $termoBuscado = Str::lower($search);
+
+                $eventosCorrespondentes = collect(['created', 'updated', 'deleted', 'forceDeleted', 'restored'])
+                    ->filter(fn (string $evento): bool => str_contains(
+                        Str::lower(__('activitylog::action.event.' . $evento)),
+                        $termoBuscado,
+                    ))
+                    ->values()
+                    ->all();
+
+                if (empty($eventosCorrespondentes)) {
+                    return $query->whereRaw('1 = 0');
+                }
+
+                return $query->whereIn('event', $eventosCorrespondentes);
+            })
+            ->sortable();
     }
 
     /**
@@ -129,10 +190,34 @@ class AuditoriaResource extends ActivitylogResource
      * social, número de Obra...) — não é uma coluna real de
      * `activity_log`, o valor vem do `subject` (já eager-loaded por
      * `ActivitylogResource::getEloquentQuery()`, inclusive
-     * soft-deleted). Não é `->searchable()` (não existe coluna pra
-     * buscar) — a busca por este texto é o filtro dedicado
-     * `getBuscaRegistroFilterComponent()`, que sabe em qual coluna de
-     * cada Model procurar.
+     * soft-deleted).
+     *
+     * `->searchable(query: ...)` liga a caixa "Pesquisar" padrão do
+     * Filament (topo da tabela) direto em
+     * `SubjectTypeCatalog::applyBusca()` — como a coluna não tem um
+     * valor de banco próprio pra comparar (`getStateUsing`, não
+     * `make('coluna_real')`), sem esse `query:` custom o Filament
+     * tentaria (e falharia) buscar por uma coluna `subject_reference`
+     * inexistente em `activity_log`
+     * (`Filament\Tables\Columns\Concerns\InteractsWithTableQuery::applySearchConstraint()`
+     * só monta a comparação padrão por coluna quando NÃO há
+     * `$searchQuery` definido). Existia um `Filter` dedicado
+     * ("Nome, razão social, número...") pra isso antes de 2026-08-29 —
+     * removido por redundância com a caixa "Pesquisar" (duas caixas de
+     * busca fazendo a mesma coisa confundia o usuário).
+     *
+     * Case-insensitive "de graça": todas as 14 colunas reais que
+     * `applyBusca()` compara (`descricao`, `numero_obra`, `nome`,
+     * `razao_social`, `nome_fantasia`, `cnpj`, `logradouro`, `bairro`,
+     * `municipio`, `cargo`) usam collation `utf8mb4_unicode_ci`
+     * (confirmado com `SHOW FULL COLUMNS` em cada tabela) — `LIKE` do
+     * MySQL/MariaDB já é case-insensitive nessa collation, sem precisar
+     * de `LOWER()` nos dois lados. Mesmo padrão que o próprio Filament
+     * usa pra busca padrão em MySQL/MariaDB
+     * (`Filament\Support\generate_search_term_expression()`: só força
+     * `Str::lower()` no termo por padrão quando o driver é `pgsql` —
+     * em `mysql`/`mariadb` conta com a collation da coluna pra isso,
+     * exatamente como aqui).
      */
     public static function getSubjectReferenceColumnComponent(): Column
     {
@@ -140,6 +225,7 @@ class AuditoriaResource extends ActivitylogResource
             ->label(__('auditoria::filament/resources/auditoria.table.columns.subject_reference'))
             ->getStateUsing(fn (Activity $record) => SubjectTypeCatalog::referenceFor($record->subject)
                 ?? __('auditoria::filament/resources/auditoria.table.columns.subject_reference_unavailable'))
+            ->searchable(query: fn (Builder $query, string $search): Builder => SubjectTypeCatalog::applyBusca($query, $search))
             ->wrap();
     }
 
@@ -164,23 +250,26 @@ class AuditoriaResource extends ActivitylogResource
             ->options(SubjectTypeCatalog::subjectTypeOptions());
     }
 
-    public static function getBuscaRegistroFilterComponent(): Filter
+    /**
+     * `causer_id` é coluna real de `activity_log` — sem `->query()`
+     * customizado, o `SelectFilter` já aplica `where('causer_id', $valor)`
+     * sozinho (comportamento padrão, ver `getSubjectTypeFilterComponent()`
+     * acima pro mesmo raciocínio). Não restringe também por `causer_type`:
+     * uma checagem direta em `activity_log.causer_type` (`SELECT DISTINCT
+     * causer_type`) confirmou só dois valores possíveis: vazio (ações sem
+     * usuário autenticado, ex. seeders/tinker) ou
+     * `Webkul\Security\Models\User` — não há outro tipo de causer hoje
+     * (nem o `causedBy()` manual de
+     * `Perseu\Auditoria\Traits\LogsBusinessActivity::bootLogsBusinessActivity()`,
+     * adicionado depois desta nota pra logar `forceDeleted`, muda isso —
+     * ele também sempre passa um `Webkul\Security\Models\User` ou
+     * `null`), então um `causer_id` já identifica o log sem ambiguidade.
+     */
+    public static function getCauserFilterComponent(): SelectFilter
     {
-        return Filter::make('busca')
-            ->label(__('auditoria::filament/resources/auditoria.table.filters.busca.label'))
-            ->form([
-                TextInput::make('valor')
-                    ->label(__('auditoria::filament/resources/auditoria.table.filters.busca.valor')),
-            ])
-            ->query(function (Builder $query, array $data): Builder {
-                if (blank($data['valor'] ?? null)) {
-                    return $query;
-                }
-
-                return SubjectTypeCatalog::applyBusca($query, $data['valor']);
-            })
-            ->indicateUsing(fn (array $data): ?string => filled($data['valor'] ?? null)
-                ? $data['valor']
-                : null);
+        return SelectFilter::make('causer_id')
+            ->label(__('auditoria::filament/resources/auditoria.table.filters.causer.label'))
+            ->searchable()
+            ->options(fn (): array => User::query()->orderBy('name')->pluck('name', 'id')->all());
     }
 }
