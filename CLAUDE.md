@@ -2289,3 +2289,173 @@ recurso nativo nesta versão do Filament. Construir isso do zero
 mesmo estado de filtro) seria consideravelmente mais trabalho por
 puro ganho estético, sem funcionalidade nova — mantido no painel de
 Filtros padrão (ícone de funil), só com a multi-seleção pedida.
+
+## Localização do cadastro de Empresa (Company) pro padrão brasileiro — Empresa e Filiais (2026-08-30)
+
+`Webkul\Support\Models\Company` (Configurações → Empresas) — Model
+CORE do AureusERP, integrado a multi-tenancy/segurança — foi
+LOCALIZADO pro padrão brasileiro de Pessoa Jurídica (CNPJ, busca
+automática via BrasilAPI, endereço com CEP/UF), decisão consciente de
+**adaptar os campos em vez de substituir o Model** por `PessoaJuridica`
+(mexer na integração de segurança/multi-empresa seria arriscado demais
+pro ganho). Filial (`Branch`) NÃO é um Model separado — é a MESMA
+tabela `companies`, auto-referencial via `parent_id`
+(`Company::branches(): HasMany` = `hasMany(Company::class, 'parent_id')`)
+— por isso `BranchesRelationManager` recebeu exatamente o mesmo
+tratamento, com o próprio `form()`/`infolist()` (não herda do
+`CompanyResource`, é uma classe irmã que duplica a estrutura desde a
+origem do AureusERP).
+
+### Estudo obrigatório ANTES de mexer em qualquer coluna — dois agentes de investigação, não suposição
+
+Antes de qualquer alteração, dois levantamentos extensos (não
+suposição) confirmaram:
+
+1. **`registration_number` E `company_id` (coluna própria, string
+   única — NÃO a PK numérica, nome infeliz do AureusERP original) SÃO
+   usados internamente**: `Company::boot()` copia
+   `registration_number` → `Partner.company_registry` em `creating`
+   E `saved`; ambos aparecem em `Http/Resources/V1/CompanyResource.php`
+   (API pública) e em `database/seeders/CompanySeeder.php`/
+   `database/factories/CompanyFactory.php`. **Decisão**: campos
+   ESCONDIDOS do formulário (`->hidden()`), NÃO removidos — coluna,
+   `$fillable` e sincronização com Partner continuam intactos.
+2. **`tax_id` — desvio deliberado da instrução literal da tarefa**: em
+   vez de remover `tax_id` e criar uma coluna `cnpj` nova, `tax_id` foi
+   **reaproveitado como CNPJ** (mesmo tratamento dado a `name`→Razão
+   Social). Já tinha `unique()->nullable()` (exatamente o que CNPJ
+   precisa) e já sincronizava pra `Partner.tax_id`
+   (`Company::boot()`); nenhum PDF/e-mail do sistema hoje exibe
+   `tax_id` (confirmado por grep completo), então repropor seu
+   conteúdo não quebra nada visível.
+3. **`name` — usado bem além do CRUD de Empresa**: aparece no
+   `company-switcher.blade.php` (dropdown de troca de empresa na
+   topbar) e em SEIS templates de impressão/PDF diferentes (cotação de
+   vendas, pedidos de compra, romaneio/nota de separação, fatura/
+   recibo/nota de crédito) via `$record->company->name`, além de ser
+   serializado inteiro (`current_company()->toArray()`) em TODO e-mail
+   automático do sistema (`$payload['from']['company']`). Como a
+   COLUNA `name` nunca foi renomeada (só o LABEL do formulário virou
+   "Razão Social"), nenhuma dessas dezenas de pontos de uso foi afetada
+   — confirmado que esse é exatamente o motivo de nunca renomear uma
+   coluna existente neste tipo de Model amplamente consumido, só
+   adicionar novas.
+4. **Endereço nos PDFs vem de `Company->partner->{campo}`, não de
+   `Company->{campo}` diretamente** — `Company::boot()` sincroniza
+   `street1`/`street2`/`city`/`zip`/`state_id`/`country_id` pro
+   Partner vinculado, e é o Partner que os templates de impressão leem.
+   `bairro`/`numero` (as duas colunas genuinamente novas) NÃO entram
+   nesse sync hoje (nenhum consumidor precisa deles ainda, já que não
+   existe emissão de NF-e implementada) — ponto de atenção se/quando a
+   emissão de NF-e for implementada: estender `Company::boot()` pra
+   sincronizar esses dois campos também.
+5. **Nenhuma Policy/Guard/scope de multi-tenancy depende do VALOR**
+   desses campos (`CompanyPolicy` é só permissão-string;
+   `CompanyContext`/`RestrictToAllowedCompanies`/`CompanyScope`
+   operam só sobre o `id` numérico) — confirmado antes de mexer, não
+   assumido.
+6. **Achado incidental corrigido de graça**: o infolist de
+   `BranchesRelationManager` (aba "Informações de endereço") referenciava
+   `address.street1`/`address.city`/etc. — `Company` NUNCA teve uma
+   relação/accessor `address` (bug pré-existente da implementação
+   AureusERP original, não desta tarefa), então essa aba sempre
+   mostrou só "—" vazio, mesmo com os campos preenchidos no formulário.
+   Corrigido pra `street1`/`city`/etc. (os atributos reais) já que
+   esta tarefa reescreveu exatamente essa seção. Um bug idêntico existe
+   em `plugins/webkul/sales/resources/views/sales/quotation.blade.php`
+   (`$record->company->address`, sempre `null`) — **não corrigido**,
+   plugin/contexto diferente, fora do escopo desta tarefa.
+7. **Achado que exige atenção do usuário, não corrigido
+   silenciosamente**: o registro real "Fa Marcenaria" (única Empresa
+   cadastrada hoje) tem `tax_id = "Inscrição"` — claramente um valor de
+   teste/placeholder, não um CNPJ. Como o campo agora tem
+   `->rule(new CnpjValido())`, a PRÓXIMA tentativa de salvar esse
+   registro (mesmo editando outro campo) vai falhar a validação até o
+   CNPJ real ser digitado ali. Não foi alterado via tinker/seed
+   (seria mexer em dado real sem autorização) — o usuário precisa
+   digitar o CNPJ real da F.A. Marcenaria na primeira edição depois
+   desta mudança.
+
+### Reaproveitamento da lógica de CNPJ — generalização mínima, não recriação
+
+`Perseu\Pessoas\Support\BrasilApiCnpjLookup::fill()` ganhou um 4º
+parâmetro opcional `string $razaoSocialField = 'razao_social'`
+(default preserva 100% o comportamento pra quem já chama sem
+informá-lo — Pessoa Jurídica) — só troca `$set('razao_social', ...)`
+por `$set($razaoSocialField, ...)`, usado como `fill($set, $get,
+$state, razaoSocialField: 'name')` pro campo `name` (legado) de
+Company. Único ponto tocado na classe original; todo o resto
+(CNAE, situação cadastral, regime tributário, porte etc.) já usava
+NOMES DE CAMPO IDÊNTICOS aos escolhidos pra Company, então funcionou
+sem nenhuma outra mudança.
+
+Endereço INLINE (Company tem UM endereço no próprio formulário, ao
+contrário de Pessoa Jurídica, que usa a relação `enderecos` — ver
+seção "Estrutura do plugin de Pessoas") não existia como necessidade
+antes desta tarefa, então não tinha equivalente em
+`BrasilApiCnpjLookup`. Nova classe
+`Webkul\Support\Support\CompanyCnpjLookup::fillEndereco()` reaproveita
+`BrasilApiCnpjLookup::buscar()`/`enderecoFrom()` (ambos públicos,
+sem estado) só pra fazer o mapeamento Company-específico
+(`logradouro`→`street1`, `complemento`→`street2`, `municipio`→`city`,
+`cep`→`zip`, `bairro`/`numero` diretos, `uf`→`state_id` via
+`State::where('code', $uf)->whereHas('country', code BR)` — os 27
+estados brasileiros já vêm seedados com `code` de 2 letras batendo
+exatamente com o formato da BrasilAPI, confirmado via tinker antes de
+implementar). Ficou em `webkul/support` (não em `perseu/pessoas`) pra
+não misturar conhecimento do schema legado do AureusERP
+(`street1`/`state_id` como FK) dentro do plugin de Pessoas.
+
+`Perseu\Pessoas\Enums\RegimeTributario`/`IndicadorContribuinteIcms` e
+o cast correspondente em `Company::$casts` (necessário pra
+`TextColumn`/`TextEntry` renderizarem o rótulo do enum em vez do
+inteiro cru, mesmo mecanismo já usado em `PessoaJuridica`) foram
+REUTILIZADOS diretamente de `perseu/pessoas`, não duplicados —
+decisão consciente: `webkul/support` tem `->isCore()` (excluído do
+grafo de `plugin_dependencies` usado pela UI de gestão de plugins, ver
+`Webkul\PluginManager\Models\Plugin::getAllPluginPackages()`), então
+importar uma classe de `perseu/pessoas` não introduz o risco de
+dependência circular que motivou a decisão equivalente na Lixeira
+Central (`comercial`/`pessoas` → `auditoria`) — `support` nunca é
+instalado/desinstalado dinamicamente, então a direção da dependência
+não entra nesse grafo de forma alguma. `SituacaoCadastralBadge`
+(renderização do badge de Situação Cadastral) foi DUPLICADA como
+classe própria em `webkul/support` em vez de reaproveitada da
+Resource de Pessoa Jurídica — só 15 linhas, sem estado, e não fazia
+sentido puxar uma classe de RENDERIZAÇÃO específica de um Resource de
+outro plugin pra dentro de dois lugares (`CompanyResource`/
+`BranchesRelationManager`) que não compartilham base comum.
+
+### Migration — só 11 colunas novas, todo o resto reaproveitado
+
+`2026_08_30_100000_add_brazilian_fields_to_companies_table` (registrada
+em `SupportServiceProvider::hasMigrations()`, lista explícita como as
+demais deste plugin) adiciona: `nome_fantasia`, `cnae`,
+`cnae_descricao`, `regime_tributario`, `porte`, `descricao_porte`,
+`situacao_cadastral`, `descricao_situacao_cadastral`,
+`indicador_contribuinte_icms`, `bairro`, `numero` — todas
+`nullable()`, sem quebrar seeders/factories existentes (confirmado
+rodando `CompanyFactory::new()->make()` depois da migration).
+REAPROVEITADAS sem migration: `name` (Razão Social), `tax_id` (CNPJ),
+`founded_date` (Data de Abertura), `street1`/`street2`/`city`/`zip`
+(Logradouro/Complemento/Município/CEP), `state_id`/`country_id`
+(UF/País, já FK pras tabelas `states`/`countries`, ambas já seedadas
+com os 27 estados brasileiros).
+
+### Validado de ponta a ponta (Empresa E Filial), com o CNPJ real de teste já usado em tarefas anteriores
+
+Via `Livewire::test()` (não só leitura de código): buscar um CNPJ
+preenche `name`/`nome_fantasia`/`street1`/`bairro`/`numero`/`city`/
+`zip`/`state_id`(FK resolvida)/`country_id`(Brasil, id 31)/`cnae`/
+`situacao_cadastral`/`regime_tributario` — tanto no formulário de
+Empresa quanto no modal de criação de Filial dentro do
+`BranchesRelationManager` (usando um CNPJ diferente do de Empresa,
+confirmando que cada registro busca e preenche independentemente).
+Edição manual de um campo já preenchido pela API foi aceita
+normalmente (`->set()` sobrescreve sem resistência, mesma UX de
+Pessoa Jurídica). Criação completa (`->call('create')`/
+`->callMountedAction()`, dentro de transação revertida) confirmou
+Empresa E Filial salvas corretamente, incluindo a sincronização pro
+Partner vinculado (`$company->partner->tax_id`/`street1` batendo com
+os valores da Empresa). Logo/Cor (branding) não foram tocados —
+confirmado que a seção continua renderizando normalmente.

@@ -16,6 +16,8 @@ use Filament\Actions\ViewAction;
 use Filament\Forms\Components\ColorPicker;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\FileUpload;
+use Filament\Forms\Components\Hidden;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
@@ -41,8 +43,14 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
+use Perseu\Pessoas\Enums\IndicadorContribuinteIcms;
+use Perseu\Pessoas\Enums\RegimeTributario;
+use Perseu\Pessoas\Rules\CnpjValido;
+use Perseu\Pessoas\Support\BrasilApiCnpjLookup;
 use Webkul\Support\Models\Country;
 use Webkul\Support\Models\Currency;
+use Webkul\Support\Support\CompanyCnpjLookup;
+use Webkul\Support\Support\SituacaoCadastralBadge;
 
 class BranchesRelationManager extends RelationManager
 {
@@ -65,6 +73,22 @@ class BranchesRelationManager extends RelationManager
                             ->schema([
                                 Section::make(__('support::filament/resources/company/relation-managers/manage-branch.form.tabs.general-information.sections.branch-information.title'))
                                     ->schema([
+                                        TextInput::make('tax_id')
+                                            // Reaproveita `tax_id` como CNPJ, mesmo tratamento de
+                                            // CompanyResource (ver CLAUDE.md) — a Filial é uma Pessoa
+                                            // Jurídica própria (CNPJ diferente da Matriz), mesma busca
+                                            // automática via BrasilAPI.
+                                            ->label(__('support::filament/resources/company/relation-managers/manage-branch.form.tabs.general-information.sections.branch-information.fields.tax-id'))
+                                            ->mask('99.999.999/9999-99')
+                                            ->rule(new CnpjValido())
+                                            ->unique(ignoreRecord: true)
+                                            ->live(onBlur: true)
+                                            ->afterStateUpdated(function (Set $set, Get $get, ?string $state) {
+                                                BrasilApiCnpjLookup::fill($set, $get, $state, razaoSocialField: 'name');
+                                                CompanyCnpjLookup::fillEndereco($set, $get, $state);
+                                            })
+                                            ->hint(fn (Get $get) => $get('cnpj_lookup_erro'))
+                                            ->hintColor('danger'),
                                         TextInput::make('name')
                                             ->label(__('support::filament/resources/company/relation-managers/manage-branch.form.tabs.general-information.sections.branch-information.fields.company-name'))
                                             ->required()
@@ -74,21 +98,52 @@ class BranchesRelationManager extends RelationManager
                                                 'unique' => 'Branch name already exists. Please use a unique name.',
                                             ])
                                             ->live(onBlur: true),
-                                        TextInput::make('registration_number')
-                                            ->label(__('support::filament/resources/company/relation-managers/manage-branch.form.tabs.general-information.sections.branch-information.fields.registration-number')),
-                                        TextInput::make('company_id')
-                                            ->label(__('support::filament/resources/company/relation-managers/manage-branch.form.tabs.general-information.sections.branch-information.fields.company-id'))
-                                            ->unique(ignoreRecord: true)
-                                            ->hintIcon('heroicon-o-question-mark-circle', tooltip: __('support::filament/resources/company/relation-managers/manage-branch.form.tabs.general-information.sections.branch-information.fields.company-id-tooltip')),
-                                        TextInput::make('tax_id')
-                                            ->label(__('support::filament/resources/company/relation-managers/manage-branch.form.tabs.general-information.sections.branch-information.fields.tax-id'))
-                                            ->unique(ignoreRecord: true)
-                                            ->hintIcon('heroicon-o-question-mark-circle', tooltip: __('support::filament/resources/company/relation-managers/manage-branch.form.tabs.general-information.sections.branch-information.fields.tax-id-tooltip')),
+                                        TextInput::make('nome_fantasia')
+                                            ->label(__('support::filament/resources/company/relation-managers/manage-branch.form.tabs.general-information.sections.branch-information.fields.nome-fantasia'))
+                                            ->maxLength(255),
                                         ColorPicker::make('color')
                                             ->label(__('support::filament/resources/company/relation-managers/manage-branch.form.tabs.general-information.sections.branch-information.fields.color'))
                                             ->hexColor(),
+                                        // "Número de registro"/"ID da empresa" — mesma decisão de
+                                        // CompanyResource: escondidos, não removidos (ver CLAUDE.md).
+                                        TextInput::make('registration_number')
+                                            ->label(__('support::filament/resources/company/relation-managers/manage-branch.form.tabs.general-information.sections.branch-information.fields.registration-number'))
+                                            ->hidden(),
+                                        TextInput::make('company_id')
+                                            ->label(__('support::filament/resources/company/relation-managers/manage-branch.form.tabs.general-information.sections.branch-information.fields.company-id'))
+                                            ->unique(ignoreRecord: true)
+                                            ->hidden(),
                                     ])
                                     ->columns(2),
+                                Section::make(__('support::filament/resources/company/relation-managers/manage-branch.form.tabs.general-information.sections.fiscal-information.title'))
+                                    ->schema([
+                                        Placeholder::make('situacao_cadastral_display')
+                                            ->label(__('support::filament/resources/company/relation-managers/manage-branch.form.tabs.general-information.sections.fiscal-information.fields.situacao-cadastral'))
+                                            ->content(fn (Get $get) => SituacaoCadastralBadge::render($get('situacao_cadastral'), $get('descricao_situacao_cadastral')))
+                                            ->hidden(fn (Get $get) => blank($get('descricao_situacao_cadastral'))),
+                                        TextInput::make('cnae')
+                                            ->label(__('support::filament/resources/company/relation-managers/manage-branch.form.tabs.general-information.sections.fiscal-information.fields.cnae'))
+                                            ->mask('9999-9/99')
+                                            ->helperText(fn (Get $get) => $get('cnae_descricao')),
+                                        DatePicker::make('founded_date')
+                                            ->native(false)
+                                            ->label(__('support::filament/resources/company/relation-managers/manage-branch.form.tabs.general-information.sections.fiscal-information.fields.data-abertura')),
+                                        Select::make('indicador_contribuinte_icms')
+                                            ->label(__('support::filament/resources/company/relation-managers/manage-branch.form.tabs.general-information.sections.fiscal-information.fields.indicador-contribuinte-icms'))
+                                            ->options(IndicadorContribuinteIcms::class),
+                                        Select::make('regime_tributario')
+                                            ->label(__('support::filament/resources/company/relation-managers/manage-branch.form.tabs.general-information.sections.fiscal-information.fields.regime-tributario'))
+                                            ->options(RegimeTributario::class)
+                                            ->default(RegimeTributario::NaoInformado->value),
+                                        TextInput::make('porte')
+                                            ->label(__('support::filament/resources/company/relation-managers/manage-branch.form.tabs.general-information.sections.fiscal-information.fields.porte'))
+                                            ->helperText(fn (Get $get) => $get('descricao_porte')),
+                                        Hidden::make('situacao_cadastral'),
+                                        Hidden::make('descricao_situacao_cadastral'),
+                                        Hidden::make('cnae_descricao'),
+                                        Hidden::make('descricao_porte'),
+                                    ])
+                                    ->columns(3),
                                 Section::make(__('support::filament/resources/company/relation-managers/manage-branch.form.tabs.general-information.sections.branding.title'))
                                     ->relationship('partner', 'avatar')
                                     ->schema([
@@ -108,8 +163,12 @@ class BranchesRelationManager extends RelationManager
                                             ->schema([
                                                 TextInput::make('street1')
                                                     ->label(__('support::filament/resources/company/relation-managers/manage-branch.form.tabs.address-information.sections.address-information.fields.street1')),
+                                                TextInput::make('numero')
+                                                    ->label(__('support::filament/resources/company/relation-managers/manage-branch.form.tabs.address-information.sections.address-information.fields.numero')),
                                                 TextInput::make('street2')
                                                     ->label(__('support::filament/resources/company/relation-managers/manage-branch.form.tabs.address-information.sections.address-information.fields.street2')),
+                                                TextInput::make('bairro')
+                                                    ->label(__('support::filament/resources/company/relation-managers/manage-branch.form.tabs.address-information.sections.address-information.fields.bairro')),
                                                 TextInput::make('city')
                                                     ->label(__('support::filament/resources/company/relation-managers/manage-branch.form.tabs.address-information.sections.address-information.fields.city')),
                                                 TextInput::make('zip')
@@ -118,6 +177,7 @@ class BranchesRelationManager extends RelationManager
                                                 Select::make('country_id')
                                                     ->label(__('support::filament/resources/company/relation-managers/manage-branch.form.tabs.address-information.sections.address-information.fields.country'))
                                                     ->relationship(name: 'country', titleAttribute: 'name')
+                                                    ->default(fn () => Country::where('code', 'BR')->value('id'))
                                                     ->afterStateUpdated(fn (Set $set) => $set('state_id', null))
                                                     ->searchable()
                                                     ->preload()
@@ -210,9 +270,9 @@ class BranchesRelationManager extends RelationManager
                                                     ->modalSubmitActionLabel(__('support::filament/resources/company/relation-managers/manage-branch.form.tabs.address-information.sections.additional-information.fields.currency-create'))
                                                     ->modalWidth('lg')
                                             ),
-                                        DatePicker::make('founded_date')
-                                            ->native(false)
-                                            ->label(__('support::filament/resources/company/relation-managers/manage-branch.form.tabs.address-information.sections.additional-information.fields.company-foundation-date')),
+                                        // "Data de fundação" (founded_date) foi movida pra dentro da
+                                        // seção "Informações Fiscais", reaproveitada como "Data de
+                                        // Abertura" (mesma coluna, mesmo padrão de CompanyResource).
                                         Toggle::make('is_active')
                                             ->label(__('support::filament/resources/company/relation-managers/manage-branch.form.tabs.address-information.sections.additional-information.fields.status'))
                                             ->default(true),
@@ -408,24 +468,50 @@ class BranchesRelationManager extends RelationManager
                             ->schema([
                                 Section::make(__('support::filament/resources/company/relation-managers/manage-branch.infolist.tabs.general-information.sections.branch-information.title'))
                                     ->schema([
+                                        TextEntry::make('tax_id')
+                                            ->icon('heroicon-o-identification')
+                                            ->placeholder('—')
+                                            ->label(__('support::filament/resources/company/relation-managers/manage-branch.infolist.tabs.general-information.sections.branch-information.entries.tax-id')),
                                         TextEntry::make('name')
                                             ->icon('heroicon-o-building-office')
                                             ->placeholder('—')
                                             ->label(__('support::filament/resources/company/relation-managers/manage-branch.infolist.tabs.general-information.sections.branch-information.entries.company-name')),
-                                        TextEntry::make('registration_number')
-                                            ->icon('heroicon-o-document-text')
+                                        TextEntry::make('nome_fantasia')
+                                            ->icon('heroicon-o-tag')
                                             ->placeholder('—')
-                                            ->label(__('support::filament/resources/company/relation-managers/manage-branch.infolist.tabs.general-information.sections.branch-information.entries.registration-number')),
-                                        TextEntry::make('tax_id')
-                                            ->icon('heroicon-o-currency-dollar')
-                                            ->placeholder('—')
-                                            ->label(__('support::filament/resources/company/relation-managers/manage-branch.infolist.tabs.general-information.sections.branch-information.entries.tax-id')),
+                                            ->label(__('support::filament/resources/company/relation-managers/manage-branch.infolist.tabs.general-information.sections.branch-information.entries.nome-fantasia')),
                                         TextEntry::make('color')
                                             ->icon('heroicon-o-swatch')
                                             ->placeholder('—')
                                             ->badge()
                                             ->color(fn ($record) => $record->color ?? 'gray')
                                             ->label(__('support::filament/resources/company/relation-managers/manage-branch.infolist.tabs.general-information.sections.branch-information.entries.color')),
+                                    ])
+                                    ->columns(2),
+
+                                Section::make(__('support::filament/resources/company/relation-managers/manage-branch.form.tabs.general-information.sections.fiscal-information.title'))
+                                    ->schema([
+                                        TextEntry::make('descricao_situacao_cadastral')
+                                            ->icon('heroicon-o-shield-check')
+                                            ->placeholder('—')
+                                            ->label(__('support::filament/resources/company/relation-managers/manage-branch.form.tabs.general-information.sections.fiscal-information.fields.situacao-cadastral')),
+                                        TextEntry::make('cnae')
+                                            ->placeholder('—')
+                                            ->label(__('support::filament/resources/company/relation-managers/manage-branch.form.tabs.general-information.sections.fiscal-information.fields.cnae')),
+                                        TextEntry::make('founded_date')
+                                            ->icon('heroicon-o-calendar')
+                                            ->placeholder('—')
+                                            ->date()
+                                            ->label(__('support::filament/resources/company/relation-managers/manage-branch.form.tabs.general-information.sections.fiscal-information.fields.data-abertura')),
+                                        TextEntry::make('indicador_contribuinte_icms')
+                                            ->placeholder('—')
+                                            ->label(__('support::filament/resources/company/relation-managers/manage-branch.form.tabs.general-information.sections.fiscal-information.fields.indicador-contribuinte-icms')),
+                                        TextEntry::make('regime_tributario')
+                                            ->placeholder('—')
+                                            ->label(__('support::filament/resources/company/relation-managers/manage-branch.form.tabs.general-information.sections.fiscal-information.fields.regime-tributario')),
+                                        TextEntry::make('descricao_porte')
+                                            ->placeholder('—')
+                                            ->label(__('support::filament/resources/company/relation-managers/manage-branch.form.tabs.general-information.sections.fiscal-information.fields.porte')),
                                     ])
                                     ->columns(2),
 
@@ -442,25 +528,36 @@ class BranchesRelationManager extends RelationManager
                             ->schema([
                                 Section::make(__('support::filament/resources/company/relation-managers/manage-branch.infolist.tabs.address-information.sections.address-information.title'))
                                     ->schema([
-                                        TextEntry::make('address.street1')
+                                        // Corrigido de `address.street1` etc. pra `street1` etc.:
+                                        // `Company` NUNCA teve uma relação/accessor `address` (bug
+                                        // pré-existente, achado ao investigar esta tarefa — ver
+                                        // CLAUDE.md) — a aba sempre mostrou só "—" vazio, mesmo com
+                                        // os campos preenchidos no formulário.
+                                        TextEntry::make('street1')
                                             ->icon('heroicon-o-map-pin')
                                             ->placeholder('—')
                                             ->label(__('support::filament/resources/company/relation-managers/manage-branch.infolist.tabs.address-information.sections.address-information.entries.street1')),
-                                        TextEntry::make('address.street2')
+                                        TextEntry::make('numero')
+                                            ->placeholder('—')
+                                            ->label(__('support::filament/resources/company/relation-managers/manage-branch.infolist.tabs.address-information.sections.address-information.entries.numero')),
+                                        TextEntry::make('street2')
                                             ->placeholder('—')
                                             ->label(__('support::filament/resources/company/relation-managers/manage-branch.infolist.tabs.address-information.sections.address-information.entries.street2')),
-                                        TextEntry::make('address.city')
+                                        TextEntry::make('bairro')
+                                            ->placeholder('—')
+                                            ->label(__('support::filament/resources/company/relation-managers/manage-branch.infolist.tabs.address-information.sections.address-information.entries.bairro')),
+                                        TextEntry::make('city')
                                             ->icon('heroicon-o-building-library')
                                             ->placeholder('—')
                                             ->label(__('support::filament/resources/company/relation-managers/manage-branch.infolist.tabs.address-information.sections.address-information.entries.city')),
-                                        TextEntry::make('address.zip')
+                                        TextEntry::make('zip')
                                             ->placeholder('—')
                                             ->label(__('support::filament/resources/company/relation-managers/manage-branch.infolist.tabs.address-information.sections.address-information.entries.zip-code')),
-                                        TextEntry::make('address.country.name')
+                                        TextEntry::make('country.name')
                                             ->icon('heroicon-o-globe-alt')
                                             ->placeholder('—')
                                             ->label(__('support::filament/resources/company/relation-managers/manage-branch.infolist.tabs.address-information.sections.address-information.entries.country')),
-                                        TextEntry::make('address.state.name')
+                                        TextEntry::make('state.name')
                                             ->placeholder('—')
                                             ->label(__('support::filament/resources/company/relation-managers/manage-branch.infolist.tabs.address-information.sections.address-information.entries.state')),
                                     ])
@@ -472,11 +569,6 @@ class BranchesRelationManager extends RelationManager
                                             ->icon('heroicon-o-currency-dollar')
                                             ->placeholder('—')
                                             ->label(__('support::filament/resources/company/relation-managers/manage-branch.infolist.tabs.address-information.sections.additional-information.entries.default-currency')),
-                                        TextEntry::make('founded_date')
-                                            ->icon('heroicon-o-calendar')
-                                            ->placeholder('—')
-                                            ->date()
-                                            ->label(__('support::filament/resources/company/relation-managers/manage-branch.infolist.tabs.address-information.sections.additional-information.entries.company-foundation-date')),
                                         IconEntry::make('is_active')
                                             ->label(__('support::filament/resources/company/relation-managers/manage-branch.infolist.tabs.address-information.sections.additional-information.entries.status'))
                                             ->boolean(),

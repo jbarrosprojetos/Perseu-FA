@@ -20,12 +20,25 @@ return [
             'company-information' => [
                 'title'  => 'Informações da empresa',
                 'fields' => [
-                    'name'                => 'Nome da empresa',
+                    'name'                => 'Razão Social',
+                    'nome-fantasia'       => 'Nome Fantasia',
                     'registration-number' => 'Número de registro',
                     'company-id'          => 'ID da empresa',
-                    'tax-id'              => 'Identificação fiscal',
+                    'tax-id'              => 'CNPJ',
                     'tax-id-tooltip'      => 'O ID fiscal é um identificador único da sua empresa.',
                     'website'             => 'Site',
+                ],
+            ],
+
+            'fiscal-information' => [
+                'title' => 'Informações Fiscais',
+                'fields' => [
+                    'situacao-cadastral'          => 'Situação Cadastral',
+                    'cnae'                        => 'CNAE',
+                    'data-abertura'               => 'Data de Abertura',
+                    'indicador-contribuinte-icms' => 'Indicador de Contribuinte do ICMS',
+                    'regime-tributario'           => 'Regime Tributário',
+                    'porte'                       => 'Porte',
                 ],
             ],
 
@@ -33,9 +46,11 @@ return [
                 'title' => 'Informações de endereço',
 
                 'fields' => [
-                    'street1'        => 'Rua 1',
-                    'street2'        => 'Rua 2',
-                    'city'           => 'Cidade',
+                    'street1'        => 'Logradouro',
+                    'numero'         => 'Número',
+                    'street2'        => 'Complemento',
+                    'bairro'         => 'Bairro',
+                    'city'           => 'Município',
                     'zipcode'        => 'CEP',
                     'country'        => 'País',
                     'currency-name'  => 'Nome da moeda',
@@ -45,7 +60,7 @@ return [
                     'state-required' => 'Estado obrigatório',
                     'zip-required'   => 'CEP obrigatório',
                     'create-country' => 'Criar país',
-                    'state'          => 'Estado',
+                    'state'          => 'Estado (UF)',
                     'state-name'     => 'Nome do estado',
                     'state-code'     => 'Código do estado',
                     'create-state'   => 'Criar estado',
@@ -181,10 +196,11 @@ return [
             'company-information' => [
                 'title'   => 'Informações da empresa',
                 'entries' => [
-                    'name'                => 'Nome da empresa',
+                    'name'                => 'Razão Social',
+                    'nome-fantasia'       => 'Nome Fantasia',
                     'registration-number' => 'Número de registro',
                     'company-id'          => 'ID da empresa',
-                    'tax-id'              => 'Identificação fiscal',
+                    'tax-id'              => 'CNPJ',
                     'tax-id-tooltip'      => 'O ID fiscal é um identificador único da sua empresa.',
                     'website'             => 'Site',
                 ],
@@ -194,9 +210,11 @@ return [
                 'title' => 'Informações de endereço',
 
                 'entries' => [
-                    'street1'        => 'Rua 1',
-                    'street2'        => 'Rua 2',
-                    'city'           => 'Cidade',
+                    'street1'        => 'Logradouro',
+                    'numero'         => 'Número',
+                    'street2'        => 'Complemento',
+                    'bairro'         => 'Bairro',
+                    'city'           => 'Município',
                     'zipcode'        => 'CEP',
                     'country'        => 'País',
                     'currency-name'  => 'Nome da moeda',
@@ -206,7 +224,7 @@ return [
                     'state-required' => 'Estado obrigatório',
                     'zip-required'   => 'CEP obrigatório',
                     'create-country' => 'Criar país',
-                    'state'          => 'Estado',
+                    'state'          => 'Estado (UF)',
                     'state-name'     => 'Nome do estado',
                     'state-code'     => 'Código do estado',
                     'create-state'   => 'Criar estado',

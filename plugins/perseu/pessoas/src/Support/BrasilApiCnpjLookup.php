@@ -31,8 +31,15 @@ class BrasilApiCnpjLookup
      * de sobrescrever" sem interromper o fluxo automático (abrir um modal
      * de confirmação a cada edição de CNPJ seria mais intrusivo que o
      * ganho), então essa é a opção mais segura.
+     *
+     * `$razaoSocialField` existe pra reaproveitar este método em
+     * `Webkul\Support\Filament\Resources\CompanyResource` (Empresa,
+     * padrão brasileiro — ver CLAUDE.md), cujo campo de razão social é
+     * a coluna legada `name` do AureusERP, não `razao_social` — o
+     * parâmetro tem valor padrão que preserva o comportamento original
+     * pra quem já chama este método sem informá-lo (Pessoa Jurídica).
      */
-    public static function fill(Set $set, Get $get, ?string $cnpj): void
+    public static function fill(Set $set, Get $get, ?string $cnpj, string $razaoSocialField = 'razao_social'): void
     {
         $digits = preg_replace('/\D/', '', (string) $cnpj);
 
@@ -54,8 +61,8 @@ class BrasilApiCnpjLookup
 
         $set(self::ERROR_STATE_KEY, null);
 
-        if (blank($get('razao_social')) && filled($data['razao_social'] ?? null)) {
-            $set('razao_social', $data['razao_social']);
+        if (blank($get($razaoSocialField)) && filled($data['razao_social'] ?? null)) {
+            $set($razaoSocialField, $data['razao_social']);
         }
 
         if (blank($get('nome_fantasia')) && filled($data['nome_fantasia'] ?? null)) {

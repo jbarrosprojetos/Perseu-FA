@@ -8,6 +8,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Auth;
+use Perseu\Pessoas\Enums\IndicadorContribuinteIcms;
+use Perseu\Pessoas\Enums\RegimeTributario;
 use Spatie\EloquentSortable\Sortable;
 use Spatie\EloquentSortable\SortableTrait;
 use Webkul\Chatter\Traits\HasChatter;
@@ -22,6 +24,16 @@ use Webkul\Support\Traits\RestrictToAllowedCompanies;
 class Company extends Model implements Sortable
 {
     use HasChatter, HasCustomFields, HasFactory, HasOwnershipScope, RestrictToAllowedCompanies, SoftDeletes, SortableTrait;
+
+    // Reaproveita os mesmos enums de Perseu\Pessoas (ver CLAUDE.md,
+    // "Localização do cadastro de Empresa") — o cast é o que faz
+    // Filament TextColumn/TextEntry renderizarem o rótulo traduzido
+    // automaticamente (via HasLabel) em vez do inteiro cru, mesmo
+    // mecanismo já usado em PessoaJuridica.
+    protected $casts = [
+        'regime_tributario'           => RegimeTributario::class,
+        'indicador_contribuinte_icms' => IndicadorContribuinteIcms::class,
+    ];
 
     protected static function ownershipScopeIsGlobal(): bool
     {
@@ -41,6 +53,8 @@ class Company extends Model implements Sortable
         'street1',
         'street2',
         'city',
+        'bairro',
+        'numero',
         'zip',
         'state_id',
         'country_id',
@@ -52,6 +66,19 @@ class Company extends Model implements Sortable
         'currency_id',
         'partner_id',
         'website',
+        // Localização pro padrão brasileiro de Pessoa Jurídica (ver
+        // migration 2026_08_30_100000_add_brazilian_fields_to_companies_table
+        // e CLAUDE.md) — `tax_id` (acima) já reaproveitado como CNPJ e
+        // `founded_date` (acima) como Data de Abertura, sem coluna nova.
+        'nome_fantasia',
+        'cnae',
+        'cnae_descricao',
+        'regime_tributario',
+        'porte',
+        'descricao_porte',
+        'situacao_cadastral',
+        'descricao_situacao_cadastral',
+        'indicador_contribuinte_icms',
     ];
 
     public $sortable = [

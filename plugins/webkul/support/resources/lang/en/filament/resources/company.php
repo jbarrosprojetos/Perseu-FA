@@ -20,12 +20,25 @@ return [
             'company-information' => [
                 'title'  => 'Company Information',
                 'fields' => [
-                    'name'                  => 'Company Name',
+                    'name'                  => 'Corporate Name',
+                    'nome-fantasia'         => 'Trade Name',
                     'registration-number'   => 'Registration Number',
                     'company-id'            => 'Company ID',
-                    'tax-id'                => 'Tax ID',
+                    'tax-id'                => 'CNPJ',
                     'tax-id-tooltip'        => 'The Tax ID is a unique identifier for your company.',
                     'website'               => 'Website',
+                ],
+            ],
+
+            'fiscal-information' => [
+                'title' => 'Fiscal Information',
+                'fields' => [
+                    'situacao-cadastral'          => 'Registration Status',
+                    'cnae'                        => 'CNAE',
+                    'data-abertura'               => 'Incorporation Date',
+                    'indicador-contribuinte-icms' => 'ICMS Taxpayer Indicator',
+                    'regime-tributario'           => 'Tax Regime',
+                    'porte'                       => 'Company Size',
                 ],
             ],
 
@@ -33,8 +46,10 @@ return [
                 'title'  => 'Address Information',
 
                 'fields' => [
-                    'street1'        => 'Street 1',
-                    'street2'        => 'Street 2',
+                    'street1'        => 'Address',
+                    'numero'         => 'Number',
+                    'street2'        => 'Complement',
+                    'bairro'         => 'Neighborhood',
                     'city'           => 'City',
                     'zipcode'        => 'Zip Code',
                     'country'        => 'Country',
@@ -181,10 +196,11 @@ return [
             'company-information' => [
                 'title'   => 'Company Information',
                 'entries' => [
-                    'name'                  => 'Company Name',
+                    'name'                  => 'Corporate Name',
+                    'nome-fantasia'         => 'Trade Name',
                     'registration-number'   => 'Registration Number',
                     'company-id'            => 'Company ID',
-                    'tax-id'                => 'Tax ID',
+                    'tax-id'                => 'CNPJ',
                     'tax-id-tooltip'        => 'The Tax ID is a unique identifier for your company.',
                     'website'               => 'Website',
                 ],
@@ -194,8 +210,10 @@ return [
                 'title'  => 'Address Information',
 
                 'entries' => [
-                    'street1'        => 'Street 1',
-                    'street2'        => 'Street 2',
+                    'street1'        => 'Address',
+                    'numero'         => 'Number',
+                    'street2'        => 'Complement',
+                    'bairro'         => 'Neighborhood',
                     'city'           => 'City',
                     'zipcode'        => 'Zip Code',
                     'country'        => 'Country',

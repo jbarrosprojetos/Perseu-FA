@@ -16,6 +16,8 @@ use Filament\Actions\ViewAction;
 use Filament\Forms\Components\ColorPicker;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\FileUpload;
+use Filament\Forms\Components\Hidden;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
@@ -41,6 +43,10 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Collection;
+use Perseu\Pessoas\Enums\IndicadorContribuinteIcms;
+use Perseu\Pessoas\Enums\RegimeTributario;
+use Perseu\Pessoas\Rules\CnpjValido;
+use Perseu\Pessoas\Support\BrasilApiCnpjLookup;
 use Webkul\Field\Filament\Traits\HasCustomFields;
 use Webkul\Security\Settings\UserSettings;
 use Webkul\Support\Enums\CompanyStatus;
@@ -53,6 +59,8 @@ use Webkul\Support\Filament\Resources\CompanyResource\RelationManagers\BranchesR
 use Webkul\Support\Models\Company;
 use Webkul\Support\Models\Currency;
 use Webkul\Support\Models\Scopes\AllowedCompanyScope;
+use Webkul\Support\Support\CompanyCnpjLookup;
+use Webkul\Support\Support\SituacaoCadastralBadge;
 
 class CompanyResource extends Resource
 {
@@ -115,6 +123,22 @@ class CompanyResource extends Resource
                             ->schema([
                                 Section::make(__('support::filament/resources/company.form.sections.company-information.title'))
                                     ->schema([
+                                        TextInput::make('tax_id')
+                                            // Reaproveita a coluna `tax_id` (já `unique()`/sincronizada
+                                            // com Partner.tax_id, ver CLAUDE.md) como CNPJ — mesma
+                                            // busca automática via BrasilAPI já usada em Pessoa
+                                            // Jurídica, reaproveitada aqui (não recriada).
+                                            ->label(__('support::filament/resources/company.form.sections.company-information.fields.tax-id'))
+                                            ->mask('99.999.999/9999-99')
+                                            ->rule(new CnpjValido())
+                                            ->unique(ignoreRecord: true)
+                                            ->live(onBlur: true)
+                                            ->afterStateUpdated(function (Set $set, Get $get, ?string $state) {
+                                                BrasilApiCnpjLookup::fill($set, $get, $state, razaoSocialField: 'name');
+                                                CompanyCnpjLookup::fillEndereco($set, $get, $state);
+                                            })
+                                            ->hint(fn (Get $get) => $get('cnpj_lookup_erro'))
+                                            ->hintColor('danger'),
                                         TextInput::make('name')
                                             ->label(__('support::filament/resources/company.form.sections.company-information.fields.name'))
                                             ->required()
@@ -124,27 +148,63 @@ class CompanyResource extends Resource
                                                 'unique' => 'Company name already exists. Please use a unique name.',
                                             ])
                                             ->live(onBlur: true),
-                                        TextInput::make('registration_number')
-                                            ->label(__('support::filament/resources/company.form.sections.company-information.fields.registration-number'))
+                                        TextInput::make('nome_fantasia')
+                                            ->label(__('support::filament/resources/company.form.sections.company-information.fields.nome-fantasia'))
                                             ->maxLength(255),
-                                        TextInput::make('company_id')
-                                            ->label(__('support::filament/resources/company.form.sections.company-information.fields.company-id'))
-                                            ->unique(ignoreRecord: true)
-                                            ->maxLength(255)
-                                            ->hintIcon('heroicon-o-question-mark-circle', tooltip: 'The Company ID is a unique identifier for your company.'),
-                                        TextInput::make('tax_id')
-                                            ->label(__('support::filament/resources/company.form.sections.company-information.fields.tax-id'))
-                                            ->unique(ignoreRecord: true)
-                                            ->maxLength(255)
-                                            ->hintIcon('heroicon-o-question-mark-circle', tooltip: __('support::filament/resources/company.form.sections.company-information.fields.tax-id-tooltip')),
                                         TextInput::make('website')
                                             ->url()
                                             ->prefixIcon('heroicon-o-globe-alt')
                                             ->maxLength(255)
                                             ->label(__('support::filament/resources/company.form.sections.company-information.fields.website'))
                                             ->unique(ignoreRecord: true),
+                                        // "Número de registro"/"ID da empresa" — campos genéricos do
+                                        // modelo americano do AureusERP, sem equivalente no cadastro
+                                        // brasileiro de Pessoa Jurídica. Escondidos (não removidos: a
+                                        // coluna `registration_number` sincroniza pra
+                                        // `Partner.company_registry` em `Company::boot()`, e ambas
+                                        // aparecem em seeders/factories/API V1 — ver CLAUDE.md,
+                                        // "Localização do cadastro de Empresa") pra não quebrar essas
+                                        // integrações internas do AureusERP.
+                                        TextInput::make('registration_number')
+                                            ->label(__('support::filament/resources/company.form.sections.company-information.fields.registration-number'))
+                                            ->maxLength(255)
+                                            ->hidden(),
+                                        TextInput::make('company_id')
+                                            ->label(__('support::filament/resources/company.form.sections.company-information.fields.company-id'))
+                                            ->unique(ignoreRecord: true)
+                                            ->maxLength(255)
+                                            ->hidden(),
                                     ])
                                     ->columns(2),
+                                Section::make(__('support::filament/resources/company.form.sections.fiscal-information.title'))
+                                    ->schema([
+                                        Placeholder::make('situacao_cadastral_display')
+                                            ->label(__('support::filament/resources/company.form.sections.fiscal-information.fields.situacao-cadastral'))
+                                            ->content(fn (Get $get) => SituacaoCadastralBadge::render($get('situacao_cadastral'), $get('descricao_situacao_cadastral')))
+                                            ->hidden(fn (Get $get) => blank($get('descricao_situacao_cadastral'))),
+                                        TextInput::make('cnae')
+                                            ->label(__('support::filament/resources/company.form.sections.fiscal-information.fields.cnae'))
+                                            ->mask('9999-9/99')
+                                            ->helperText(fn (Get $get) => $get('cnae_descricao')),
+                                        DatePicker::make('founded_date')
+                                            ->native(false)
+                                            ->label(__('support::filament/resources/company.form.sections.fiscal-information.fields.data-abertura')),
+                                        Select::make('indicador_contribuinte_icms')
+                                            ->label(__('support::filament/resources/company.form.sections.fiscal-information.fields.indicador-contribuinte-icms'))
+                                            ->options(IndicadorContribuinteIcms::class),
+                                        Select::make('regime_tributario')
+                                            ->label(__('support::filament/resources/company.form.sections.fiscal-information.fields.regime-tributario'))
+                                            ->options(RegimeTributario::class)
+                                            ->default(RegimeTributario::NaoInformado->value),
+                                        TextInput::make('porte')
+                                            ->label(__('support::filament/resources/company.form.sections.fiscal-information.fields.porte'))
+                                            ->helperText(fn (Get $get) => $get('descricao_porte')),
+                                        Hidden::make('situacao_cadastral'),
+                                        Hidden::make('descricao_situacao_cadastral'),
+                                        Hidden::make('cnae_descricao'),
+                                        Hidden::make('descricao_porte'),
+                                    ])
+                                    ->columns(3),
                                 Section::make(__('support::filament/resources/company.form.sections.address-information.title'))
                                     ->schema([
                                         Group::make()
@@ -152,8 +212,14 @@ class CompanyResource extends Resource
                                                 TextInput::make('street1')
                                                     ->label(__('support::filament/resources/company.form.sections.address-information.fields.street1'))
                                                     ->maxLength(255),
+                                                TextInput::make('numero')
+                                                    ->label(__('support::filament/resources/company.form.sections.address-information.fields.numero'))
+                                                    ->maxLength(255),
                                                 TextInput::make('street2')
                                                     ->label(__('support::filament/resources/company.form.sections.address-information.fields.street2')),
+                                                TextInput::make('bairro')
+                                                    ->label(__('support::filament/resources/company.form.sections.address-information.fields.bairro'))
+                                                    ->maxLength(255),
                                                 TextInput::make('city')
                                                     ->label(__('support::filament/resources/company.form.sections.address-information.fields.city'))
                                                     ->maxLength(255),
@@ -164,6 +230,10 @@ class CompanyResource extends Resource
                                                 Select::make('country_id')
                                                     ->label(__('support::filament/resources/company.form.sections.address-information.fields.country'))
                                                     ->relationship(name: 'country', titleAttribute: 'name')
+                                                    // Empresa é sempre a emissora de NF-e (padrão
+                                                    // brasileiro) — default Brasil, mas o campo
+                                                    // continua editável pra qualquer outro caso.
+                                                    ->default(fn () => \Webkul\Support\Models\Country::where('code', 'BR')->value('id'))
                                                     ->afterStateUpdated(fn (Set $set) => $set('state_id', null))
                                                     ->searchable()
                                                     ->preload()
@@ -256,9 +326,10 @@ class CompanyResource extends Resource
                                                     ->modalSubmitActionLabel(__('support::filament/resources/company.form.sections.additional-information.fields.currency-create'))
                                                     ->modalWidth('xl')
                                             ),
-                                        DatePicker::make('founded_date')
-                                            ->native(false)
-                                            ->label(__('support::filament/resources/company.form.sections.additional-information.fields.company-foundation-date')),
+                                        // "Data de fundação" (founded_date) foi movida pra dentro da
+                                        // seção "Informações Fiscais" acima, reaproveitada como "Data
+                                        // de Abertura" do CNPJ (mesma coluna, mesmo lugar visual dos
+                                        // demais campos fiscais preenchidos pela busca de CNPJ).
                                         ...static::getCustomFormFields(),
                                     ])->columns(2),
                             ])
@@ -512,26 +583,48 @@ class CompanyResource extends Resource
                             ->schema([
                                 Section::make(__('support::filament/resources/company.infolist.sections.company-information.title'))
                                     ->schema([
+                                        TextEntry::make('tax_id')
+                                            ->icon('heroicon-o-identification')
+                                            ->placeholder('—')
+                                            ->label(__('support::filament/resources/company.infolist.sections.company-information.entries.tax-id')),
                                         TextEntry::make('name')
                                             ->icon('heroicon-o-building-office')
                                             ->placeholder('—')
                                             ->label(__('support::filament/resources/company.infolist.sections.company-information.entries.name')),
-                                        TextEntry::make('registration_number')
-                                            ->icon('heroicon-o-document-text')
+                                        TextEntry::make('nome_fantasia')
+                                            ->icon('heroicon-o-tag')
                                             ->placeholder('—')
-                                            ->label(__('support::filament/resources/company.infolist.sections.company-information.entries.registration-number')),
-                                        TextEntry::make('company_id')
-                                            ->icon('heroicon-o-identification')
-                                            ->placeholder('—')
-                                            ->label(__('support::filament/resources/company.infolist.sections.company-information.entries.company-id')),
-                                        TextEntry::make('tax_id')
-                                            ->icon('heroicon-o-currency-dollar')
-                                            ->placeholder('—')
-                                            ->label(__('support::filament/resources/company.infolist.sections.company-information.entries.tax-id')),
+                                            ->label(__('support::filament/resources/company.infolist.sections.company-information.entries.nome-fantasia')),
                                         TextEntry::make('website')
                                             ->icon('heroicon-o-globe-alt')
                                             ->placeholder('—')
                                             ->label(__('support::filament/resources/company.infolist.sections.company-information.entries.website')),
+                                    ])
+                                    ->columns(2),
+
+                                Section::make(__('support::filament/resources/company.form.sections.fiscal-information.title'))
+                                    ->schema([
+                                        TextEntry::make('descricao_situacao_cadastral')
+                                            ->icon('heroicon-o-shield-check')
+                                            ->placeholder('—')
+                                            ->label(__('support::filament/resources/company.form.sections.fiscal-information.fields.situacao-cadastral')),
+                                        TextEntry::make('cnae')
+                                            ->placeholder('—')
+                                            ->label(__('support::filament/resources/company.form.sections.fiscal-information.fields.cnae')),
+                                        TextEntry::make('founded_date')
+                                            ->icon('heroicon-o-calendar')
+                                            ->placeholder('—')
+                                            ->date()
+                                            ->label(__('support::filament/resources/company.form.sections.fiscal-information.fields.data-abertura')),
+                                        TextEntry::make('indicador_contribuinte_icms')
+                                            ->placeholder('—')
+                                            ->label(__('support::filament/resources/company.form.sections.fiscal-information.fields.indicador-contribuinte-icms')),
+                                        TextEntry::make('regime_tributario')
+                                            ->placeholder('—')
+                                            ->label(__('support::filament/resources/company.form.sections.fiscal-information.fields.regime-tributario')),
+                                        TextEntry::make('descricao_porte')
+                                            ->placeholder('—')
+                                            ->label(__('support::filament/resources/company.form.sections.fiscal-information.fields.porte')),
                                     ])
                                     ->columns(2),
 
@@ -541,9 +634,15 @@ class CompanyResource extends Resource
                                             ->icon('heroicon-o-map-pin')
                                             ->placeholder('—')
                                             ->label(__('support::filament/resources/company.infolist.sections.address-information.entries.street1')),
+                                        TextEntry::make('numero')
+                                            ->placeholder('—')
+                                            ->label(__('support::filament/resources/company.infolist.sections.address-information.entries.numero')),
                                         TextEntry::make('street2')
                                             ->placeholder('—')
                                             ->label(__('support::filament/resources/company.infolist.sections.address-information.entries.street2')),
+                                        TextEntry::make('bairro')
+                                            ->placeholder('—')
+                                            ->label(__('support::filament/resources/company.infolist.sections.address-information.entries.bairro')),
                                         TextEntry::make('city')
                                             ->label(__('support::filament/resources/company.infolist.sections.address-information.entries.city'))
                                             ->icon('heroicon-o-building-library')
@@ -567,11 +666,6 @@ class CompanyResource extends Resource
                                             ->icon('heroicon-o-currency-dollar')
                                             ->placeholder('—')
                                             ->label(__('support::filament/resources/company.infolist.sections.additional-information.entries.default-currency')),
-                                        TextEntry::make('founded_date')
-                                            ->icon('heroicon-o-calendar')
-                                            ->placeholder('—')
-                                            ->date()
-                                            ->label(__('support::filament/resources/company.infolist.sections.additional-information.entries.company-foundation-date')),
                                         IconEntry::make('is_active')
                                             ->label(__('support::filament/resources/company.infolist.sections.additional-information.entries.status'))
                                             ->boolean(),

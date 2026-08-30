@@ -13,13 +13,26 @@ return [
                         'title' => 'Informações da filial',
 
                         'fields' => [
-                            'company-name'        => 'Nome da empresa',
+                            'company-name'        => 'Razão Social',
+                            'nome-fantasia'       => 'Nome Fantasia',
                             'registration-number' => 'Número de registro',
-                            'tax-id'              => 'Identificação fiscal',
+                            'tax-id'              => 'CNPJ',
                             'tax-id-tooltip'      => 'O ID fiscal é um identificador único da sua empresa.',
                             'color'               => 'Cor',
                             'company-id'          => 'ID da empresa',
                             'company-id-tooltip'  => 'O ID da empresa é um identificador único da sua empresa.',
+                        ],
+                    ],
+
+                    'fiscal-information' => [
+                        'title' => 'Informações Fiscais',
+                        'fields' => [
+                            'situacao-cadastral'          => 'Situação Cadastral',
+                            'cnae'                        => 'CNAE',
+                            'data-abertura'               => 'Data de Abertura',
+                            'indicador-contribuinte-icms' => 'Indicador de Contribuinte do ICMS',
+                            'regime-tributario'           => 'Regime Tributário',
+                            'porte'                       => 'Porte',
                         ],
                     ],
 
@@ -40,9 +53,11 @@ return [
                         'title' => 'Informações de endereço',
 
                         'fields' => [
-                            'street1'                => 'Rua 1',
-                            'street2'                => 'Rua 2',
-                            'city'                   => 'Cidade',
+                            'street1'                => 'Logradouro',
+                            'numero'                 => 'Número',
+                            'street2'                => 'Complemento',
+                            'bairro'                 => 'Bairro',
+                            'city'                   => 'Município',
                             'zip'                    => 'CEP',
                             'country'                => 'País',
                             'country-currency-name'  => 'Nome da moeda',
@@ -196,9 +211,10 @@ return [
                         'title' => 'Informações da filial',
 
                         'entries' => [
-                            'company-name'                => 'Nome da empresa',
+                            'company-name'                => 'Razão Social',
+                            'nome-fantasia'               => 'Nome Fantasia',
                             'registration-number'         => 'Número de registro',
-                            'tax-id'                      => 'Identificação fiscal',
+                            'tax-id'                      => 'CNPJ',
                             'registration-number-tooltip' => 'O ID fiscal é um identificador único da sua empresa.',
                             'color'                       => 'Cor',
                         ],
@@ -221,9 +237,11 @@ return [
                         'title' => 'Informações de endereço',
 
                         'entries' => [
-                            'street1'                => 'Rua 1',
-                            'street2'                => 'Rua 2',
-                            'city'                   => 'Cidade',
+                            'street1'                => 'Logradouro',
+                            'numero'                 => 'Número',
+                            'street2'                => 'Complemento',
+                            'bairro'                 => 'Bairro',
+                            'city'                   => 'Município',
                             'zip'                    => 'CEP',
                             'country'                => 'País',
                             'country-currency-name'  => 'Nome da moeda',
