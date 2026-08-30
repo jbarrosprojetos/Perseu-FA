@@ -4,10 +4,12 @@ namespace Perseu\Auditoria\Filament\Resources;
 
 use Filament\Tables\Columns\Column;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Str;
+use Rmsramos\Activitylog\ActivitylogPlugin;
 use Perseu\Auditoria\Filament\Resources\AuditoriaResource\Pages\ListAuditoria;
 use Perseu\Auditoria\Filament\Resources\AuditoriaResource\Pages\ViewAuditoria;
 use Perseu\Auditoria\Support\SubjectTypeCatalog;
@@ -150,7 +152,7 @@ class AuditoriaResource extends ActivitylogResource
             ->searchable(query: function (Builder $query, string $search): Builder {
                 $termoBuscado = Str::lower($search);
 
-                $eventosCorrespondentes = collect(['created', 'updated', 'deleted', 'forceDeleted', 'restored'])
+                $eventosCorrespondentes = collect(static::eventoKeys())
                     ->filter(fn (string $evento): bool => str_contains(
                         Str::lower(__('activitylog::action.event.' . $evento)),
                         $termoBuscado,
@@ -165,6 +167,22 @@ class AuditoriaResource extends ActivitylogResource
                 return $query->whereIn('event', $eventosCorrespondentes);
             })
             ->sortable();
+    }
+
+    /**
+     * Valores técnicos de `event` que este projeto conhece — fixos (não
+     * lidos via `DISTINCT event` do banco, como o
+     * `ActivitylogResource::getEventFilterComponent()` original fazia)
+     * de propósito: `getEventFilterComponent()` abaixo precisa que os 5
+     * apareçam sempre como opção marcável no filtro, mesmo que hoje não
+     * exista nenhum log de um tipo específico ainda (ex.: `restored`
+     * antes da primeira restauração já ter acontecido) — usado também
+     * pela busca por evento em `getEventColumnComponent()`, um só lugar
+     * pra não duplicar a lista.
+     */
+    protected static function eventoKeys(): array
+    {
+        return ['created', 'updated', 'deleted', 'forceDeleted', 'restored'];
     }
 
     /**
@@ -271,5 +289,103 @@ class AuditoriaResource extends ActivitylogResource
             ->label(__('auditoria::filament/resources/auditoria.table.filters.causer.label'))
             ->searchable()
             ->options(fn (): array => User::query()->orderBy('name')->pluck('name', 'id')->all());
+    }
+
+    /**
+     * Sobrescreve o do pacote (`ActivitylogResource::getEventFilterComponent()`)
+     * pra virar multi-seleção com TUDO marcado por padrão — pedido do
+     * usuário: o caso de uso mais comum é "não quero ver isto" (ex.:
+     * desmarcar "Excluído Definitivamente" pra escondê-lo), não "quero
+     * ver só isto". Com um `SelectFilter` de seleção única (o padrão do
+     * pacote) só dava pra isolar UM evento por vez, nunca "todos menos
+     * um". `->options()` usa `eventoKeys()` (fixo) em vez do
+     * `DISTINCT event` que o pacote usa — precisamos que as 5 opções
+     * sempre apareçam, mesmo que algum evento ainda não tenha ocorrido
+     * nenhuma vez neste banco.
+     *
+     * `->default(eventoKeys())` é o que faz a lista abrir já mostrando
+     * TUDO (equivalente a nenhum filtro aplicado) em vez de vazia — sem
+     * isso, um `SelectFilter::multiple()` sem seleção nenhuma
+     * filtraria pra ZERO resultados, não pra "sem filtro".
+     */
+    public static function getEventFilterComponent(): SelectFilter
+    {
+        return SelectFilter::make('event')
+            ->label(__('activitylog::tables.filters.event.label'))
+            ->multiple()
+            ->options(collect(static::eventoKeys())
+                ->mapWithKeys(fn (string $evento): array => [$evento => ucwords(__('activitylog::action.event.' . $evento))])
+                ->all())
+            ->default(static::eventoKeys());
+    }
+
+    /**
+     * Sobrescreve o do pacote (`ActivitylogResource::getDateFilterComponent()`)
+     * só pra somar `->default(...)` no campo "Criado a partir de" —
+     * pedido do usuário: a lista deve abrir mostrando só o último 1
+     * ano, sem precisar de exclusão automática de logs antigos (decisão
+     * tomada de manter o histórico completo pra sempre, ver
+     * PENDENCIAS-TECNICAS.md). "Criado até" fica SEM default de
+     * propósito — só o passado é limitado, não existe um "futuro" a
+     * esconder.
+     *
+     * Resto do método é uma cópia fiel do original (`indicateUsing`/
+     * `form`/`query`) — não dava pra só "somar" o default por cima
+     * (`static::getDatePickerCompoment('created_from')` já devolve o
+     * campo pronto, mas o restante do Filter precisa ser reconstruído
+     * porque não há como interceptar só o form original).
+     *
+     * **Formato do valor**: `->default()` usa `now()->subYear()->toDateString()`
+     * (`Y-m-d`), NÃO `ActivitylogPlugin::get()->getDateFormat()`
+     * (`d/m/Y`, usado só para EXIBIÇÃO) — confirmado testando os dois
+     * formatos via `Livewire::test()->set('tableFilters.created_at.created_from', ...)`:
+     * `Y-m-d` funciona normalmente, `d/m/Y` quebra a renderização do
+     * indicador do filtro com `Could not parse '29/08/2026'`
+     * (`ActivitylogPlugin::getDateParser()` usa `Carbon::parse()` sem
+     * formato explícito, que interpreta `dd/mm/yyyy` de forma ambígua
+     * e falha quando o dia é > 12). O valor DEHYDRATADO do `DatePicker`
+     * é sempre ISO internamente, independente do `->format()` de
+     * exibição configurado no campo.
+     */
+    public static function getDateFilterComponent(): Filter
+    {
+        return Filter::make('created_at')
+            ->label(__('activitylog::tables.filters.created_at.label'))
+            ->indicateUsing(function (array $data): array {
+                $indicators = [];
+                $parser     = ActivitylogPlugin::get()->getDateParser();
+
+                if ($data['created_from'] ?? null) {
+                    $indicators['created_from'] = __('activitylog::tables.filters.created_at.created_from_indicator', [
+                        'created_from' => $parser($data['created_from'])
+                            ->format(ActivitylogPlugin::get()->getDateFormat()),
+                    ]);
+                }
+
+                if ($data['created_until'] ?? null) {
+                    $indicators['created_until'] = __('activitylog::tables.filters.created_at.created_until_indicator', [
+                        'created_until' => $parser($data['created_until'])
+                            ->format(ActivitylogPlugin::get()->getDateFormat()),
+                    ]);
+                }
+
+                return $indicators;
+            })
+            ->form([
+                static::getDatePickerCompoment('created_from')
+                    ->default(now()->subYear()->toDateString()),
+                static::getDatePickerCompoment('created_until'),
+            ])
+            ->query(function (Builder $query, array $data): Builder {
+                return $query
+                    ->when(
+                        $data['created_from'] ?? null,
+                        fn (Builder $query, $date): Builder => $query->whereDate('created_at', '>=', $date),
+                    )
+                    ->when(
+                        $data['created_until'] ?? null,
+                        fn (Builder $query, $date): Builder => $query->whereDate('created_at', '<=', $date),
+                    );
+            });
     }
 }

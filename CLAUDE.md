@@ -2221,3 +2221,71 @@ restauração; combinado com o filtro Módulo (`defi` + módulo=Comercial
 numa Obra) confirma que busca por evento e filtros continuam
 interseccionando corretamente; a busca por nome/razão social/número
 (já existente) continua funcionando sem regressão.
+
+## Auditoria: período padrão de 1 ano + filtro de Eventos multi-seleção (2026-08-29)
+
+Decisão que motivou esta tarefa: **não implementar exclusão automática
+de logs antigos** — a tabela `activity_log` é leve e o histórico tem
+valor de auditoria/fiscal a longo prazo, registrar isso aqui evita a
+pergunta se repetir. Em vez disso, dois ajustes de usabilidade na
+listagem (que já mostra tudo, pra sempre): a lista abre já filtrada
+pro último ano (ajustável/limpável livremente), e o filtro de Eventos
+virou "desmarque o que não quer ver" em vez de "marque só um".
+
+### Período padrão — `->default()` no `DatePicker`, formato ISO (não o de exibição)
+
+`getDateFilterComponent()` sobrescrito (cópia do original do pacote +
+`->default(now()->subYear()->toDateString())` só no campo "Criado a
+partir de"; "Criado até" sem default, de propósito — só o passado é
+limitado). **Achado importante, confirmado empiricamente antes de
+decidir o formato**: `ActivitylogPlugin::get()->getDateFormat()`
+(`d/m/Y`, usado pelo pacote só para EXIBIÇÃO) NÃO é o formato que o
+`DatePicker` realmente usa no valor dehydratado/state interno —
+testado passando os dois formatos via `Livewire::test()->set(...)`:
+`Y-m-d` funcionou normalmente; `d/m/Y` quebrou a renderização do
+indicador do filtro com `Could not parse '29/08/2026'`
+(`ActivitylogPlugin::getDateParser()` usa `Carbon::parse()` sem
+formato explícito — ambíguo pra `dd/mm/yyyy`, falha quando o dia é
+> 12). Se tivesse assumido `d/m/Y` (o valor mais "óbvio" à primeira
+vista, já que é o que aparece na tela) sem testar, o default quebraria
+a página pra qualquer usuário cujo dia atual fosse > 12.
+
+Validado forçando via SQL direto a `created_at` de um log real pra 2
+anos atrás (teste revertido ao final): com o default aplicado, esse
+log some da lista (101 de 102); limpando o filtro manualmente, ele
+volta (102) — confirma que o default filtra de verdade E que
+"ajustar/limpar livremente" continua funcionando.
+
+### Filtro de Eventos — multi-seleção com tudo marcado, não `DISTINCT event`
+
+`getEventFilterComponent()` sobrescrito: `SelectFilter::make('event')->multiple()`
+com `->default(eventoKeys())` (todos os 5 valores técnicos marcados),
+pra abrir exatamente como hoje (tudo visível) mas já pronto pra
+desmarcar. `eventoKeys()` (novo método, `protected static`) é uma
+lista FIXA (`created/updated/deleted/forceDeleted/restored`), não o
+`DISTINCT event` que a versão original do pacote usa — precisamos que
+as 5 opções apareçam sempre marcáveis mesmo se algum evento (ex.:
+`restored`) ainda não tiver ocorrido nenhuma vez neste banco;
+`DISTINCT` simplesmente não a listaria antes da primeira ocorrência.
+Mesma lista reaproveitada por `getEventColumnComponent()` (busca por
+evento, tarefa anterior) — extraída pra não duplicar o array em dois
+lugares.
+
+Validado: desmarcar `forceDeleted` (deixando só
+`created/updated/deleted/restored`) tira exatamente 1 registro da
+lista (101 de 102, batendo com `Activity::whereIn(...)->count()`
+direto no banco); combinado com o filtro de Módulo ao mesmo tempo
+(`event=created` + `modulo=comercial`) intersecciona corretamente.
+
+### Item 4 da tarefa — filtro "alinhado na coluna Eventos": não é nativo, mantido no painel de Filtros
+
+Avaliado antes de implementar: `Filament\Tables\Enums\FiltersLayout`
+(`AboveContent`/`BelowContent`/`BeforeContent`/`AfterContent`/`Dropdown`/`Modal`/`Hidden`
+— lido no vendor) controla só a POSIÇÃO do painel de filtros inteiro
+em relação à tabela, nunca um dropdown ancorado a uma coluna
+específica (padrão "cabeçalho de coluna do Excel"). Não existe esse
+recurso nativo nesta versão do Filament. Construir isso do zero
+(dropdown customizado embutido no header da coluna, sincronizado com o
+mesmo estado de filtro) seria consideravelmente mais trabalho por
+puro ganho estético, sem funcionalidade nova — mantido no painel de
+Filtros padrão (ícone de funil), só com a multi-seleção pedida.
