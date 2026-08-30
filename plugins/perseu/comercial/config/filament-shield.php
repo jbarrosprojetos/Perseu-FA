@@ -4,6 +4,8 @@ use Perseu\Comercial\Filament\Clusters\Comercial\Resources\ObraResource;
 use Perseu\Comercial\Filament\Clusters\Comercial\Resources\SituacaoObraResource;
 use Perseu\Comercial\Filament\Clusters\Comercial\Resources\TipoObraResource;
 use Perseu\Comercial\Filament\Clusters\Obras;
+use Perseu\Comercial\Filament\Clusters\Referencias;
+use Perseu\Comercial\Filament\Clusters\Referencias\Resources\ReferenciaPrecoResource;
 
 $basic = ['view_any', 'view', 'create', 'update'];
 $delete = ['delete', 'delete_any'];
@@ -13,9 +15,10 @@ $restore = ['restore', 'restore_any'];
 return [
     'resources' => [
         'manage' => [
-            SituacaoObraResource::class => [...$basic, ...$delete],
-            TipoObraResource::class     => [...$basic, ...$delete],
-            ObraResource::class         => [...$basic, ...$delete, ...$restore, ...$forceDelete],
+            SituacaoObraResource::class    => [...$basic, ...$delete],
+            TipoObraResource::class        => [...$basic, ...$delete],
+            ObraResource::class            => [...$basic, ...$delete, ...$restore, ...$forceDelete],
+            ReferenciaPrecoResource::class => [...$basic, ...$delete, ...$restore, ...$forceDelete],
         ],
     ],
 
@@ -34,6 +37,8 @@ return [
     'pages' => [
         'exclude' => [
             Obras::class,
+            // Mesmo raciocínio acima, aplicado ao Cluster Referências.
+            Referencias::class,
         ],
     ],
 ];

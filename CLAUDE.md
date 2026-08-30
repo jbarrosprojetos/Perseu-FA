@@ -2519,3 +2519,211 @@ a criação com o mesmo CPF passa a ser permitida normalmente (dentro de
 transação revertida). Todos os registros de teste foram limpos ao
 final (`PessoaFisica::withTrashed()->count()` de volta a 3, o estado
 original).
+
+## Cluster "Referências" no plugin perseu/comercial, com o cadastro de Preços (2026-08-30)
+
+Segundo Cluster do módulo Comercial, mesmo padrão técnico do Cluster
+`Obras` (mesma estrutura de classe, `getClusterBreadcrumb()`,
+`$cluster` nos Resources filhos, exclusão em `filament-shield.php` —
+ver seção "Cluster 'Obras'..." acima, não reinvestigado de novo, só
+replicado). Reúne cadastros de apoio pra compor Propostas/Contratos no
+futuro: **Preços** implementado nesta tarefa; **Propostas (modelo/
+template), Contratos, Termos de Entrega, Termos de Garantia — apenas
+citados/planejados, SEM Resource/Model/migration criados** (a ideia de
+longo prazo é gerar PDF desses documentos com dados do sistema,
+reaproveitando `barryvdh/laravel-dompdf` já presente no
+`composer.json` — ver "Roadmap — Geração de PDF de Proposta" acima,
+mesma pendência, agora com um lar definido no menu).
+
+### Slug do Cluster — `comercial/referencias`, não `comercial` (já ocupado)
+
+Diferente de `Obras` (que pôde usar o slug "nu" `comercial`, por ser o
+primeiro/único Cluster do módulo na época), `Referencias::$slug =
+'comercial/referencias'` — `admin/comercial` já pertence ao Cluster
+Obras. `ReferenciaPrecoResource::$slug = 'precos'` (relativo ao
+Cluster), URL final `admin/comercial/referencias/precos`.
+
+### `ReferenciaPreco` — cadastro de múltiplas tabelas "vivas" simultâneas, NÃO histórico/versionamento
+
+Esclarecimento confirmado com o usuário antes de desenhar o schema:
+cada registro é uma tabela de preços INDEPENDENTE que pode coexistir
+com outras ao mesmo tempo (ex.: "Tabela Padrão" e "Tabela Cliente
+Corporativo" simultaneamente ativas) — a escolha de QUAL usar acontece
+na hora de montar uma Proposta (fora de escopo aqui), não é uma
+"versão vigente vs. antiga" no tempo. Por isso o campo principal se
+chama `descricao` ("Descrição da Referência", texto livre que
+identifica a tabela), não algo como "vigência"/"período".
+
+Campos monetários (`laminacao`/`corte`/`hora_producao`/`hora_execucao`,
+`decimal(10,2)`) e percentual (`retencao_tecnica`, `decimal(5,2)`) —
+unidade de medida (metro linear vs. m²) exibida no formulário via
+`->suffix(...)` traduzido (`/m linear`/`/m²`) ao lado de cada campo
+monetário, já que os nomes dos campos sozinhos não deixam isso óbvio
+pro usuário digitando. Coluna da tabela usa `->money('BRL')` (label da
+coluna já inclui a unidade entre parênteses, ex. "Laminação (m
+linear)", já que o `->suffix()` do form não se aplica a `TextColumn`).
+Nenhum cálculo implementado — só CRUD, conforme escopo pedido; o uso
+desses valores em Propostas é trabalho futuro.
+
+### Convenção de Model novo seguida à risca — `SoftDeletes` desde a criação, sem esperar um bug pra adicionar depois
+
+Diferente de `Obra`/`PessoaFisica`/`PessoaJuridica` (que ganharam
+`SoftDeletes`/Lixeira numa tarefa posterior à criação), `ReferenciaPreco`
+já nasce com `SoftDeletes` + `LogsBusinessActivity` +
+`TrashedFilter`/`RestoreAction`/`ForceDeleteAction` no próprio
+Resource + entrada em `Perseu\Auditoria\Support\TrashCatalog`/
+`SubjectTypeCatalog` (4 pontos: `labelSlugs()`, `modulos()`,
+`referenceFor()` — reaproveita o mesmo `descricao` de Tipo/Situação de
+Obra/Categoria/Setor — e `applyBusca()`) — exatamente a "Convenção
+para todo Model de cadastro de negócio criado a partir de agora" já
+documentada, seguida desde o primeiro commit deste Model, não como
+correção posterior. Sem aba de Atividades própria (`ActivitylogRelationManager`)
+— auditoria só pela Central, decisão já vigente desde que essa aba foi
+removida dos demais Models.
+
+### Validado de ponta a ponta (não só leitura de código)
+
+`route:list` confirmou as 4 rotas esperadas
+(`admin/comercial/referencias`, `.../precos`, `.../precos/create`,
+`.../precos/{record}/edit}`); `shield:generate --resource=ReferenciaPrecoResource`
+processou exatamente 1 entidade (confirma que a exclusão do Cluster em
+`filament-shield.php` funcionou, mesmo padrão de Obras) e gerou as 10
+permissões esperadas (`*_comercial_referencia::preco`), sincronizadas
+manualmente com o Admin (`shield:generate` não sincroniza sozinho,
+mesma ressalva já documentada). Criado um registro de teste real via
+`Livewire::test()` com todos os 6 campos preenchidos — confirmado
+aparecendo na Central de Auditoria (rótulo "Preço", filtro por
+Cadastro E por Módulo=Comercial funcionando) e, depois de excluído
+(soft delete), na Lixeira Central — restaurado por lá com sucesso, e
+removido definitivamente ao final da validação (nenhum dado de teste
+deixado no banco). Navegação completa conferida antes/depois: grupo
+"Comercial" foi de 1 pra 2 itens (Obras + Referências), nenhum outro
+grupo afetado.
+
+## Referência de Preços: campos de Imposto/Despesas + criação/edição em modal (2026-08-30)
+
+Depois de estudar a planilha real de Proposta da F.A. Marcenaria
+(cálculo de preço + cláusulas contratuais num único documento),
+completada a cadeia de cálculo do cadastro de Referência de Preços
+(criado na tarefa anterior) com 3 campos que faltavam: **Imposto**,
+**Despesas Variáveis**, **Despesas Fixas**. Margem de Lucro
+deliberadamente NÃO entrou — é resultado calculado (lucro bruto), não
+parâmetro de entrada do cadastro.
+
+### Decisão: os 3 campos novos são percentuais, não valor fixo
+
+A tarefa pediu pra confirmar valor fixo vs. percentual caso não
+estivesse óbvio pelo contexto. Decisão: **percentual** (`decimal(5,2)`,
+mesmo formato de `retencao_tecnica`, que já era percentual) para os 3
+— Imposto incide sobre o preço de venda (alíquota, sempre percentual
+por natureza) e Despesas Variáveis/Fixas, na forma como aparecem na
+planilha real (uma linha de "DRE"/rateio de custos operacionais sobre
+o preço), são tipicamente expressas como um percentual de rateio sobre
+o faturamento, não um valor fixo em R$ — esse é o padrão mais comum
+pra esse tipo de campo numa fórmula de precificação, e é consistente
+com o campo percentual que já existia no mesmo cadastro. Todos os 3
+são `->required()` (mesmo padrão dos demais campos numéricos do
+formulário) e exibidos com `->suffix('%')`.
+
+Migration em ALTER separada
+(`2026_08_30_140000_add_imposto_despesas_to_referencias_precos_table`),
+não editando a migration de criação já aplicada (mesma convenção de
+sempre — ver rename Projeto→Obra). `ReferenciaPreco::$fillable`/
+`$casts` atualizados com os 3 campos (`decimal:2`, mesmo padrão dos
+demais). Tabela ganhou uma coluna por campo (mesmo `formatStateUsing`
+de porcentagem já usado por `retencao_tecnica` — extraído pra um
+método `ReferenciaPrecoResource::formatPercent()` reaproveitado pelas
+4 colunas percentuais, pra não repetir a mesma closure 4 vezes).
+
+### Criar/editar em modal — mesmo mecanismo que já faz Filial funcionar assim
+
+Investigado como `BranchesRelationManager` (Filial, dentro de
+Configurações → Empresas) já abre criação/edição em modal: não tem
+nada de especial no próprio `CreateAction`/`EditAction` (RelationManagers
+não têm páginas de Create/Edit dedicadas — só a página de listagem
+existe pra qualquer RelationManager). O mecanismo real está em
+`Filament\Resources\Pages\Page::getDefaultActionUrl()` (`vendor/filament/filament/src/Resources/Pages/Page.php`):
+
+```php
+if (($action instanceof EditAction) && (static::getResource()::hasPage('edit')) && ...) {
+    return $this->getResourceUrl('edit', ['record' => $action->getRecord()]);
+}
+return null; // sem URL → Action cai no comportamento padrão: abrir modal
+```
+
+Ou seja: `CreateAction`/`EditAction` (`Filament\Actions\*`, não algo
+específico de RelationManager) **sempre abrem modal por padrão** — só
+passam a navegar pra uma página cheia quando o Resource declara uma
+page `create`/`edit` em `getPages()` E essa combinação de
+`hasPage(...)` retorna `true`. `BranchesRelationManager` nunca teve
+essa page pra começo de conversa (RelationManager não registra pages
+próprias), por isso sempre foi modal. Confirmado lendo o próprio
+`EditAction::setUp()`/`CreateAction::setUp()` (`vendor/filament/actions/src/{Edit,Create}Action.php`):
+o `$this->action(...)` de cada uma já faz `$record->update($data)`/
+`$record->save()` diretamente — a Action em si nunca soube navegar pra
+lugar nenhum, isso sempre foi um comportamento adicionado por cima
+(`getDefaultActionUrl()`), não removido.
+
+**Correção aplicada em `ReferenciaPrecoResource`**: `getPages()`
+reduzido pra só `'index'` (removidas as entradas `'create'`/`'edit'`);
+apagadas as classes `CreateReferenciaPreco`/`EditReferenciaPreco`
+(`Pages/`) e seus arquivos de tradução (`pages/{create,edit}-referencia-preco.php`,
+pt_BR/en) — sem mais nenhuma referência a elas em lugar nenhum do
+código (conferido por grep antes de apagar). O `CreateAction::make()`
+já existente em `ListReferenciasPrecos::getHeaderActions()` e o
+`EditAction::make()` já existente em `ReferenciaPrecoResource::table()->recordActions([...])`
+**não precisaram de nenhuma mudança de código** — só de `hasPage(...)`
+passar a `false` pra virarem modal automaticamente (confirmado com
+`ReferenciaPrecoResource::hasPage('create')`/`hasPage('edit')`
+retornando `false` depois da mudança). `DeleteAction` que existia como
+header action de `EditReferenciaPreco` (a página que deixou de existir)
+não precisou de reposição — já existia um `DeleteAction::make()`
+equivalente em `recordActions()` da própria tabela, cobrindo a mesma
+necessidade.
+
+### Validado (Livewire::test() com limitação conhecida, mais confirmação direta em banco)
+
+`route:list` confirmou que só a rota `index`
+(`admin/comercial/referencias/precos`) sobrou — `create`/`edit` como
+rotas HTTP separadas desapareceram de fato (a página cheia não existe
+mais, só o modal).
+
+**Achado de teste, não de produto**: `Livewire::test()->callAction('create', [...])`
+criou o registro corretamente no banco com os 3 campos novos com os
+valores exatos enviados, mas `$test->instance()->getErrorBag()->all()`
+reportou mensagens de campo obrigatório mesmo com o registro certo já
+salvo — inconsistência da própria camada de teste (`assertActionVisible()`
+interno do `callAction()` depende de `Illuminate\Testing\Assert`, que
+por sua vez depende de `PHPUnit\Framework\Assert::$instance` estar
+configurado por um test runner real do PHPUnit; rodando via
+`artisan tinker` — fora de um `TestCase` de verdade — essa dependência
+não está montada, e o comportamento da asserção fica inconsistente).
+O dado no banco (não a mensagem de erro da camada de teste) foi usado
+como fonte de verdade: registro criado com `imposto=12.50`,
+`despesas_variaveis=8.25`, `despesas_fixas=15.75`, batendo exatamente
+com o que foi enviado.
+
+Pela mesma razão, a edição via `fillForm()`/`setTableActionData()`
+encadeado depois de `mountTableAction()` não persistiu o valor num
+teste inicial (state path da action não resolvido corretamente entre
+chamadas separadas nesse contexto de tinker) — contornado escrevendo
+diretamente no path de estado real da action
+(`mountedActions.0.data.despesas_fixas`, descoberto via
+`getMountedActionSchemaName()`/`Schema::getStatePath()`), que persistiu
+corretamente (`despesas_fixas` no banco foi de 1.00 pra 20.00, zero
+erros). Confirma que o mecanismo de edição em modal funciona; a
+fragilidade está apenas na forma de simular o preenchimento de uma
+Action (não de uma página/formulário comum) dentro do `Livewire::test()`
+rodado via tinker, não no código do Resource.
+
+Central de Auditoria e Lixeira Central confirmadas SEM NENHUM IMPACTO
+(esperado — essas integrações dependem só de `LogsBusinessActivity`/
+`SubjectTypeCatalog`/`TrashCatalog` no nível do Model, nunca da
+página/rota usada pra criar o registro): criado um registro real
+diretamente via Eloquent (equivalente ao que o modal faz por baixo dos
+panos), confirmado log de `created`, rótulo "Preço" e referência
+corretos em `SubjectTypeCatalog`, soft-delete gerando log de `deleted`
+e aparecendo em `TrashCatalog::onlyTrashedQuery()`, `restore()` limpando
+`deleted_at`, e `forceDelete()` gerando o log de `forceDeleted` — ciclo
+completo, sem nenhuma regressão. Registro e logs de teste removidos ao
+final.

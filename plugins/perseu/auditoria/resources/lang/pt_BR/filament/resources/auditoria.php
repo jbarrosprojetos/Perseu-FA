@@ -20,6 +20,7 @@ return [
         'obra'            => 'Obra',
         'tipo-obra'       => 'Tipo de Obra',
         'situacao-obra'   => 'Situação de Obra',
+        'referencia-preco' => 'Preço',
         'pessoa-fisica'   => 'Pessoa Física',
         'pessoa-juridica' => 'Pessoa Jurídica',
         'categoria-pessoa' => 'Categoria de Pessoa',

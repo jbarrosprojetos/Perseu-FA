@@ -13,6 +13,7 @@ return [
         'obra'            => 'Work',
         'tipo-obra'       => 'Work Type',
         'situacao-obra'   => 'Work Status',
+        'referencia-preco' => 'Price',
         'pessoa-fisica'   => 'Individual',
         'pessoa-juridica' => 'Company',
         'categoria-pessoa' => 'Person Category',

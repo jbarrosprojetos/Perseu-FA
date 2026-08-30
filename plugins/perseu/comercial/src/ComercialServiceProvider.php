@@ -5,9 +5,11 @@ namespace Perseu\Comercial;
 use Filament\Panel;
 use Illuminate\Support\Facades\Gate;
 use Perseu\Comercial\Models\Obra;
+use Perseu\Comercial\Models\ReferenciaPreco;
 use Perseu\Comercial\Models\SituacaoObra;
 use Perseu\Comercial\Models\TipoObra;
 use Perseu\Comercial\Policies\ObraPolicy;
+use Perseu\Comercial\Policies\ReferenciaPrecoPolicy;
 use Perseu\Comercial\Policies\SituacaoObraPolicy;
 use Perseu\Comercial\Policies\TipoObraPolicy;
 use Webkul\PluginManager\Console\Commands\InstallCommand;
@@ -30,6 +32,7 @@ class ComercialServiceProvider extends PackageServiceProvider
                 '2026_08_22_110003_create_projetos_table',
                 '2026_08_22_110004_create_projeto_situacao_table',
                 '2026_08_28_120000_rename_projeto_to_obra',
+                '2026_08_30_130000_create_referencias_precos_table',
             ])
             ->runsMigrations()
             ->hasDependency('auditoria')
@@ -44,6 +47,7 @@ class ComercialServiceProvider extends PackageServiceProvider
         Gate::policy(SituacaoObra::class, SituacaoObraPolicy::class);
         Gate::policy(TipoObra::class, TipoObraPolicy::class);
         Gate::policy(Obra::class, ObraPolicy::class);
+        Gate::policy(ReferenciaPreco::class, ReferenciaPrecoPolicy::class);
     }
 
     public function packageRegistered(): void

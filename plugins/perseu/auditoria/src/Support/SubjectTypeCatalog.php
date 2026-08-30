@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
 use Perseu\Comercial\Models\Obra;
+use Perseu\Comercial\Models\ReferenciaPreco;
 use Perseu\Comercial\Models\SituacaoObra;
 use Perseu\Comercial\Models\TipoObra;
 use Perseu\Pessoas\Models\CategoriaPessoa;
@@ -45,6 +46,7 @@ class SubjectTypeCatalog
             Obra::class           => 'obra',
             TipoObra::class       => 'tipo-obra',
             SituacaoObra::class   => 'situacao-obra',
+            ReferenciaPreco::class => 'referencia-preco',
             PessoaFisica::class   => 'pessoa-fisica',
             PessoaJuridica::class => 'pessoa-juridica',
             CategoriaPessoa::class => 'categoria-pessoa',
@@ -63,6 +65,7 @@ class SubjectTypeCatalog
             Obra::class            => self::MODULO_COMERCIAL,
             TipoObra::class        => self::MODULO_COMERCIAL,
             SituacaoObra::class    => self::MODULO_COMERCIAL,
+            ReferenciaPreco::class => self::MODULO_COMERCIAL,
             PessoaFisica::class    => self::MODULO_PESSOAS,
             PessoaJuridica::class  => self::MODULO_PESSOAS,
             CategoriaPessoa::class => self::MODULO_PESSOAS,
@@ -144,7 +147,7 @@ class SubjectTypeCatalog
             Obra::class => trim(
                 ($subject->numero_obra ? "{$subject->numero_obra} — " : '') . $subject->descricao
             ),
-            TipoObra::class, SituacaoObra::class, CategoriaPessoa::class, Setor::class => $subject->descricao,
+            TipoObra::class, SituacaoObra::class, ReferenciaPreco::class, CategoriaPessoa::class, Setor::class => $subject->descricao,
             PessoaFisica::class => $subject->nome,
             PessoaJuridica::class => $subject->razao_social,
             Endereco::class => trim(
@@ -184,7 +187,7 @@ class SubjectTypeCatalog
                     Obra::class => $subQuery->where(fn ($q) => $q
                         ->where('descricao', 'like', "%{$termo}%")
                         ->orWhere('numero_obra', 'like', "%{$termo}%")),
-                    TipoObra::class, SituacaoObra::class, CategoriaPessoa::class, Setor::class => $subQuery
+                    TipoObra::class, SituacaoObra::class, ReferenciaPreco::class, CategoriaPessoa::class, Setor::class => $subQuery
                         ->where('descricao', 'like', "%{$termo}%"),
                     PessoaFisica::class => $subQuery->where('nome', 'like', "%{$termo}%"),
                     PessoaJuridica::class => $subQuery->where(fn ($q) => $q

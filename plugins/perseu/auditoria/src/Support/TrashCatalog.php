@@ -5,6 +5,7 @@ namespace Perseu\Auditoria\Support;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Perseu\Comercial\Models\Obra;
+use Perseu\Comercial\Models\ReferenciaPreco;
 use Perseu\Pessoas\Models\PessoaFisica;
 use Perseu\Pessoas\Models\PessoaJuridica;
 
@@ -13,10 +14,12 @@ use Perseu\Pessoas\Models\PessoaJuridica;
  * `TrashedFilter`/`RestoreAction`/`ForceDeleteAction` no próprio
  * Resource — ver "Auditoria (log de atividade) + Lixeira completa" no
  * CLAUDE.md). Confirmado por grep (`grep -rl "use SoftDeletes"
- * plugins/perseu`) antes de escrever esta lista, não assumido: SÓ estes
- * 3 — Categoria de Pessoa e Setor (citados como exemplo na tarefa que
- * pediu a Lixeira Central) NÃO usam `SoftDeletes` hoje (limitação já
- * documentada, ver "Limitação conhecida" no CLAUDE.md).
+ * plugins/perseu`) antes de escrever esta lista, não assumido: estes
+ * 4 (`ReferenciaPreco` adicionado na tarefa do Cluster Referências,
+ * 2026-08-30, já nascendo com `SoftDeletes` desde a criação, seguindo
+ * a convenção) — Categoria de Pessoa, Setor, Tipo/Situação de Obra
+ * NÃO usam `SoftDeletes` hoje (limitação já documentada, ver
+ * "Limitação conhecida" no CLAUDE.md).
  *
  * Deliberadamente um subconjunto (não uma cópia) de
  * `SubjectTypeCatalog` — aquela classe cobre os 9 Models AUDITADOS
@@ -39,6 +42,7 @@ class TrashCatalog
     {
         return [
             Obra::class,
+            ReferenciaPreco::class,
             PessoaJuridica::class,
             PessoaFisica::class,
         ];
