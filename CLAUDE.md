@@ -2727,3 +2727,46 @@ e aparecendo em `TrashCatalog::onlyTrashedQuery()`, `restore()` limpando
 `deleted_at`, e `forceDelete()` gerando o log de `forceDeleted` — ciclo
 completo, sem nenhuma regressão. Registro e logs de teste removidos ao
 final.
+
+## Referência de Preços: mais 4 campos (Valor por Peças + 3 Fatores) e decisão de não poluir a listagem (2026-08-30)
+
+Mais uma rodada de campos da composição de custo real da empresa,
+completando o cadastro de Referência de Preços: **Valor por Peças**
+(monetário, `decimal(10,2)`) e três fatores percentuais (**Fator
+Madeiras**, **Fator Ferragens e Miscelânias**, **Fator Mão de Obra**,
+todos `decimal(5,2)`) — mesmo padrão dos campos já existentes (moeda
+com `->prefix('R$')`, percentual com `->suffix('%')`). Migration nova
+em ALTER (`2026_08_30_150000_add_valor_pecas_fatores_to_referencias_precos_table`),
+não tocando nas duas migrations anteriores já aplicadas (mesma
+convenção de sempre).
+
+### Decisão: os 4 campos novos ficam ocultos por padrão NA LISTAGEM (não no modal)
+
+Antes desta tarefa a tabela já tinha 9 colunas de dados (Descrição +
+4 monetários + 4 percentuais) + Criado em. Adicionar mais 4 visíveis
+de cara deixaria a listagem larga demais pra leitura rápida — decisão
+consciente de marcar os 4 novos (`valor_pecas`, `fator_madeiras`,
+`fator_ferragens_miscelanias`, `fator_mao_obra`) com
+`->toggleable(isToggledHiddenByDefault: true)`: continuam 100%
+editáveis no modal de criar/editar (todos os campos, sem exceção,
+aparecem lá) e continuam disponíveis na listagem pra quem quiser via
+botão de alternar colunas — só não aparecem de cara pra não sobrecarregar
+a leitura da tabela no dia a dia. Nenhum campo antigo teve sua
+visibilidade alterada.
+
+### Validado
+
+Confirmado (mesma ressalva já registrada sobre `callAction()` ser
+inconsistente em `Livewire::test()` rodado fora de um `TestCase` real
+do PHPUnit — às vezes reporta erros de campo obrigatório mesmo quando
+o registro é salvo corretamente, às vezes bloqueia de fato; usar
+diretamente o state path da action, `mountedActions.0.data.*`, é o
+jeito confiável de reproduzir o preenchimento real do modal neste
+ambiente de teste) que a criação via modal com os 12 campos (8
+antigos + 4 novos) salva tudo corretamente, sem erros. Log de
+`created` do Spatie Activitylog confirmado com os 4 novos campos
+presentes em `properties.attributes`; edição de um campo novo
+(`fator_mao_obra`) gerou log de `updated` com `old`/`attributes`
+corretos (`logOnlyDirty`, só o campo alterado). Rótulo/referência da
+Central de Auditoria (`SubjectTypeCatalog`) inalterados, como esperado
+— não dependem de quais colunas o Model tem.

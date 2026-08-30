@@ -124,6 +124,26 @@ class ReferenciaPrecoResource extends Resource
                             ->numeric()
                             ->required()
                             ->suffix('%'),
+                        TextInput::make('valor_pecas')
+                            ->label(__('comercial::filament/resources/referencia-preco.form.valor-pecas'))
+                            ->numeric()
+                            ->required()
+                            ->prefix('R$'),
+                        TextInput::make('fator_madeiras')
+                            ->label(__('comercial::filament/resources/referencia-preco.form.fator-madeiras'))
+                            ->numeric()
+                            ->required()
+                            ->suffix('%'),
+                        TextInput::make('fator_ferragens_miscelanias')
+                            ->label(__('comercial::filament/resources/referencia-preco.form.fator-ferragens-miscelanias'))
+                            ->numeric()
+                            ->required()
+                            ->suffix('%'),
+                        TextInput::make('fator_mao_obra')
+                            ->label(__('comercial::filament/resources/referencia-preco.form.fator-mao-obra'))
+                            ->numeric()
+                            ->required()
+                            ->suffix('%'),
                     ]),
             ]);
     }
@@ -178,6 +198,32 @@ class ReferenciaPrecoResource extends Resource
                     ->label(__('comercial::filament/resources/referencia-preco.table.columns.despesas-fixas'))
                     ->formatStateUsing(fn (?string $state) => static::formatPercent($state))
                     ->sortable(),
+                // Os 4 campos abaixo (Valor por Peças + 3 fatores) ficam
+                // ocultos por padrão na listagem (ainda editáveis no
+                // modal) — a tabela já tinha 9 colunas de dados antes
+                // deles; deixá-los todos visíveis de cara deixaria a
+                // listagem larga demais pra leitura rápida. Continuam
+                // acessíveis via botão de alternar colunas.
+                TextColumn::make('valor_pecas')
+                    ->label(__('comercial::filament/resources/referencia-preco.table.columns.valor-pecas'))
+                    ->money('BRL')
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('fator_madeiras')
+                    ->label(__('comercial::filament/resources/referencia-preco.table.columns.fator-madeiras'))
+                    ->formatStateUsing(fn (?string $state) => static::formatPercent($state))
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('fator_ferragens_miscelanias')
+                    ->label(__('comercial::filament/resources/referencia-preco.table.columns.fator-ferragens-miscelanias'))
+                    ->formatStateUsing(fn (?string $state) => static::formatPercent($state))
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('fator_mao_obra')
+                    ->label(__('comercial::filament/resources/referencia-preco.table.columns.fator-mao-obra'))
+                    ->formatStateUsing(fn (?string $state) => static::formatPercent($state))
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('created_at')
                     ->label(__('comercial::filament/resources/referencia-preco.table.columns.created-at'))
                     ->dateTime()

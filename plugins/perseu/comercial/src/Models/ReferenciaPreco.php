@@ -31,16 +31,24 @@ class ReferenciaPreco extends Model
         'imposto',
         'despesas_variaveis',
         'despesas_fixas',
+        'valor_pecas',
+        'fator_madeiras',
+        'fator_ferragens_miscelanias',
+        'fator_mao_obra',
     ];
 
     protected $casts = [
-        'laminacao'          => 'decimal:2',
-        'corte'              => 'decimal:2',
-        'hora_producao'      => 'decimal:2',
-        'hora_execucao'      => 'decimal:2',
-        'retencao_tecnica'   => 'decimal:2',
-        'imposto'            => 'decimal:2',
-        'despesas_variaveis' => 'decimal:2',
-        'despesas_fixas'     => 'decimal:2',
+        'laminacao'                   => 'decimal:2',
+        'corte'                       => 'decimal:2',
+        'hora_producao'               => 'decimal:2',
+        'hora_execucao'               => 'decimal:2',
+        'retencao_tecnica'            => 'decimal:2',
+        'imposto'                     => 'decimal:2',
+        'despesas_variaveis'          => 'decimal:2',
+        'despesas_fixas'              => 'decimal:2',
+        'valor_pecas'                 => 'decimal:2',
+        'fator_madeiras'              => 'decimal:2',
+        'fator_ferragens_miscelanias' => 'decimal:2',
+        'fator_mao_obra'              => 'decimal:2',
     ];
 }
