@@ -22,6 +22,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Validation\Rules\Unique;
 use Perseu\Pessoas\Enums\EstadoCivil;
 use Perseu\Pessoas\Enums\Sexo;
 use Perseu\Pessoas\Filament\Clusters\Pessoas\Resources\PessoaFisicaResource\Pages\CreatePessoaFisica;
@@ -29,6 +30,7 @@ use Perseu\Pessoas\Filament\Clusters\Pessoas\Resources\PessoaFisicaResource\Page
 use Perseu\Pessoas\Filament\Clusters\Pessoas\Resources\PessoaFisicaResource\Pages\ListPessoasFisicas;
 use Perseu\Pessoas\Filament\Clusters\Pessoas\Resources\PessoaFisicaResource\RelationManagers\EnderecosRelationManager;
 use Perseu\Pessoas\Models\PessoaFisica;
+use Perseu\Pessoas\Rules\CpfNaoExcluido;
 use Perseu\Pessoas\Rules\CpfValido;
 use Perseu\Pessoas\Traits\HasCompactFieldWidth;
 use Webkul\Support\Enums\NavigationGroup;
@@ -124,7 +126,16 @@ class PessoaFisicaResource extends Resource
                             ->label(__('pessoas::filament/resources/pessoa-fisica.form.cpf'))
                             ->mask('999.999.999-99')
                             ->rule(new CpfValido())
-                            ->unique(ignoreRecord: true),
+                            // Mesmo bug/mesma correção de CNPJ em Pessoa
+                            // Jurídica (ver CLAUDE.md): sem
+                            // whereNull('deleted_at'), um CPF de registro
+                            // soft-deleted bloqueava a recriação com a
+                            // mensagem genérica de "já se encontra
+                            // registrado" — a checagem específica (com
+                            // mensagem própria) é a regra CpfNaoExcluido
+                            // logo abaixo.
+                            ->unique(ignoreRecord: true, modifyRuleUsing: fn (Unique $rule) => $rule->whereNull('deleted_at'))
+                            ->rule(fn (?PessoaFisica $record) => new CpfNaoExcluido($record?->id)),
                         chars: 14, // "999.999.999-99"
                     ),
                 ]),

@@ -2459,3 +2459,63 @@ Empresa E Filial salvas corretamente, incluindo a sincronização pro
 Partner vinculado (`$company->partner->tax_id`/`street1` batendo com
 os valores da Empresa). Logo/Cor (branding) não foram tocados —
 confirmado que a seção continua renderizando normalmente.
+
+## Bug de "registro fantasma" em Pessoa Física — só metade existia, confirmado por reprodução (2026-08-30)
+
+Investigação (não suposição) da mesma vulnerabilidade já corrigida em
+Pessoa Jurídica (ver "Excluir Pessoa Jurídica em cascata"), aplicada a
+`PessoaFisica`:
+
+1. **Cascata de `forceDeleting()` (Endereços/Contatos)**: **JÁ
+   corrigida** — `PessoaFisica` já usa
+   `Perseu\Pessoas\Traits\CascadesRelatedDataOnForceDelete` desde a
+   tarefa "Auditoria (log de atividade) + Lixeira completa"
+   (2026-08-28), que fechou essa lacuna nos dois Models ao mesmo
+   tempo (a nota antiga dizendo "escopo só PessoaJuridica... não foi
+   corrigido aqui" ficou desatualizada por aquela tarefa posterior).
+   Confirmado de novo por reprodução: criar Pessoa Física + Endereço +
+   Contato, `forceDelete()` → os dois somem do banco; soft-delete +
+   `restore()` → os dois continuam intactos (cascata só dispara em
+   exclusão definitiva de fato, não no soft delete).
+2. **Validação de CPF vs. registro soft-deleted**: **bug real,
+   confirmado por reprodução antes de corrigir** — o campo `cpf` em
+   `PessoaFisicaResource` tinha só `->unique(ignoreRecord: true)`
+   (sem `whereNull('deleted_at')`) e nenhuma Rule equivalente a
+   `CnpjNaoExcluido`. Reproduzido via `Livewire::test()`: criar uma
+   Pessoa Física, soft-deletá-la, e tentar criar outra com o MESMO CPF
+   falhava silenciosamente (nenhum registro novo, mensagem genérica de
+   "já se encontra registrado") — exatamente o mesmo sintoma que
+   motivou a correção original em Pessoa Jurídica.
+
+### Correção — mesmo padrão, nova classe `CpfNaoExcluido`
+
+- `plugins/perseu/pessoas/src/Rules/CpfNaoExcluido.php` (novo) —
+  cópia fiel de `CnpjNaoExcluido` trocando CNPJ por CPF (`PessoaFisica::onlyTrashed()->where('cpf', $value)`).
+  Não extraída pra uma Rule genérica compartilhada (`RegistroNaoExcluido`
+  parametrizável por Model/coluna): as duas regras já são pequenas e
+  auto-contidas, e generalizar agora seria antecipar reuso sem um
+  terceiro caso real (mesmo critério já usado no projeto pra não
+  promover abstrações cedo demais — ver seção sobre
+  `HasCompactFieldWidth`).
+- `PessoaFisicaResource::form()`: `->unique(ignoreRecord: true,
+  modifyRuleUsing: fn (Unique $rule) => $rule->whereNull('deleted_at'))`
+  + `->rule(fn (?PessoaFisica $record) => new CpfNaoExcluido($record?->id))`
+  no campo `cpf` — mesma dupla proteção de CNPJ (unique só considera
+  ativos + regra dedicada bloqueia com mensagem clara quando o CPF
+  pertence a um soft-deleted).
+- Chave de tradução `pessoas::validation.rules.cpf-excluido` (pt_BR/en),
+  mesmo texto de `cnpj-excluido` adaptado.
+
+### Validado por reprodução (não só leitura de código)
+
+Recriado o cenário exato: Pessoa Física + Endereço + Contato de teste,
+soft-deletada — tentar criar uma nova com o mesmo CPF agora falha com
+a mensagem "Já existe um cadastro excluído com este CPF..." (confirmado
+via `$test->getErrorBag()->all()`, já que — como já registrado nesta
+sessão pra outros formulários — `Livewire::test()->html()` nem sempre
+reflete mensagens de erro de validação no snapshot, mesmo com o erro
+real presente); excluindo definitivamente esse mesmo registro depois,
+a criação com o mesmo CPF passa a ser permitida normalmente (dentro de
+transação revertida). Todos os registros de teste foram limpos ao
+final (`PessoaFisica::withTrashed()->count()` de volta a 3, o estado
+original).
