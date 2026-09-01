@@ -33,6 +33,21 @@ class ComercialServiceProvider extends PackageServiceProvider
                 '2026_08_22_110004_create_projeto_situacao_table',
                 '2026_08_28_120000_rename_projeto_to_obra',
                 '2026_08_30_130000_create_referencias_precos_table',
+                // As 3 entradas abaixo faltavam nesta lista desde suas
+                // respectivas tarefas (rodadas na época via `artisan
+                // migrate --path=`, que funciona independente deste
+                // array) — sem elas, `loadMigrationsFrom()` nunca
+                // carregava esses arquivos (ver
+                // `Webkul\PluginManager\PackageServiceProvider::packageBooted()`),
+                // então uma instalação nova do plugin (`comercial:install`)
+                // ou `artisan migrate` num ambiente diferente NUNCA
+                // rodaria essas 3 migrations. Corrigido ao mexer neste
+                // array de novo (tarefa do Cluster Propostas, depois
+                // revertido — esta correção ficou).
+                '2026_08_30_140000_add_imposto_despesas_to_referencias_precos_table',
+                '2026_08_30_150000_add_valor_pecas_fatores_to_referencias_precos_table',
+                '2026_09_01_100000_drop_revisao_from_obras_table',
+                '2026_09_02_100000_add_revisao_back_to_obras_table',
             ])
             ->runsMigrations()
             ->hasDependency('auditoria')

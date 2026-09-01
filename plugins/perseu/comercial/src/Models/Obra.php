@@ -20,7 +20,10 @@ class Obra extends Model
     protected $table = 'obras';
 
     // numero_obra e data_cadastro nunca são preenchidos pelo usuário —
-    // gerados automaticamente no evento "creating" abaixo.
+    // gerados automaticamente no evento "creating" abaixo. `revisao`
+    // (trazida de volta em 2026-09-02, ver CLAUDE.md) também fica de
+    // fora: nunca teve um input editável, só o `default(0)` da
+    // migration — mesmo critério, sem incluir no `$fillable`.
     protected $fillable = [
         'pessoa_fisica_id',
         'pessoa_juridica_id',
@@ -28,7 +31,6 @@ class Obra extends Model
         'tipo_obra_id',
         'endereco_id',
         'descricao',
-        'revisao',
     ];
 
     protected $casts = [

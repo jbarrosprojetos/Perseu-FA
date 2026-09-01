@@ -2770,3 +2770,148 @@ presentes em `properties.attributes`; edição de um campo novo
 corretos (`logOnlyDirty`, só o campo alterado). Rótulo/referência da
 Central de Auditoria (`SubjectTypeCatalog`) inalterados, como esperado
 — não dependem de quais colunas o Model tem.
+
+## Remoção do campo "Revisão" de Obra — pertencia conceitualmente à Proposta (2026-09-01)
+
+`obras.revisao` (`unsignedInteger`, default `0`) veio junto com a
+numeração AAT#### desde a migration original de criação do cadastro
+(`..._create_projetos_table`), mas — conforme
+`CONCEITO-OBRA-PROPOSTA-PROJETO.md` — revisões existem na Proposta (e
+no Projeto), não na Obra: a Obra é a entidade raiz e permanente, sem
+revisões próprias. Removido por completo (não só ocultado), depois de
+confirmar ausência de uso real.
+
+### Evidência levantada antes de remover (grep amplo, não suposição)
+
+`grep -ril "revisao"`/`"revision"` em `plugins/perseu/comercial` e no
+restante do repositório (excluindo `vendor`/`node_modules`) encontrou
+só: a migration original (coluna), `Obra::$fillable`, o
+`Placeholder::make('revisao_display')` somente-leitura em
+`ObraResource::form()`, e as duas chaves de tradução
+(pt_BR/en). Nenhuma lógica de negócio, cálculo, Model relacionado, ou
+policy referenciava a coluna. Confirmado especificamente que
+`GeradorNumeroObra::gerar()` (a numeração AAT####) nunca leu/gravou
+`revisao` — o algoritmo (`obra_numero_sequencias` + `sprintf('%02d%s%04d', ...)`)
+é inteiramente independente dela, e `Obra::boot()`'s `creating` também
+nunca a tocava (só preenche `numero_obra`/`data_cadastro`
+automaticamente). Os únicos outros hits de "revisao" no repo eram
+arquivos históricos de planejamento (`tarefa-*.md`, fases anteriores
+do Comercial) — não código.
+
+### O que mudou
+
+- Nova migration (`2026_09_01_100000_drop_revisao_from_obras_table`,
+  `dropColumn('revisao')`) — a migration original que criou a coluna
+  não foi editada (mesma convenção de sempre: remover uma coluna já
+  aplicada é sempre uma migration nova).
+- `Obra::$fillable`: entrada `'revisao'` removida.
+- `ObraResource::form()`: `Placeholder::make('revisao_display')`
+  removido da Linha 1 do `Grid::make(12)`.
+- Traduções `pessoas::filament/resources/obra.form.revisao` (pt_BR/en)
+  removidas.
+
+### Rebalanceamento do Grid — preservando o alinhamento com a Linha 2
+
+O comentário já existente no `form()` documentava um invariante:
+"Nome da Obra" (Linha 1) e o Select de Cliente (Linha 2) ficam
+alinhados verticalmente porque ambos são o 2º item de cada
+`Grid::make(12)` com a MESMA soma de `columnSpan` antes deles
+(`numero_obra+revisao+data_cadastro = 3` vs. `tipo_contratante = 3`).
+Remover `revisao` sem compensar deixaria essa soma em 2, quebrando o
+alinhamento — corrigido aumentando `data_cadastro` de `columnSpan(1)`
+para `columnSpan(2)` (em vez de `numero_obra`, já que uma data por
+extenso ocupa mais espaço visual que o código curto de `numero_obra`),
+mantendo a soma em 3 e o Grid somando 12 colunas
+(`1+2+4+2+3=12`). Comentários do método atualizados para refletir o
+novo layout de 2 campos na Linha 1 (antes eram 3).
+
+### Validado
+
+`Schema::hasColumn('obras', 'revisao')` confirmado `false` depois da
+migration. Criada uma Obra de teste real (`Obra::create([...])`,
+sem passar `revisao`): `numero_obra` gerado normalmente
+(`2610006`/`2610007` nos dois testes, formato AAT#### intacto),
+`data_cadastro` preenchido automaticamente. `Livewire::test(EditObra::class, ...)`
+confirmou que o HTML renderizado do formulário de edição não contém
+mais nenhuma ocorrência de "Revis" e que `numero_obra` continua
+exibido corretamente. Registros de teste removidos ao final
+(`forceDelete()`).
+
+### Nota — Cluster "Propostas" implementado e revertido (2026-09-01)
+
+Um primeiro desenho do Cluster "Propostas" (Situação de Proposta +
+cabeçalho da Proposta, com "Revisão" voltando a existir aqui) chegou a
+ser implementado, validado e documentado logo após esta remoção — e
+depois **descartado por completo a pedido do usuário**, que decidiu
+repensar o desenho do zero, sem reaproveitar nada da primeira
+tentativa. Nenhum arquivo, tabela, permissão ou entrada em
+`SubjectTypeCatalog`/`TrashCatalog` daquela tentativa permanece no
+projeto — reverter isso foi uma tarefa própria, separada desta. Só a
+remoção do campo "Revisão" de Obra (documentada acima) e a correção
+de `hasMigrations()` (ver `ComercialServiceProvider.php`) sobreviveram
+dessa sessão de trabalho. Registrado aqui só pra quem for desenhar o
+Cluster "Propostas" de novo no futuro não estranhar o histórico do
+git — não há nenhum detalhe de design daquela tentativa preservado de
+propósito, já que a ideia é começar sem viés da abordagem descartada.
+
+## "Revisão" volta a existir em Obra — replanejamento: sem cadastro de Proposta separado, por ora (2026-09-02)
+
+Depois de reverter a tentativa de Cluster "Propostas" (nota acima), o
+usuário decidiu por um caminho mais simples por enquanto: **"Revisão"
+volta a existir, mas dentro do próprio cadastro de Obra**, sem Model/
+Resource separado. Ideia conceitual: a combinação "Obra + Revisão" já
+representa o que seria uma "Proposta" — mas o nome do cadastro/menu
+continua "Obra" (rename é decisão futura, em aberto, não desta
+tarefa).
+
+### Mesmo comportamento exato de antes da remoção
+
+`obras.revisao` — `unsignedInteger`, `default(0)`, sem NENHUMA lógica
+de autoincremento (nunca teve, nem antes nem agora), exibido como
+`Placeholder` somente-leitura zero-padded em 2 dígitos
+(`str_pad(..., 2, '0', STR_PAD_LEFT)`) — mesmo texto/formato/posição
+de antes (Linha 1 do `Grid::make(12)`, entre `numero_obra` e
+`data_cadastro`, `columnSpan(1)` cada, voltando a somar 3 igual à
+soma de `tipo_contratante` na Linha 2 — o `columnSpan(2)` que
+`data_cadastro` tinha ganhado temporariamente pra compensar a ausência
+de Revisão foi revertido de volta pra `columnSpan(1)`).
+
+**Migration nova** (`2026_09_02_100000_add_revisao_back_to_obras_table`),
+não um `down()` da migration de remoção
+(`2026_09_01_100000_drop_revisao_from_obras_table`, que continua
+intacta) — mesma convenção de sempre: desfazer algo já aplicado é
+sempre uma migration nova, pra manter o histórico linear.
+
+### `revisao` continua FORA do `$fillable`
+
+A tarefa permitia reavaliar isso ("a menos que agora haja necessidade
+real de editá-lo via formulário; se houver dúvida, perguntar") — não
+havia necessidade real (nada mudou sobre COMO o campo é usado, só
+sobre ONDE ele mora), então mantido fora do `$fillable`, mesma decisão
+já tomada na tentativa revertida de Proposta: o campo nunca teve (nem
+tem agora) um input editável em lugar nenhum, só o `default(0)` da
+migration — incluir no `$fillable` sem um input real seria dead code.
+
+### Gap do `hasMigrations()` — não repetido desta vez
+
+Aprendendo com o gap encontrado e corrigido na tarefa anterior (3
+migrations que nunca tinham sido registradas), a migration nova desta
+tarefa já foi adicionada a `ComercialServiceProvider::hasMigrations()`
+no mesmo commit que a criou, não deixada pra descobrir depois.
+
+### Validado
+
+`Schema::hasColumn('obras', 'revisao')` confirmado `true` depois da
+migration. Criada uma Obra de teste real: `numero_obra` gerado
+normalmente (AAT#### intacto, `GeradorNumeroObra` nunca teve relação
+com `revisao`), `revisao` persistido como `0` no banco (o valor em
+memória logo após `Model::create()` aparece `null` até um `refresh()`
+ou nova consulta — comportamento padrão do Eloquent pra colunas com
+`default()` no schema que não são passadas explicitamente na
+inserção, não um bug; o Placeholder do formulário sempre lê do
+registro já carregado via rota/consulta fresca, nunca do objeto
+recém-criado em memória). `Livewire::test(EditObra::class, ...)`
+confirmou o HTML renderizado mostrando "Revisão" com o valor "00" no
+mesmo estilo (`fi-entry-bold`) dos campos vizinhos. Registro de teste
+removido ao final (`forceDelete()`). Navegação e rotas de Obra
+conferidas sem nenhuma mudança.

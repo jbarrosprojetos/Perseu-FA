@@ -95,6 +95,11 @@ class ObraResource extends Resource
         // na Linha 1; tipo_contratante = 3 na Linha 2) — alinhamento vem da
         // posição na grid, não de um max-width em comum calibrado à mão
         // como antes.
+        // ("Revisão" removida em 2026-09-01 e trazida de volta em
+        // 2026-09-02, ver CLAUDE.md — o replanejamento da fase de
+        // Proposta decidiu manter Revisão dentro do próprio cadastro de
+        // Obra por enquanto, em vez de um cadastro de Proposta
+        // separado.)
         //
         // Grid::make(N) tem seu próprio gap zerado pelo Bonsai
         // (`.fi-sc.fi-sc-has-gap { gap: 0 !important; }`, que cobre o
