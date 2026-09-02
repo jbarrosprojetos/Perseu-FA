@@ -88,7 +88,7 @@ class ProjetoResource extends Resource
         // "normal" que deve crescer) não se aplica. O trait
         // HasCompactFieldWidth deixou de ser usado neste Resource.
         //
-        // Nome do Projeto (Linha 1, columnSpan 4) e o Select de Cliente
+        // Nome da Obra (Linha 1, columnSpan 4) e o Select de Cliente
         // (Linha 2, columnSpan 4) ficam alinhados verticalmente porque
         // ambos são o 2º item de cada Grid::make(12) e têm a MESMA soma de
         // columnSpan antes deles (numero_projeto+revisao+data_cadastro = 3
@@ -112,7 +112,7 @@ class ProjetoResource extends Resource
         return $schema
             ->components([
                 // Linha 1: numero_projeto/revisao/data_cadastro (1 coluna
-                // cada) + descricao "Nome do Projeto" (4) + tipo_projeto_id
+                // cada) + descricao "Nome da Obra" (4) + tipo_projeto_id
                 // (2) + situacoes (3) = 12 colunas.
                 Grid::make(12)
                     ->columnSpanFull()
@@ -284,13 +284,26 @@ class ProjetoResource extends Resource
                             ->columnSpan(1),
                     ]),
 
-                // Linha 3: Endereço do Projeto sozinho, largura total — não
+                // Linha 3: Endereço da Obra sozinho, largura total — não
                 // precisa de Grid, o próprio campo com columnSpanFull() já
                 // ocupa a linha inteira.
                 Select::make('endereco_id')
                     ->label(__('comercial::filament/resources/projeto.form.endereco'))
                     ->options(function (Get $get): array {
-                        return static::enderecoOptionsFor($get('pessoa_fisica_id'), $get('pessoa_juridica_id'));
+                        return static::enderecoObraOptionsFor($get('pessoa_fisica_id'), $get('pessoa_juridica_id'));
+                    })
+                    ->helperText(function (Get $get): ?string {
+                        // Só mostra o aviso depois de um Cliente selecionado E
+                        // sem nenhum endereço-obra — antes disso (nenhum
+                        // Cliente ainda) o campo já fica vazio por padrão, sem
+                        // precisar de explicação.
+                        if (blank($get('pessoa_fisica_id')) && blank($get('pessoa_juridica_id'))) {
+                            return null;
+                        }
+
+                        return filled(static::enderecoObraOptionsFor($get('pessoa_fisica_id'), $get('pessoa_juridica_id')))
+                            ? null
+                            : __('comercial::filament/resources/projeto.form.endereco-sem-tag-obra');
                     })
                     ->columnSpanFull()
                     ->searchable()
@@ -323,42 +336,43 @@ class ProjetoResource extends Resource
 
                         // O endereço só serve pra algo aqui se ficar vinculado ao
                         // contratante selecionado — senão desaparece da lista de
-                        // opções assim que o formulário recalcular. "Obra" (o
-                        // valor do enum TipoEndereco, sem relação com o nome
-                        // deste cadastro) é o tipo mais coerente com o contexto
-                        // (endereço da obra/canteiro em execução).
+                        // opções assim que o formulário recalcular. "Obra" (a tag
+                        // do enum TipoEndereco, sem relação com o nome deste
+                        // cadastro — ver CLAUDE.md de perseu/pessoas, "Tipo de
+                        // Endereço como tag") é a mais coerente com o contexto
+                        // (endereço da obra/canteiro em execução). Tag única e
+                        // deliberada aqui, NÃO todas marcadas por padrão — essa
+                        // regra vale só para o CheckboxList do formulário manual
+                        // de Endereços; este é preenchimento automático sem
+                        // interação do usuário.
                         if (filled($pessoaFisicaId)) {
                             PessoaFisica::find($pessoaFisicaId)?->enderecos()->attach($endereco->id, [
-                                'tipo'      => TipoEndereco::Obra->value,
                                 'principal' => false,
                             ]);
                         } elseif (filled($pessoaJuridicaId)) {
                             PessoaJuridica::find($pessoaJuridicaId)?->enderecos()->attach($endereco->id, [
-                                'tipo'      => TipoEndereco::Obra->value,
                                 'principal' => false,
                             ]);
                         }
+
+                        $endereco->tipos()->create(['tipo' => TipoEndereco::Obra->value]);
 
                         return $endereco->id;
                     }),
 
                 // Linha 4: respiro visual entre Endereço e os botões
-                // Salvar/Cancelar. Não existe um componente "spacer"
+                // Salvar/Cancelar — Endereço já é o último campo do form,
+                // então os botões (renderizados pela própria página
+                // Create/Edit, fora deste form()) ficam logo abaixo desta
+                // linha. Altura reduzida de 3rem para 1rem (2026-09-02) pra
+                // diminuir a distância/rolagem até os botões, mantendo só
+                // um respiro mínimo. Não existe um componente "spacer"
                 // dedicado em filament/schemas (mesma lacuna documentada no
                 // CLAUDE.md para o Divider entre form/Relation Manager) —
                 // Html::make() com um <div> de altura fixa é o mecanismo
                 // idiomático disponível pra isso (mesmo usado no CLAUDE.md
-                // para o <hr> de divisor). Deliberadamente NÃO foi usado gap
-                // aqui: o container do Schema de nível mais alto também tem
-                // sua classe "fi-sc-has-gap" zerada pelo Bonsai (mesma regra
-                // que afeta os dois Grid::make(12) acima), e um valor de gap
-                // só teria efeito visual se sobrescrito com !important, sem
-                // nenhuma vantagem sobre simplesmente dar altura própria a
-                // um elemento real — o <div> abaixo ocupa espaço no fluxo
-                // normal do documento por conta própria, então não depende
-                // de gap nenhum (nem precisa de !important: height não é
-                // uma das propriedades que o Bonsai força).
-                Html::make('<div style="height: 3rem;"></div>')
+                // para o <hr> de divisor).
+                Html::make('<div style="height: 1rem;"></div>')
                     ->columnSpanFull(),
             ]);
     }
@@ -371,13 +385,24 @@ class ProjetoResource extends Resource
     }
 
     /**
+     * Só endereços com a tag "Obra" ativa (ver CLAUDE.md de
+     * perseu/pessoas, "Tipo de Endereço como tag") — o que interessa
+     * pro Projeto é especificamente onde a obra será executada/
+     * entregue/instalada, não o endereço comercial/residencial/de
+     * cobrança do cliente. Um cliente pode ter mais de um endereço
+     * com a tag Obra (ex: duas obras em andamento ao mesmo tempo) —
+     * todos aparecem como opção, cabe ao usuário escolher qual se
+     * aplica a este Projeto.
+     *
      * @return array<int, string>
      */
-    protected static function enderecoOptionsFor(?string $pessoaFisicaId, ?string $pessoaJuridicaId): array
+    protected static function enderecoObraOptionsFor(?string $pessoaFisicaId, ?string $pessoaJuridicaId): array
     {
+        $comTagObra = fn (Builder $query) => $query->where('tipo', TipoEndereco::Obra->value);
+
         $enderecos = match (true) {
-            filled($pessoaFisicaId)    => PessoaFisica::find($pessoaFisicaId)?->enderecos,
-            filled($pessoaJuridicaId)  => PessoaJuridica::find($pessoaJuridicaId)?->enderecos,
+            filled($pessoaFisicaId)    => PessoaFisica::find($pessoaFisicaId)?->enderecos()->whereHas('tipos', $comTagObra)->get(),
+            filled($pessoaJuridicaId)  => PessoaJuridica::find($pessoaJuridicaId)?->enderecos()->whereHas('tipos', $comTagObra)->get(),
             default                    => null,
         };
 

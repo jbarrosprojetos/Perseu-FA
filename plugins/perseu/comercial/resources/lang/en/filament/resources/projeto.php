@@ -10,7 +10,7 @@ return [
     ],
 
     'form' => [
-        'descricao'      => 'Project Name',
+        'descricao'      => 'Job Name',
         'tipo-projeto'   => 'Project Type',
         'situacoes'      => 'Statuses',
         'tipo-contratante' => 'Client',
@@ -23,7 +23,7 @@ return [
         'contato'         => 'Contact',
         'contato-email'   => 'Email',
         'contato-telefone' => 'Phone',
-        'endereco'        => 'Project Address',
+        'endereco'        => 'Job Address',
         'endereco-form'   => [
             'cep'         => 'Zip Code',
             'logradouro'  => 'Street',
@@ -33,6 +33,7 @@ return [
             'municipio'   => 'City',
             'uf'          => 'State',
         ],
+        'endereco-sem-tag-obra' => 'This client has no address tagged as Job. Add that tag to an address in the client\'s own record, or use the "+" above to create one here.',
         'numero-projeto'          => 'Project',
         'numero-projeto-pendente' => 'Automatically generated on save',
         'revisao'                 => 'Revision',
@@ -43,7 +44,7 @@ return [
     'table' => [
         'columns' => [
             'numero-projeto' => 'Number',
-            'descricao'      => 'Project Name',
+            'descricao'      => 'Job Name',
             'tipo-projeto'   => 'Type',
             'contratante'    => 'Client',
             'situacoes'      => 'Statuses',

@@ -10,7 +10,7 @@ return [
     ],
 
     'form' => [
-        'descricao'      => 'Nome do Projeto',
+        'descricao'      => 'Nome da Obra',
         'tipo-projeto'   => 'Tipo de Projeto',
         'situacoes'      => 'Situações',
         'tipo-contratante' => 'Contratante',
@@ -23,7 +23,7 @@ return [
         'contato'         => 'Contato',
         'contato-email'   => 'E-mail',
         'contato-telefone' => 'Telefone',
-        'endereco'        => 'Endereço do Projeto',
+        'endereco'        => 'Endereço da Obra',
         'endereco-form'   => [
             'cep'         => 'CEP',
             'logradouro'  => 'Logradouro',
@@ -33,6 +33,7 @@ return [
             'municipio'   => 'Município',
             'uf'          => 'UF',
         ],
+        'endereco-sem-tag-obra' => 'Este cliente não tem nenhum endereço marcado com a tag Obra. Cadastre um endereço com essa tag no cadastro do cliente, ou use o "+" acima para criar um novo aqui.',
         'numero-projeto'          => 'Projeto',
         'numero-projeto-pendente' => 'Gerado automaticamente ao salvar',
         'revisao'                 => 'Revisão',
@@ -43,7 +44,7 @@ return [
     'table' => [
         'columns' => [
             'numero-projeto' => 'Número',
-            'descricao'      => 'Nome do Projeto',
+            'descricao'      => 'Nome da Obra',
             'tipo-projeto'   => 'Tipo',
             'contratante'    => 'Contratante',
             'situacoes'      => 'Situações',
