@@ -21,7 +21,7 @@ class EnderecosRelationManager extends RelationManager
 
     /**
      * Pessoa Jurídica (ver CLAUDE.md, "Filtro de Tipo de Endereço por
-     * contexto"): Comercial, Cobrança, Entrega, Obra, Outro — sem
+     * contexto"): tags Comercial, Cobrança, Entrega, Obra, Outro — sem
      * Residencial.
      *
      * @return array<TipoEndereco>

@@ -11,7 +11,7 @@ return [
         'bairro'      => 'Bairro',
         'municipio'   => 'Município',
         'uf'          => 'UF',
-        'tipo'        => 'Tipo',
+        'tipos'       => 'Tipos',
         'principal'   => 'Endereço principal?',
     ],
 
@@ -22,7 +22,7 @@ return [
             'bairro'     => 'Bairro',
             'municipio'  => 'Município',
             'uf'         => 'UF',
-            'tipo'       => 'Tipo',
+            'tipos'      => 'Tipos',
             'principal'  => 'Principal',
         ],
 

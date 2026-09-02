@@ -44,17 +44,94 @@ por tipo de pessoa.
 - Endereços também não é item de menu — é uma tabela própria
   (`enderecos`) com pivots (`pessoa_fisica_endereco`,
   `pessoa_juridica_endereco`), exibida como Relation Manager dentro de
-  Pessoa Física e Pessoa Jurídica. O tipo de endereço (Residencial,
-  Comercial, Cobrança, etc.) é um enum PHP (`TipoEndereco`) com valor
-  inteiro, não uma tabela separada. `tipo`/`principal` são colunas do
-  PIVOT, não da tabela `enderecos`.
-- No Select de "tipo" do Relation Manager de Endereços, as opções são
-  filtradas por contexto: Pessoa Física (Residencial, Cobrança,
-  Entrega, Outro) vs. Pessoa Jurídica (Comercial, Cobrança, Entrega,
-  Obra, Outro) — o enum continua com todas as opções, a tela só
-  restringe visualmente. `TipoEndereco::Obra` (endereço de canteiro de
-  obras/execução) é um conceito diferente do cadastro "Projeto" de
-  `perseu/comercial` — não confundir os dois ao mexer em qualquer um.
+  Pessoa Física e Pessoa Jurídica. `principal` é coluna do PIVOT
+  (característica da relação Pessoa↔Endereço); o tipo de endereço NÃO
+  é mais coluna de pivot — ver "Tipo de Endereço como tag" abaixo.
+- No `CheckboxList` de tags do Relation Manager de Endereços, as
+  opções são filtradas por contexto: Pessoa Física (Residencial,
+  Cobrança, Entrega, Obra, Outro) vs. Pessoa Jurídica (Comercial,
+  Cobrança, Entrega, Obra, Outro) — o enum continua com todas as
+  opções, a tela só restringe visualmente. `TipoEndereco::Obra`
+  (endereço de canteiro de obras/execução) é um conceito diferente do
+  cadastro "Projeto" de `perseu/comercial` — não confundir os dois ao
+  mexer em qualquer um.
+
+### Tipo de Endereço como tag (múltiplas finalidades por endereço, 2026-09-02)
+
+Um mesmo `Endereco` pode servir a mais de uma finalidade ao mesmo
+tempo (ex: Comercial + Obra) — "Tipo de Endereço" deixou de ser um
+valor único e virou uma TAG (múltipla escolha). Antes disso, `tipo`
+era uma coluna `unsignedTinyInteger` de valor único nos PIVOTS
+`pessoa_fisica_endereco`/`pessoa_juridica_endereco`.
+
+- **Modelagem**: N:N entre `Endereco` e o enum `TipoEndereco`, tabela
+  `endereco_tipo` (`endereco_id`, `tipo`, unique nos dois juntos) —
+  **não** entre a relação Pessoa↔Endereço e o tipo, mesmo `tipo`
+  historicamente tendo vivido no pivot Pessoa↔Endereço. Confirmado por
+  query antes de decidir: nenhum `Endereco` é hoje compartilhado entre
+  duas Pessoas (cada linha de `enderecos` pertence a exatamente um
+  pivot PF ou PJ), então a tag pertence naturalmente ao Endereço em
+  si.
+- `Perseu\Pessoas\Models\EnderecoTipo` — Model simples (uma linha =
+  uma tag), `tipo` castado direto pra `TipoEndereco` (`$casts`).
+  `Endereco::tipos(): HasMany`. `principal` continua na tabela pivot
+  Pessoa↔Endereço, sem mudança — não é uma tag, é característica da
+  relação (`withPivot('principal')`, `'tipo'` removido de todo
+  `withPivot()` do plugin).
+- **Formulário** (`HasEnderecoRelationManagerSchema::form()`):
+  `CheckboxList::make('tipos')` no lugar do antigo `Select::make('tipo')`
+  de escolha única. Ao criar um endereço NOVO, todas as opções vêm
+  marcadas por padrão (`->default(array_keys(...))` — só se aplica
+  quando não há estado existente, ou seja, só no Create); o usuário
+  desmarca as que não se aplicam. Endereços já cadastrados mostram só
+  as tags reais que têm.
+- **Create/EditAction customizados**: como `tipos` não é mais coluna
+  de pivot (`withPivot()`), o split automático de pivot vs. atributo
+  do Filament (`$relationship->getPivotColumns()`, ver
+  `Filament\Actions\{Create,Edit}Action`) não sabe lidar com ele — a
+  chave `tipos` simplesmente é descartada silenciosamente pelo
+  `fill()`/`update()` do Endereco (não está no `$fillable`, e o
+  projeto não tem `Model::preventSilentlyDiscardingAttributes()`
+  ativado). Por isso o trait sincroniza manualmente via
+  `->after(fn (array $data, Endereco $record) => static::syncTipos($record, $data['tipos'] ?? []))`
+  (Create e Edit) e `->mutateRecordDataUsing(...)` (Edit, pra
+  pré-popular o CheckboxList com as tags reais salvas ao abrir o modal
+  — sem isso, o form usaria o `->default()` de "tudo marcado" também
+  na edição, o que é errado). `array $data`/`Model $record` são
+  injeções NOMEADAS oficiais do Filament em
+  `Action::resolveDefaultClosureDependencyForEvaluationByName()`
+  (`'data' => $this->getData()`, `'record' => $this->getRecord()`) —
+  não é uma gambiarra, é a forma documentada de customizar esse ponto.
+  `syncTipos()` é `delete()` + `createMany()` (substitui o conjunto
+  inteiro, mais simples que fazer diff attach/detach).
+- **Tabela**: `TextColumn::make('tipos')->badge()` com
+  `->getStateUsing()` lendo `$record->tipos->pluck('tipo')->map(fn ($t) => $t->getLabel())`
+  — `->badge()` em cima de estado array renderiza um badge por item
+  (mesmo mecanismo já usado por `situacoes.descricao` em
+  `ProjetoResource`). `->modifyQueryUsing(fn ($q) => $q->with('tipos'))`
+  no `table()` evita N+1.
+- **Fluxos automáticos (sem CheckboxList) continuam com tag ÚNICA e
+  deliberada**, NÃO "tudo marcado por padrão" — essa regra vale só
+  para quando um humano preenche o formulário manualmente:
+  `CreatePessoaJuridica::afterCreate()` (endereço vindo da busca de
+  CNPJ, tag "Comercial") e `ProjetoResource::createOptionUsing()` do
+  Select de Endereço (tag "Obra", canteiro de obra/execução).
+- **Migração de dados**: `2026_09_02_120000_create_endereco_tipo_table`
+  — cada linha existente em `pessoa_fisica_endereco`/
+  `pessoa_juridica_endereco` virou UMA linha em `endereco_tipo` com o
+  mesmo `tipo` que já tinha (sem marcar tags extras), depois a coluna
+  `tipo` foi dropada dos dois pivots. Validado 1:1 contra um snapshot
+  tirado antes de migrar — nenhum dado perdido ou alterado.
+- **Testando isso via `Livewire::test()` em `tinker`**: montar a
+  Action `create`/`edit` de um Relation Manager isoladamente
+  (`Livewire::test(EnderecosRelationManager::class, [...])
+  ->mountAction('create')`) NÃO funciona neste ambiente — `mountedActions`
+  fica vazio, sem erro (Relation Managers em Filament v4 renderizam
+  como "islands" assíncronas que não populam em teste isolado via
+  tinker; mesma limitação documentada no `CLAUDE.md` da raiz sobre
+  `callAction()`/`callTableAction()` via tinker). Validar a lógica de
+  sincronização diretamente (chamar o equivalente de `syncTipos()` e
+  checar o banco), não via mount de Action.
 - Os dois Relation Managers de Endereços reaproveitam o mesmo
   `form()`/`table()` via o trait
   `Perseu\Pessoas\Traits\HasEnderecoRelationManagerSchema` — a classe

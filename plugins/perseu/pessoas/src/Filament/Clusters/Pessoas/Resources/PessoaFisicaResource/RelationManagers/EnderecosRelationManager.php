@@ -21,8 +21,10 @@ class EnderecosRelationManager extends RelationManager
 
     /**
      * Pessoa Física (ver CLAUDE.md, "Filtro de Tipo de Endereço por
-     * contexto"): Residencial, Cobrança, Entrega, Outro — sem Comercial
-     * nem Obra.
+     * contexto"): Residencial, Cobrança, Entrega, Obra, Outro — sem
+     * Comercial. "Obra" foi adicionada aqui em 2026-09-02 (ver CLAUDE.md,
+     * "Tipo de Endereço como tag") — uma Pessoa Física também pode ser a
+     * contratante de uma obra.
      *
      * @return array<TipoEndereco>
      */
@@ -32,6 +34,7 @@ class EnderecosRelationManager extends RelationManager
             TipoEndereco::Residencial,
             TipoEndereco::Cobranca,
             TipoEndereco::Entrega,
+            TipoEndereco::Obra,
             TipoEndereco::Outro,
         ];
     }

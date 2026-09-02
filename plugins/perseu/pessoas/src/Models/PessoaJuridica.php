@@ -57,7 +57,7 @@ class PessoaJuridica extends Model
     public function enderecos(): BelongsToMany
     {
         return $this->belongsToMany(Endereco::class, 'pessoa_juridica_endereco')
-            ->withPivot('tipo', 'principal')
+            ->withPivot('principal')
             ->withTimestamps();
     }
 

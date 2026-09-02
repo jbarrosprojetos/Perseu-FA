@@ -39,6 +39,7 @@ class PessoasServiceProvider extends PackageServiceProvider
                 '2026_08_22_100001_add_e_fornecedor_to_categorias_pessoa_table',
                 '2026_08_26_100000_create_setores_table',
                 '2026_08_26_100001_create_pessoa_juridica_setor_table',
+                '2026_09_02_120000_create_endereco_tipo_table',
             ])
             ->runsMigrations()
             ->hasDependency('auditoria')

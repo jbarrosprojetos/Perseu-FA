@@ -63,8 +63,14 @@ class CreatePessoaJuridica extends CreateRecord
         $endereco = Endereco::create($campos);
 
         $this->record->enderecos()->attach($endereco->id, [
-            'tipo'      => TipoEndereco::Comercial->value,
             'principal' => true,
         ]);
+
+        // Tag única e deliberada ("Comercial", o endereço registrado na
+        // Receita Federal) — NÃO todas as tags marcadas por padrão, regra
+        // que vale só para o CheckboxList do formulário manual (ver
+        // CLAUDE.md, "Tipo de Endereço como tag"); aqui é preenchimento
+        // automático sem interação do usuário.
+        $endereco->tipos()->create(['tipo' => TipoEndereco::Comercial->value]);
     }
 }

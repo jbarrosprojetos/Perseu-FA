@@ -48,7 +48,7 @@ class PessoaFisica extends Model
     public function enderecos(): BelongsToMany
     {
         return $this->belongsToMany(Endereco::class, 'pessoa_fisica_endereco')
-            ->withPivot('tipo', 'principal')
+            ->withPivot('principal')
             ->withTimestamps();
     }
 
