@@ -16,7 +16,7 @@ use Spatie\QueryBuilder\AllowedFilter;
 use Spatie\QueryBuilder\QueryBuilder;
 use Webkul\Project\Http\Requests\ProjectRequest;
 use Webkul\Project\Http\Resources\V1\ProjectResource;
-use Webkul\Project\Models\Project;
+use Webkul\Project\Models\Processo;
 
 #[Group('Project API Management')]
 #[Subgroup('Projects', 'Manage projects')]
@@ -42,13 +42,13 @@ class ProjectController extends Controller
     #[QueryParam('filter[visibility]', 'string', 'Filter by visibility', required: false, example: 'internal')]
     #[QueryParam('filter[trashed]', 'string', 'Filter by trashed status. </br></br><b>Available options:</b> with, only', required: false, example: 'with')]
     #[QueryParam('sort', 'string', 'Sort field', required: false, example: '-created_at')]
-    #[ResponseFromApiResource(ProjectResource::class, Project::class, collection: true, paginate: 10)]
+    #[ResponseFromApiResource(ProjectResource::class, Processo::class, collection: true, paginate: 10)]
     #[Response(status: 401, description: 'Unauthenticated', content: '{"message":"Unauthenticated."}')]
     public function index()
     {
-        Gate::authorize('viewAny', Project::class);
+        Gate::authorize('viewAny', Processo::class);
 
-        $projects = QueryBuilder::for(Project::class)
+        $projects = QueryBuilder::for(Processo::class)
             ->allowedFilters(
                 AllowedFilter::exact('id'),
                 AllowedFilter::exact('stage_id'),
@@ -70,12 +70,12 @@ class ProjectController extends Controller
     }
 
     #[Endpoint('Create project', 'Create a new project')]
-    #[ResponseFromApiResource(ProjectResource::class, Project::class, status: 201, additional: ['message' => 'Project created successfully.'])]
+    #[ResponseFromApiResource(ProjectResource::class, Processo::class, status: 201, additional: ['message' => 'Project created successfully.'])]
     #[Response(status: 422, description: 'Validation error', content: '{"message": "The given data was invalid.", "errors": {"name": ["The name field is required."]}}')]
     #[Response(status: 401, description: 'Unauthenticated', content: '{"message":"Unauthenticated."}')]
     public function store(ProjectRequest $request)
     {
-        Gate::authorize('create', Project::class);
+        Gate::authorize('create', Processo::class);
 
         $data = $request->validated();
 
@@ -83,7 +83,7 @@ class ProjectController extends Controller
             $tags = $data['tags'] ?? [];
             unset($data['tags']);
 
-            $project = Project::create($data);
+            $project = Processo::create($data);
 
             if ($request->has('tags')) {
                 $project->tags()->sync($tags);
@@ -101,12 +101,12 @@ class ProjectController extends Controller
     #[Endpoint('Show project', 'Retrieve a specific project by ID')]
     #[UrlParam('id', 'integer', 'The project ID', required: true, example: 1)]
     #[QueryParam('include', 'string', 'Comma-separated list of relationships to include. </br></br><b>Available options:</b> stage, partner, company, user, creator, tasks, taskStages, milestones, tags, favoriteUsers', required: false, example: 'tasks,tags')]
-    #[ResponseFromApiResource(ProjectResource::class, Project::class)]
+    #[ResponseFromApiResource(ProjectResource::class, Processo::class)]
     #[Response(status: 404, description: 'Project not found', content: '{"message":"Resource not found."}')]
     #[Response(status: 401, description: 'Unauthenticated', content: '{"message":"Unauthenticated."}')]
     public function show(string $id)
     {
-        $project = QueryBuilder::for(Project::where('id', $id))
+        $project = QueryBuilder::for(Processo::where('id', $id))
             ->allowedIncludes(...$this->allowedIncludes)
             ->firstOrFail();
 
@@ -117,13 +117,13 @@ class ProjectController extends Controller
 
     #[Endpoint('Update project', 'Update an existing project')]
     #[UrlParam('id', 'integer', 'The project ID', required: true, example: 1)]
-    #[ResponseFromApiResource(ProjectResource::class, Project::class, additional: ['message' => 'Project updated successfully.'])]
+    #[ResponseFromApiResource(ProjectResource::class, Processo::class, additional: ['message' => 'Project updated successfully.'])]
     #[Response(status: 422, description: 'Validation error', content: '{"message": "The given data was invalid.", "errors": {"name": ["The name field is required."]}}')]
     #[Response(status: 404, description: 'Project not found', content: '{"message":"Resource not found."}')]
     #[Response(status: 401, description: 'Unauthenticated', content: '{"message":"Unauthenticated."}')]
     public function update(ProjectRequest $request, string $id)
     {
-        $project = Project::findOrFail($id);
+        $project = Processo::findOrFail($id);
 
         Gate::authorize('update', $project);
 
@@ -153,7 +153,7 @@ class ProjectController extends Controller
     #[Response(status: 401, description: 'Unauthenticated', content: '{"message": "Unauthenticated."}')]
     public function destroy(string $id)
     {
-        $project = Project::findOrFail($id);
+        $project = Processo::findOrFail($id);
 
         Gate::authorize('delete', $project);
 
@@ -166,12 +166,12 @@ class ProjectController extends Controller
 
     #[Endpoint('Restore project', 'Restore a soft-deleted project')]
     #[UrlParam('id', 'integer', 'The project ID', required: true, example: 1)]
-    #[ResponseFromApiResource(ProjectResource::class, Project::class, additional: ['message' => 'Project restored successfully.'])]
+    #[ResponseFromApiResource(ProjectResource::class, Processo::class, additional: ['message' => 'Project restored successfully.'])]
     #[Response(status: 404, description: 'Project not found', content: '{"message":"Resource not found."}')]
     #[Response(status: 401, description: 'Unauthenticated', content: '{"message": "Unauthenticated."}')]
     public function restore(string $id)
     {
-        $project = Project::withTrashed()->findOrFail($id);
+        $project = Processo::withTrashed()->findOrFail($id);
 
         Gate::authorize('restore', $project);
 
@@ -188,7 +188,7 @@ class ProjectController extends Controller
     #[Response(status: 401, description: 'Unauthenticated', content: '{"message": "Unauthenticated."}')]
     public function forceDestroy(string $id)
     {
-        $project = Project::withTrashed()->findOrFail($id);
+        $project = Processo::withTrashed()->findOrFail($id);
 
         Gate::authorize('forceDelete', $project);
 

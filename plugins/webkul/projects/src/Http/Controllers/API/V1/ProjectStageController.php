@@ -15,7 +15,7 @@ use Spatie\QueryBuilder\AllowedFilter;
 use Spatie\QueryBuilder\QueryBuilder;
 use Webkul\Project\Http\Requests\ProjectStageRequest;
 use Webkul\Project\Http\Resources\V1\ProjectStageResource;
-use Webkul\Project\Models\ProjectStage;
+use Webkul\Project\Models\ProcessoStage;
 
 #[Group('Project API Management')]
 #[Subgroup('Project Stages', 'Manage project stages')]
@@ -25,19 +25,19 @@ class ProjectStageController extends Controller
     protected array $allowedIncludes = [
         'creator',
         'company',
-        'projects',
+        'processos',
     ];
 
     #[Endpoint('List project stages', 'Retrieve a paginated list of project stages')]
-    #[QueryParam('include', 'string', 'Comma-separated list of relationships to include. </br></br><b>Available options:</b> creator, company, projects', required: false, example: 'projects')]
+    #[QueryParam('include', 'string', 'Comma-separated list of relationships to include. </br></br><b>Available options:</b> creator, company, processos', required: false, example: 'processos')]
     #[QueryParam('filter[trashed]', 'string', 'Filter by trashed status. </br></br><b>Available options:</b> with, only', required: false, example: 'with')]
-    #[ResponseFromApiResource(ProjectStageResource::class, ProjectStage::class, collection: true, paginate: 10)]
+    #[ResponseFromApiResource(ProjectStageResource::class, ProcessoStage::class, collection: true, paginate: 10)]
     #[Response(status: 401, description: 'Unauthenticated', content: '{"message": "Unauthenticated."}')]
     public function index()
     {
-        Gate::authorize('viewAny', ProjectStage::class);
+        Gate::authorize('viewAny', ProcessoStage::class);
 
-        $stages = QueryBuilder::for(ProjectStage::class)
+        $stages = QueryBuilder::for(ProcessoStage::class)
             ->allowedFilters(
                 AllowedFilter::exact('id'),
                 AllowedFilter::exact('name'),
@@ -55,13 +55,13 @@ class ProjectStageController extends Controller
     }
 
     #[Endpoint('Create project stage', 'Create a new project stage')]
-    #[ResponseFromApiResource(ProjectStageResource::class, ProjectStage::class, status: 201, additional: ['message' => 'Project stage created successfully.'])]
+    #[ResponseFromApiResource(ProjectStageResource::class, ProcessoStage::class, status: 201, additional: ['message' => 'Project stage created successfully.'])]
     #[Response(status: 401, description: 'Unauthenticated', content: '{"message": "Unauthenticated."}')]
     public function store(ProjectStageRequest $request)
     {
-        Gate::authorize('create', ProjectStage::class);
+        Gate::authorize('create', ProcessoStage::class);
 
-        $stage = ProjectStage::create($request->validated());
+        $stage = ProcessoStage::create($request->validated());
 
         return (new ProjectStageResource($stage->load(['creator', 'company'])))
             ->additional(['message' => 'Project stage created successfully.'])
@@ -71,13 +71,13 @@ class ProjectStageController extends Controller
 
     #[Endpoint('Show project stage', 'Retrieve a specific project stage by ID')]
     #[UrlParam('id', 'integer', 'The project stage ID', required: true, example: 1)]
-    #[QueryParam('include', 'string', 'Comma-separated list of relationships to include. </br></br><b>Available options:</b> creator, company, projects', required: false, example: 'projects')]
-    #[ResponseFromApiResource(ProjectStageResource::class, ProjectStage::class)]
+    #[QueryParam('include', 'string', 'Comma-separated list of relationships to include. </br></br><b>Available options:</b> creator, company, processos', required: false, example: 'processos')]
+    #[ResponseFromApiResource(ProjectStageResource::class, ProcessoStage::class)]
     #[Response(status: 404, description: 'Project stage not found', content: '{"message":"Resource not found."}')]
     #[Response(status: 401, description: 'Unauthenticated', content: '{"message": "Unauthenticated."}')]
     public function show(string $id)
     {
-        $stage = QueryBuilder::for(ProjectStage::where('id', $id))
+        $stage = QueryBuilder::for(ProcessoStage::where('id', $id))
             ->allowedIncludes(...$this->allowedIncludes)
             ->firstOrFail();
 
@@ -88,11 +88,11 @@ class ProjectStageController extends Controller
 
     #[Endpoint('Update project stage', 'Update an existing project stage')]
     #[UrlParam('id', 'integer', 'The project stage ID', required: true, example: 1)]
-    #[ResponseFromApiResource(ProjectStageResource::class, ProjectStage::class, additional: ['message' => 'Project stage updated successfully.'])]
+    #[ResponseFromApiResource(ProjectStageResource::class, ProcessoStage::class, additional: ['message' => 'Project stage updated successfully.'])]
     #[Response(status: 401, description: 'Unauthenticated', content: '{"message": "Unauthenticated."}')]
     public function update(ProjectStageRequest $request, string $id)
     {
-        $stage = ProjectStage::findOrFail($id);
+        $stage = ProcessoStage::findOrFail($id);
 
         Gate::authorize('update', $stage);
 
@@ -108,7 +108,7 @@ class ProjectStageController extends Controller
     #[Response(status: 401, description: 'Unauthenticated', content: '{"message": "Unauthenticated."}')]
     public function destroy(string $id)
     {
-        $stage = ProjectStage::findOrFail($id);
+        $stage = ProcessoStage::findOrFail($id);
 
         Gate::authorize('delete', $stage);
 
@@ -121,11 +121,11 @@ class ProjectStageController extends Controller
 
     #[Endpoint('Restore project stage', 'Restore a soft-deleted project stage')]
     #[UrlParam('id', 'integer', 'The project stage ID', required: true, example: 1)]
-    #[ResponseFromApiResource(ProjectStageResource::class, ProjectStage::class, additional: ['message' => 'Project stage restored successfully.'])]
+    #[ResponseFromApiResource(ProjectStageResource::class, ProcessoStage::class, additional: ['message' => 'Project stage restored successfully.'])]
     #[Response(status: 401, description: 'Unauthenticated', content: '{"message": "Unauthenticated."}')]
     public function restore(string $id)
     {
-        $stage = ProjectStage::withTrashed()->findOrFail($id);
+        $stage = ProcessoStage::withTrashed()->findOrFail($id);
 
         Gate::authorize('restore', $stage);
 
@@ -141,7 +141,7 @@ class ProjectStageController extends Controller
     #[Response(status: 401, description: 'Unauthenticated', content: '{"message": "Unauthenticated."}')]
     public function forceDestroy(string $id)
     {
-        $stage = ProjectStage::withTrashed()->findOrFail($id);
+        $stage = ProcessoStage::withTrashed()->findOrFail($id);
 
         Gate::authorize('forceDelete', $stage);
 

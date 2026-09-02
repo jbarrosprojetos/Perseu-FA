@@ -12,7 +12,7 @@ return [
     ],
 
     'global-search' => [
-        'project'   => 'Project',
+        'processo'  => 'Process',
         'customer'  => 'Customer',
         'milestone' => 'Milestone',
     ],
@@ -29,7 +29,7 @@ return [
                     'name'              => 'Name',
                     'color'             => 'Color',
                     'description'       => 'Description',
-                    'project'           => 'Project',
+                    'processo'          => 'Process',
                     'status'            => 'Status',
                     'start_date'        => 'Start Date',
                     'end_date'          => 'End Date',
@@ -44,7 +44,7 @@ return [
                 'title' => 'Settings',
 
                 'fields' => [
-                    'project'                     => 'Project',
+                    'processo'                    => 'Process',
                     'milestone'                   => 'Milestone',
                     'milestone-hint-text'         => 'Automatically deliver your services upon reaching a milestone by linking it to a sales order item.',
                     'name'                        => 'Name',
@@ -67,8 +67,8 @@ return [
             'new-state'           => 'New State',
             'update-state'        => 'Update State',
             'title'               => 'Title',
-            'project'             => 'Project',
-            'project-placeholder' => 'Private Task',
+            'processo'            => 'Process',
+            'processo-placeholder' => 'Private Task',
             'milestone'           => 'Milestone',
             'customer'            => 'Customer',
             'assignees'           => 'Assignees',
@@ -83,7 +83,7 @@ return [
 
         'groups' => [
             'state'      => 'State',
-            'project'    => 'Project',
+            'processo'   => 'Process',
             'milestone'  => 'Milestone',
             'customer'   => 'Customer',
             'deadline'   => 'Deadline',
@@ -108,7 +108,7 @@ return [
             'updated-at'        => 'Updated At',
             'assignees'         => 'Assignees',
             'customer'          => 'Customer',
-            'project'           => 'Project',
+            'processo'          => 'Process',
             'stage'             => 'Stage',
             'milestone'         => 'Milestone',
             'company'           => 'Company',
@@ -180,11 +180,11 @@ return [
                 ],
             ],
 
-            'project-information' => [
-                'title' => 'Project Information',
+            'processo-information' => [
+                'title' => 'Process Information',
 
                 'entries' => [
-                    'project'   => 'Project',
+                    'processo'  => 'Process',
                     'milestone' => 'Milestone',
                     'customer'  => 'Customer',
                     'assignees' => 'Assignees',

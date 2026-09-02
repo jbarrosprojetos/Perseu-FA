@@ -55,8 +55,8 @@ class TaskByStageChart extends ChartWidget
 
             $query = Task::query();
 
-            if (! empty($this->pageFilters['selectedProjects'])) {
-                $query->whereIn('project_id', $this->pageFilters['selectedProjects']);
+            if (! empty($this->pageFilters['selectedProcessos'])) {
+                $query->whereIn('processo_id', $this->pageFilters['selectedProcessos']);
             }
 
             if (! empty($this->pageFilters['selectedAssignees'])) {

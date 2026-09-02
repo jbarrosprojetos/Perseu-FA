@@ -13,7 +13,7 @@ return [
         'name'         => 'الاسم',
         'deadline'     => 'الموعد النهائي',
         'is-completed' => 'مكتمل',
-        'project'      => 'المشروع',
+        'processo'     => 'العملية',
     ],
 
     'table' => [
@@ -22,7 +22,7 @@ return [
             'deadline'     => 'الموعد النهائي',
             'is-completed' => 'مكتمل',
             'completed-at' => 'تاريخ الإكمال',
-            'project'      => 'المشروع',
+            'processo'     => 'العملية',
             'creator'      => 'المُنشئ',
             'created-at'   => 'تاريخ الإنشاء',
             'updated-at'   => 'تاريخ التحديث',
@@ -31,13 +31,13 @@ return [
         'groups' => [
             'name'         => 'الاسم',
             'is-completed' => 'مكتمل',
-            'project'      => 'المشروع',
+            'processo'     => 'العملية',
             'created-at'   => 'تاريخ الإنشاء',
         ],
 
         'filters' => [
             'is-completed' => 'مكتمل',
-            'project'      => 'المشروع',
+            'processo'     => 'العملية',
             'creator'      => 'المُنشئ',
         ],
 

@@ -58,7 +58,7 @@ use Webkul\Field\Filament\Infolists\Components\ProgressStepper as InfolistProgre
 use Webkul\Field\Filament\Traits\HasCustomFields;
 use Webkul\Partner\Filament\Resources\PartnerResource;
 use Webkul\Project\Enums\TaskState;
-use Webkul\Project\Filament\Resources\ProjectResource\Pages\ManageTasks;
+use Webkul\Project\Filament\Resources\ProcessoResource\Pages\ManageTasks;
 use Webkul\Project\Filament\Resources\TaskResource\Pages\CreateTask;
 use Webkul\Project\Filament\Resources\TaskResource\Pages\EditTask;
 use Webkul\Project\Filament\Resources\TaskResource\Pages\ListTasks;
@@ -67,7 +67,7 @@ use Webkul\Project\Filament\Resources\TaskResource\Pages\ManageTimesheets;
 use Webkul\Project\Filament\Resources\TaskResource\Pages\ViewTask;
 use Webkul\Project\Filament\Resources\TaskResource\RelationManagers\SubTasksRelationManager;
 use Webkul\Project\Filament\Resources\TaskResource\RelationManagers\TimesheetsRelationManager;
-use Webkul\Project\Models\Project;
+use Webkul\Project\Models\Processo;
 use Webkul\Project\Models\Task;
 use Webkul\Project\Models\TaskStage;
 use Webkul\Project\Settings\TaskSettings;
@@ -110,14 +110,14 @@ class TaskResource extends Resource
 
     public static function getGloballySearchableAttributes(): array
     {
-        return ['title', 'project.name', 'partner.name', 'milestone.name'];
+        return ['title', 'processo.name', 'partner.name', 'milestone.name'];
     }
 
     public static function getGlobalSearchResultDetails(Model $record): array
     {
         return [
-            __('projects::filament/resources/task.global-search.project')   => $record->project?->name ?? '—',
-            __('projects::filament/resources/task.global-search.customer')  => $record->partner?->name ?? '—',
+            __('projects::filament/resources/task.global-search.processo') => $record->processo?->name ?? '—',
+            __('projects::filament/resources/task.global-search.customer') => $record->partner?->name ?? '—',
             __('projects::filament/resources/task.global-search.milestone') => $record->milestone?->name ?? '—',
         ];
     }
@@ -132,8 +132,8 @@ class TaskResource extends Resource
                             ->hiddenLabel()
                             ->inline()
                             ->required()
-                            ->options(fn (Get $get, ?Task $record) => TaskStage::where('project_id', $get('project_id') ?? $record?->project_id)->orderBy('sort')->get()->mapWithKeys(fn ($stage) => [$stage->id => $stage->name]))
-                            ->default(fn (Get $get) => static::getDefaultStageId($get('project_id'))),
+                            ->options(fn (Get $get, ?Task $record) => TaskStage::where('processo_id', $get('processo_id') ?? $record?->processo_id)->orderBy('sort')->get()->mapWithKeys(fn ($stage) => [$stage->id => $stage->name]))
+                            ->default(fn (Get $get) => static::getDefaultStageId($get('processo_id'))),
                         Section::make(__('projects::filament/resources/task.form.sections.general.title'))
                             ->schema([
                                 TextInput::make('title')
@@ -184,9 +184,9 @@ class TaskResource extends Resource
                     ->schema([
                         Section::make(__('projects::filament/resources/task.form.sections.settings.title'))
                             ->schema([
-                                Select::make('project_id')
-                                    ->label(__('projects::filament/resources/task.form.sections.settings.fields.project'))
-                                    ->relationship('project', 'name', modifyQueryUsing: fn (Builder $query) => $query->withTrashed())
+                                Select::make('processo_id')
+                                    ->label(__('projects::filament/resources/task.form.sections.settings.fields.processo'))
+                                    ->relationship('processo', 'name', modifyQueryUsing: fn (Builder $query) => $query->withTrashed())
                                     ->getOptionLabelFromRecordUsing(function (Model $record): string {
                                         return $record->name.($record->trashed() ? ' (Deleted)' : '');
                                     })
@@ -197,19 +197,19 @@ class TaskResource extends Resource
                                     ->searchable()
                                     ->preload()
                                     ->live()
-                                    ->createOptionForm(fn (Schema $schema): Schema => ProjectResource::form($schema))
+                                    ->createOptionForm(fn (Schema $schema): Schema => ProcessoResource::form($schema))
                                     ->afterStateUpdated(function (Set $set, $state) {
                                         $set('milestone_id', null);
                                         $set('stage_id', static::getDefaultStageId($state));
-                                        $project = $state ? Project::find($state) : null;
-                                        $set('partner_id', $project?->partner_id);
+                                        $processo = $state ? Processo::find($state) : null;
+                                        $set('partner_id', $processo?->partner_id);
                                     }),
                                 Select::make('milestone_id')
                                     ->label(__('projects::filament/resources/task.form.sections.settings.fields.milestone'))
                                     ->relationship(
                                         name: 'milestone',
                                         titleAttribute: 'name',
-                                        modifyQueryUsing: fn (Get $get, Builder $query) => $query->where('project_id', $get('project_id')),
+                                        modifyQueryUsing: fn (Get $get, Builder $query) => $query->where('processo_id', $get('processo_id')),
                                     )
                                     ->searchable()
                                     ->preload()
@@ -226,13 +226,13 @@ class TaskResource extends Resource
                                         Toggle::make('is_completed')
                                             ->label(__('projects::filament/resources/task.form.sections.settings.fields.is-completed'))
                                             ->required(),
-                                        Hidden::make('project_id')
-                                            ->default($get('project_id')),
+                                        Hidden::make('processo_id')
+                                            ->default($get('processo_id')),
                                     ])
                                     ->hidden(function (Get $get) {
-                                        $project = Project::find($get('project_id'));
+                                        $processo = Processo::find($get('processo_id'));
 
-                                        if (! $project) {
+                                        if (! $processo) {
                                             return true;
                                         }
 
@@ -240,7 +240,7 @@ class TaskResource extends Resource
                                             return true;
                                         }
 
-                                        return ! $project->allow_milestones;
+                                        return ! $processo->allow_milestones;
                                     })
                                     ->visible(static::getTaskSettings()->enable_milestones),
                                 Select::make('partner_id')
@@ -276,14 +276,14 @@ class TaskResource extends Resource
             ->columns(3);
     }
 
-    protected static function getDefaultStageId($projectId): ?int
+    protected static function getDefaultStageId($processoId): ?int
     {
-        if (! $projectId) {
+        if (! $processoId) {
             return null;
         }
 
         return TaskStage::query()
-            ->where('project_id', $projectId)
+            ->where('processo_id', $processoId)
             ->orderBy('sort')
             ->first()?->id;
     }
@@ -337,13 +337,13 @@ class TaskResource extends Resource
                     ->searchable()
                     ->sortable()
                     ->toggleable(),
-                TextColumn::make('project.name')
-                    ->label(__('projects::filament/resources/task.table.columns.project'))
+                TextColumn::make('processo.name')
+                    ->label(__('projects::filament/resources/task.table.columns.processo'))
                     ->hiddenOn(ManageTasks::class)
                     ->searchable()
                     ->sortable()
                     ->toggleable()
-                    ->placeholder(__('projects::filament/resources/task.table.columns.project-placeholder')),
+                    ->placeholder(__('projects::filament/resources/task.table.columns.processo-placeholder')),
                 TextColumn::make('milestone.name')
                     ->label(__('projects::filament/resources/task.table.columns.milestone'))
                     ->searchable()
@@ -460,8 +460,8 @@ class TaskResource extends Resource
                 Tables\Grouping\Group::make('state')
                     ->label(__('projects::filament/resources/task.table.groups.state'))
                     ->getTitleFromRecordUsing(fn (Task $record): string => TaskState::options()[$record->state]),
-                Tables\Grouping\Group::make('project.name')
-                    ->label(__('projects::filament/resources/task.table.groups.project')),
+                Tables\Grouping\Group::make('processo.name')
+                    ->label(__('projects::filament/resources/task.table.groups.processo')),
                 Tables\Grouping\Group::make('deadline')
                     ->label(__('projects::filament/resources/task.table.groups.deadline'))
                     ->date(),
@@ -559,8 +559,8 @@ class TaskResource extends Resource
                                     ->preload(),
                             )
                             ->icon('heroicon-o-user'),
-                        RelationshipConstraint::make('project')
-                            ->label(__('projects::filament/resources/task.table.filters.project'))
+                        RelationshipConstraint::make('processo')
+                            ->label(__('projects::filament/resources/task.table.filters.processo'))
                             ->multiple()
                             ->selectable(
                                 IsRelatedToOperator::make()
@@ -691,8 +691,8 @@ class TaskResource extends Resource
                         InfolistProgressStepper::make('stage_id')
                             ->hiddenLabel()
                             ->inline()
-                            ->options(fn ($record) => TaskStage::where('project_id', $record?->project_id)->orderBy('sort')->get()->mapWithKeys(fn ($stage) => [$stage->id => $stage->name])->toArray())
-                            ->default(fn ($record) => static::getDefaultStageId($record?->project_id)),
+                            ->options(fn ($record) => TaskStage::where('processo_id', $record?->processo_id)->orderBy('sort')->get()->mapWithKeys(fn ($stage) => [$stage->id => $stage->name])->toArray())
+                            ->default(fn ($record) => static::getDefaultStageId($record?->processo_id)),
 
                         Section::make(__('projects::filament/resources/task.infolist.sections.general.title'))
                             ->schema([
@@ -733,43 +733,43 @@ class TaskResource extends Resource
                                     ->separator(', '),
                             ]),
 
-                        Section::make(__('projects::filament/resources/task.infolist.sections.project-information.title'))
+                        Section::make(__('projects::filament/resources/task.infolist.sections.processo-information.title'))
                             ->schema([
                                 Grid::make(2)
                                     ->schema([
-                                        TextEntry::make('project.name')
-                                            ->label(__('projects::filament/resources/task.infolist.sections.project-information.entries.project'))
+                                        TextEntry::make('processo.name')
+                                            ->label(__('projects::filament/resources/task.infolist.sections.processo-information.entries.processo'))
                                             ->icon('heroicon-o-folder')
                                             ->placeholder('—')
                                             ->color('primary')
-                                            ->url(fn (Task $record): string => $record->project_id ? ProjectResource::getUrl('view', ['record' => $record->project_id]) : '#'),
+                                            ->url(fn (Task $record): string => $record->processo_id ? ProcessoResource::getUrl('view', ['record' => $record->processo_id]) : '#'),
 
                                         TextEntry::make('milestone.name')
-                                            ->label(__('projects::filament/resources/task.infolist.sections.project-information.entries.milestone'))
+                                            ->label(__('projects::filament/resources/task.infolist.sections.processo-information.entries.milestone'))
                                             ->icon('heroicon-o-flag')
                                             ->placeholder('—')
                                             ->visible(static::getTaskSettings()->enable_milestones),
 
                                         TextEntry::make('stage.name')
-                                            ->label(__('projects::filament/resources/task.infolist.sections.project-information.entries.stage'))
+                                            ->label(__('projects::filament/resources/task.infolist.sections.processo-information.entries.stage'))
                                             ->icon('heroicon-o-queue-list')
                                             ->badge(),
 
                                         TextEntry::make('partner.name')
-                                            ->label(__('projects::filament/resources/task.infolist.sections.project-information.entries.customer'))
+                                            ->label(__('projects::filament/resources/task.infolist.sections.processo-information.entries.customer'))
                                             ->icon('heroicon-o-queue-list')
                                             ->icon('heroicon-o-phone')
                                             ->listWithLineBreaks()
                                             ->placeholder('—'),
 
                                         TextEntry::make('users.name')
-                                            ->label(__('projects::filament/resources/task.infolist.sections.project-information.entries.assignees'))
+                                            ->label(__('projects::filament/resources/task.infolist.sections.processo-information.entries.assignees'))
                                             ->icon('heroicon-o-users')
                                             ->listWithLineBreaks()
                                             ->placeholder('—'),
 
                                         TextEntry::make('deadline')
-                                            ->label(__('projects::filament/resources/task.infolist.sections.project-information.entries.deadline'))
+                                            ->label(__('projects::filament/resources/task.infolist.sections.processo-information.entries.deadline'))
                                             ->icon('heroicon-o-calendar')
                                             ->dateTime()
                                             ->placeholder('—'),

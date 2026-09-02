@@ -24,7 +24,7 @@ class ProjectStageResource extends JsonResource
             'deleted_at'   => $this->deleted_at,
             'creator'      => new UserResource($this->whenLoaded('creator')),
             'company'      => new CompanyResource($this->whenLoaded('company')),
-            'projects'     => ProjectResource::collection($this->whenLoaded('projects')),
+            'processos'    => ProjectResource::collection($this->whenLoaded('processos')),
         ];
     }
 }

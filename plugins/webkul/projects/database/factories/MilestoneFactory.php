@@ -4,7 +4,7 @@ namespace Webkul\Project\Database\Factories;
 
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Webkul\Project\Models\Milestone;
-use Webkul\Project\Models\Project;
+use Webkul\Project\Models\Processo;
 use Webkul\Security\Models\User;
 
 /**
@@ -31,7 +31,7 @@ class MilestoneFactory extends Factory
             'deadline'     => fake()->date(),
             'is_completed' => fake()->boolean(),
             'completed_at' => fake()->date(),
-            'project_id'   => Project::factory(),
+            'processo_id'  => Processo::factory(),
             'creator_id'   => User::query()->value('id') ?? User::factory(),
         ];
     }

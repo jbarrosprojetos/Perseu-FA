@@ -23,12 +23,12 @@ use Webkul\Project\Models\Milestone;
 class MilestoneController extends Controller
 {
     protected array $allowedIncludes = [
-        'project',
+        'processo',
         'creator',
     ];
 
     #[Endpoint('List milestones', 'Retrieve a paginated list of milestones')]
-    #[QueryParam('include', 'string', 'Comma-separated list of relationships to include. </br></br><b>Available options:</b> project, creator', required: false, example: 'project')]
+    #[QueryParam('include', 'string', 'Comma-separated list of relationships to include. </br></br><b>Available options:</b> processo, creator', required: false, example: 'processo')]
     #[QueryParam('filter[is_completed]', 'string', 'Filter by completion state', required: false, example: '1')]
     #[ResponseFromApiResource(MilestoneResource::class, Milestone::class, collection: true, paginate: 10)]
     #[Response(status: 401, description: 'Unauthenticated', content: '{"message": "Unauthenticated."}')]
@@ -40,7 +40,7 @@ class MilestoneController extends Controller
             ->allowedFilters(
                 AllowedFilter::exact('id'),
                 AllowedFilter::exact('name'),
-                AllowedFilter::exact('project_id'),
+                AllowedFilter::exact('processo_id'),
                 AllowedFilter::exact('creator_id'),
                 AllowedFilter::exact('is_completed'),
             )
@@ -70,7 +70,7 @@ class MilestoneController extends Controller
 
         $milestone = Milestone::create($data);
 
-        return (new MilestoneResource($milestone->load(['project', 'creator'])))
+        return (new MilestoneResource($milestone->load(['processo', 'creator'])))
             ->additional(['message' => 'Milestone created successfully.'])
             ->response()
             ->setStatusCode(201);
@@ -78,7 +78,7 @@ class MilestoneController extends Controller
 
     #[Endpoint('Show milestone', 'Retrieve a specific milestone by ID')]
     #[UrlParam('id', 'integer', 'The milestone ID', required: true, example: 1)]
-    #[QueryParam('include', 'string', 'Comma-separated list of relationships to include. </br></br><b>Available options:</b> project, creator', required: false, example: 'creator')]
+    #[QueryParam('include', 'string', 'Comma-separated list of relationships to include. </br></br><b>Available options:</b> processo, creator', required: false, example: 'creator')]
     #[ResponseFromApiResource(MilestoneResource::class, Milestone::class)]
     #[Response(status: 404, description: 'Milestone not found', content: '{"message":"Resource not found."}')]
     #[Response(status: 401, description: 'Unauthenticated', content: '{"message": "Unauthenticated."}')]
@@ -117,7 +117,7 @@ class MilestoneController extends Controller
 
         $milestone->update($data);
 
-        return (new MilestoneResource($milestone->load(['project', 'creator'])))
+        return (new MilestoneResource($milestone->load(['processo', 'creator'])))
             ->additional(['message' => 'Milestone updated successfully.']);
     }
 

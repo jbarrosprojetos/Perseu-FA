@@ -23,7 +23,7 @@ use Webkul\Project\Models\TaskStage;
 class TaskStageController extends Controller
 {
     protected array $allowedIncludes = [
-        'project',
+        'processo',
         'user',
         'creator',
         'company',
@@ -31,7 +31,7 @@ class TaskStageController extends Controller
     ];
 
     #[Endpoint('List task stages', 'Retrieve a paginated list of task stages')]
-    #[QueryParam('include', 'string', 'Comma-separated list of relationships to include. </br></br><b>Available options:</b> project, user, creator, company, tasks', required: false, example: 'project')]
+    #[QueryParam('include', 'string', 'Comma-separated list of relationships to include. </br></br><b>Available options:</b> processo, user, creator, company, tasks', required: false, example: 'processo')]
     #[QueryParam('filter[trashed]', 'string', 'Filter by trashed status. </br></br><b>Available options:</b> with, only', required: false, example: 'with')]
     #[ResponseFromApiResource(TaskStageResource::class, TaskStage::class, collection: true, paginate: 10)]
     #[Response(status: 401, description: 'Unauthenticated', content: '{"message": "Unauthenticated."}')]
@@ -43,7 +43,7 @@ class TaskStageController extends Controller
             ->allowedFilters(
                 AllowedFilter::exact('id'),
                 AllowedFilter::exact('name'),
-                AllowedFilter::exact('project_id'),
+                AllowedFilter::exact('processo_id'),
                 AllowedFilter::exact('user_id'),
                 AllowedFilter::exact('company_id'),
                 AllowedFilter::exact('creator_id'),
@@ -67,7 +67,7 @@ class TaskStageController extends Controller
 
         $stage = TaskStage::create($request->validated());
 
-        return (new TaskStageResource($stage->load(['project', 'user', 'creator', 'company'])))
+        return (new TaskStageResource($stage->load(['processo', 'user', 'creator', 'company'])))
             ->additional(['message' => 'Task stage created successfully.'])
             ->response()
             ->setStatusCode(201);
@@ -75,7 +75,7 @@ class TaskStageController extends Controller
 
     #[Endpoint('Show task stage', 'Retrieve a specific task stage by ID')]
     #[UrlParam('id', 'integer', 'The task stage ID', required: true, example: 1)]
-    #[QueryParam('include', 'string', 'Comma-separated list of relationships to include. </br></br><b>Available options:</b> project, user, creator, company, tasks', required: false, example: 'tasks')]
+    #[QueryParam('include', 'string', 'Comma-separated list of relationships to include. </br></br><b>Available options:</b> processo, user, creator, company, tasks', required: false, example: 'tasks')]
     #[ResponseFromApiResource(TaskStageResource::class, TaskStage::class)]
     #[Response(status: 404, description: 'Task stage not found', content: '{"message":"Resource not found."}')]
     #[Response(status: 401, description: 'Unauthenticated', content: '{"message": "Unauthenticated."}')]
@@ -102,7 +102,7 @@ class TaskStageController extends Controller
 
         $stage->update($request->validated());
 
-        return (new TaskStageResource($stage->load(['project', 'user', 'creator', 'company'])))
+        return (new TaskStageResource($stage->load(['processo', 'user', 'creator', 'company'])))
             ->additional(['message' => 'Task stage updated successfully.']);
     }
 
@@ -135,7 +135,7 @@ class TaskStageController extends Controller
 
         $stage->restore();
 
-        return (new TaskStageResource($stage->load(['project', 'user', 'creator', 'company'])))
+        return (new TaskStageResource($stage->load(['processo', 'user', 'creator', 'company'])))
             ->additional(['message' => 'Task stage restored successfully.']);
     }
 

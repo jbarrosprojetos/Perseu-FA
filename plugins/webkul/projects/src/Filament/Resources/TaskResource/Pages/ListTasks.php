@@ -67,7 +67,7 @@ class ListTasks extends ListRecords
                 ->icon('heroicon-s-lock-closed')
                 ->favorite()
                 ->modifyQueryUsing(function (Builder $query) {
-                    return $query->whereNull('project_id');
+                    return $query->whereNull('processo_id');
                 }),
 
             'followed_tasks' => PresetView::make(__('projects::filament/resources/task/pages/list-tasks.tabs.followed-tasks'))

@@ -25,7 +25,7 @@ class TaskRequest extends FormRequest
             'description'     => ['nullable', 'string'],
             'state'           => [...$requiredRule, 'string', Rule::enum(TaskState::class)],
             'stage_id'        => [...$requiredRule, 'integer', 'exists:projects_task_stages,id'],
-            'project_id'      => ['nullable', 'integer', 'exists:projects_projects,id'],
+            'processo_id'     => ['nullable', 'integer', 'exists:projects_processos,id'],
             'milestone_id'    => ['nullable', 'integer', 'exists:projects_milestones,id'],
             'partner_id'      => ['nullable', 'integer', 'exists:partners_partners,id'],
             'parent_id'       => ['nullable', 'integer', 'exists:projects_tasks,id'],
@@ -45,9 +45,9 @@ class TaskRequest extends FormRequest
             $taskId = $this->route('task');
             $existingTask = $taskId ? Task::find($taskId) : null;
 
-            $effectiveProjectId = $this->has('project_id')
-                ? $this->input('project_id')
-                : $existingTask?->project_id;
+            $effectiveProcessoId = $this->has('processo_id')
+                ? $this->input('processo_id')
+                : $existingTask?->processo_id;
 
             $effectiveMilestoneId = $this->exists('milestone_id')
                 ? $this->input('milestone_id')
@@ -57,19 +57,19 @@ class TaskRequest extends FormRequest
                 return;
             }
 
-            if (! $effectiveProjectId) {
-                $validator->errors()->add('project_id', 'The project field is required when milestone is selected.');
+            if (! $effectiveProcessoId) {
+                $validator->errors()->add('processo_id', 'The processo field is required when milestone is selected.');
 
                 return;
             }
 
             $exists = Milestone::query()
                 ->where('id', $effectiveMilestoneId)
-                ->where('project_id', $effectiveProjectId)
+                ->where('processo_id', $effectiveProcessoId)
                 ->exists();
 
             if (! $exists) {
-                $validator->errors()->add('milestone_id', 'The selected milestone does not belong to the selected project.');
+                $validator->errors()->add('milestone_id', 'The selected milestone does not belong to the selected processo.');
             }
         });
     }
@@ -93,8 +93,8 @@ class TaskRequest extends FormRequest
                 'description' => 'Task stage ID.',
                 'example'     => 1,
             ],
-            'project_id' => [
-                'description' => 'Project ID.',
+            'processo_id' => [
+                'description' => 'Processo ID.',
                 'example'     => 1,
             ],
             'milestone_id' => [

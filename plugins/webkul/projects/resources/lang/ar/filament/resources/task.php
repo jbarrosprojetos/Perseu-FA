@@ -12,7 +12,7 @@ return [
     ],
 
     'global-search' => [
-        'project'   => 'المشروع',
+        'processo'  => 'العملية',
         'customer'  => 'العميل',
         'milestone' => 'المرحلة الرئيسية',
     ],
@@ -29,7 +29,7 @@ return [
                     'name'              => 'الاسم',
                     'color'             => 'اللون',
                     'description'       => 'الوصف',
-                    'project'           => 'المشروع',
+                    'processo'          => 'العملية',
                     'status'            => 'الحالة',
                     'start_date'        => 'تاريخ البداية',
                     'end_date'          => 'تاريخ النهاية',
@@ -44,7 +44,7 @@ return [
                 'title' => 'الإعدادات',
 
                 'fields' => [
-                    'project'                     => 'المشروع',
+                    'processo'                    => 'العملية',
                     'milestone'                   => 'المرحلة الرئيسية',
                     'milestone-hint-text'         => 'قم بتسليم خدماتك تلقائياً عند الوصول إلى مرحلة رئيسية من خلال ربطها بعنصر أمر مبيعات.',
                     'name'                        => 'الاسم',
@@ -67,8 +67,8 @@ return [
             'new-state'           => 'حالة جديدة',
             'update-state'        => 'تحديث الحالة',
             'title'               => 'العنوان',
-            'project'             => 'المشروع',
-            'project-placeholder' => 'مهمة خاصة',
+            'processo'            => 'العملية',
+            'processo-placeholder' => 'مهمة خاصة',
             'milestone'           => 'المرحلة الرئيسية',
             'customer'            => 'العميل',
             'assignees'           => 'المكلفون',
@@ -83,7 +83,7 @@ return [
 
         'groups' => [
             'state'      => 'الحالة',
-            'project'    => 'المشروع',
+            'processo'   => 'العملية',
             'milestone'  => 'المرحلة الرئيسية',
             'customer'   => 'العميل',
             'deadline'   => 'الموعد النهائي',
@@ -108,7 +108,7 @@ return [
             'updated-at'        => 'تاريخ التحديث',
             'assignees'         => 'المكلفون',
             'customer'          => 'العميل',
-            'project'           => 'المشروع',
+            'processo'          => 'العملية',
             'stage'             => 'المرحلة',
             'milestone'         => 'المرحلة الرئيسية',
             'company'           => 'الشركة',
@@ -180,11 +180,11 @@ return [
                 ],
             ],
 
-            'project-information' => [
-                'title' => 'معلومات المشروع',
+            'processo-information' => [
+                'title' => 'معلومات العملية',
 
                 'entries' => [
-                    'project'   => 'المشروع',
+                    'processo'  => 'العملية',
                     'milestone' => 'المرحلة الرئيسية',
                     'customer'  => 'العميل',
                     'assignees' => 'المكلفون',

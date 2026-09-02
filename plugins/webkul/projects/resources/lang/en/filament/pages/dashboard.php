@@ -2,11 +2,11 @@
 
 return [
     'navigation' => [
-        'title' => 'Project',
+        'title' => 'Processes',
     ],
 
     'filters-form' => [
-        'project'    => 'Project',
+        'processo'   => 'Process',
         'assignees'  => 'Assignees',
         'tags'       => 'Tags',
         'customer'   => 'Customer',

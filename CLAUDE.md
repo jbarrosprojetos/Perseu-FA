@@ -2915,3 +2915,224 @@ confirmou o HTML renderizado mostrando "Revisão" com o valor "00" no
 mesmo estilo (`fi-entry-bold`) dos campos vizinhos. Registro de teste
 removido ao final (`forceDelete()`). Navegação e rotas de Obra
 conferidas sem nenhuma mudança.
+
+## Rename interno Project → Processo no plugin webkul/projects (2026-09-02)
+
+Passo 1 da "Decisão final de nomenclatura" registrada em
+`CONCEITO-OBRA-PROPOSTA-PROJETO.md` (02/09/2026): a palavra "Projeto"
+precisa ficar livre para a entidade de negócio de `perseu/comercial`
+(hoje "Obra", rename `Obra → Projeto` ainda pendente, passo 2). Para
+isso, a entidade interna do plugin NÚCLEO `webkul/projects`
+(`Webkul\Project\Models\Project`, hoje "Projetos"/"Project" em todo o
+código, apesar do rótulo do MENU já ter virado "Gestão de Processos"
+numa tarefa anterior só de label em `lang/{locale}/admin.php`) foi
+renomeada de ponta a ponta para **Processo** — Model, tabelas, colunas
+de FK, Filament Resource, páginas, permissões Shield e traduções nos 4
+idiomas. Diferente das tarefas de rename anteriores deste projeto
+(Projeto→Obra), esta mexeu num plugin **core** do AureusERP (não um
+`perseu/*`), então o cuidado foi maior: backup confirmado antes de
+começar (`~/backup-perseu.sh`), e um levantamento explícito de outros
+pontos de integração (`webkul/timesheets` re-confirmado sem uso real
+do Model `Project`, já que ele só referencia a tabela genérica
+`analytic_records` — ver abaixo) antes de tocar em qualquer arquivo.
+
+**Não confundir com `perseu/comercial`**: `Webkul\Project\*` (este
+plugin, entidade interna "Processo") e `Perseu\Comercial\*` (Obra,
+futuro "Projeto") são namespaces e tabelas totalmente independentes,
+sem nenhuma FK entre si hoje — a única relação é conceitual (ver
+"Relação entre Projeto (Comercial) e Processo (Gestão de Processos):
+ainda não desenhada tecnicamente" no documento de conceito).
+
+### Duas decisões de escopo tomadas com o usuário antes de codificar
+
+1. **Camada de API REST e testes automatizados**: o plugin tem uma API
+   REST própria (`Http/Controllers/API/V1/*`, `Http/Resources/V1/*`,
+   `Http/Requests/*`, ~18 arquivos) e uma suíte de testes
+   (`tests/`). Perguntado ao usuário se isso deveria ser renomeado
+   junto — resposta: **não**, manter só Filament + Model + banco no
+   escopo, já que nada no Perseu consome essa API hoje. `tests/` e as
+   CLASSES/ROTAS da API (`ProjectController`, `ProjectRequest`,
+   `Http\Resources\V1\ProjectResource`, rota
+   `admin/api/v1/projects/projects`, etc.) foram mantidos exatamente
+   como estavam.
+2. **Descoberta no meio da tarefa**: essa mesma camada de API consome
+   DIRETAMENTE o Model/colunas que estavam sendo renomeados (não é uma
+   cópia) — sem nenhum ajuste, os ~18 arquivos quebrariam em runtime
+   (`Class "Project" not found`, coluna `project_id` inexistente,
+   etc.), mesmo mantendo suas próprias classes/rotas intactas. Levado
+   de volta ao usuário antes de prosseguir (a superfície real, 18
+   arquivos, era maior do que a estimativa inicial ao fazer a primeira
+   pergunta) — decisão: **corrigir só as referências internas** desses
+   18 arquivos (chamadas ao Model, nomes de coluna, `allowedIncludes`/
+   `whenLoaded()` de relacionamento) o suficiente para não quebrar,
+   preservando ao máximo nomes de classe/rota/campo do contrato JSON
+   já existente. Única exceção de contrato aceita conscientemente: o
+   campo `processo_id` no payload de entrada/saída da API (era
+   `project_id`) e o include `processo`/`processo_id` como filtro —
+   inevitável, já que a COLUNA em si mudou de nome e não existe outro
+   jeito de expor o dado sem renomear o campo correspondente na API.
+
+### O que foi renomeado (Model/banco/Filament/permissões)
+
+| Antes | Depois |
+|---|---|
+| `Webkul\Project\Models\Project` | `Webkul\Project\Models\Processo` |
+| `Webkul\Project\Models\ProjectStage` | `Webkul\Project\Models\ProcessoStage` |
+| tabela `projects_projects` | `projects_processos` |
+| tabela `projects_project_stages` | `projects_processo_stages` |
+| tabela `projects_project_tag` | `projects_processo_tag` |
+| tabela `projects_user_project_favorites` | `projects_user_processo_favorites` |
+| coluna `projects_tasks.project_id` | `processo_id` |
+| coluna `projects_milestones.project_id` | `processo_id` |
+| coluna `projects_task_stages.project_id` | `processo_id` |
+| coluna `projects_processo_tag.project_id` | `processo_id` |
+| coluna `projects_user_processo_favorites.project_id` | `processo_id` |
+| coluna `analytic_records.project_id` | `processo_id` |
+| `Filament\Resources\ProjectResource` | `ProcessoResource` (+ Pages `CreateProject`→`CreateProcesso`, `EditProject`→`EditProcesso`, `ListProjects`→`ListProcessos`, `ViewProject`→`ViewProcesso`) |
+| `Clusters\Configurations\Resources\ProjectStageResource` | `ProcessoStageResource` (+ Page `ManageProjectStages`→`ManageProcessoStages`) |
+| `Filament\Widgets\TopProjectsWidget` | `TopProcessosWidget` |
+| `ProjectPolicy`/`ProjectStagePolicy` | `ProcessoPolicy`/`ProcessoStagePolicy` |
+| `ProjectFactory`/`ProjectStageFactory` | `ProcessoFactory`/`ProcessoStageFactory` |
+| Permissões `*_project_project`/`*_project_project::stage` | `*_project_processo`/`*_project_processo::stage` |
+| Permissão `widget_project_top_projects_widget` | `widget_project_top_processos_widget` |
+
+`TaskResource`, `MilestoneResource`, `TaskStageResource`,
+`Models\Task`/`Milestone`/`TaskStage`/`Timesheet`, e os widgets
+`TopAssigneesWidget`/`StatsOverviewWidget`/`TaskByStageChart`/
+`TaskByStateChart`/`Dashboard` **não foram renomeados** (seus nomes
+não continham "Project"), mas todos tiveram suas referências internas
+ao relacionamento atualizadas (`project_id`→`processo_id`,
+`->project`→`->processo`, `$this->pageFilters['selectedProjects']`→
+`['selectedProcessos']`, lang keys `project`→`processo`).
+
+### Migration — `Schema::rename()`/`renameColumn()`, mesma técnica do Projeto→Obra
+
+`2026_09_02_100000_rename_project_to_processo.php` (registrada em
+`ProjectServiceProvider::hasMigrations()`): tabelas primeiro, colunas
+depois (já com o nome novo da tabela), FKs preservadas automaticamente
+pelo MySQL/MariaDB (mesmo mecanismo já documentado na seção do rename
+Projeto→Obra). Incluiu `analytic_records.project_id`→`processo_id`
+apesar de essa ser uma tabela nominalmente "compartilhada" — confirmado
+por grep que as colunas `project_id`/`task_id` dessa tabela são
+contribuídas SÓ pela migration do próprio `webkul/projects`
+(`2024_12_18_145142_add_columns_to_analytic_records_table`), não por
+`webkul/analytics` nem nenhum outro plugin, então era seguro incluir
+no rename. `Timesheet extends Record` (a subclasse que usa essa
+tabela) foi atualizada junto. Migration com `down()` completo e
+testada rodando `up()`: as 4 tabelas novas existem, as 4 antigas
+sumiram, `processo_id` confirmado presente em `projects_tasks`,
+`projects_milestones`, `projects_task_stages`, `analytic_records`.
+
+### Exceções conscientes — deixadas de propósito com o nome antigo
+
+- **`Webkul\Project\Enums\ProjectVisibility`** (níveis
+  privado/interno/público de visibilidade de um Processo) — CLASSE,
+  ARQUIVO e chaves de tradução mantidos 100% intactos. Motivo duplo:
+  (1) é usado tanto pela camada Filament (dentro do escopo) quanto por
+  `Http\Requests\ProjectRequest.php` (fora do escopo, API preservada
+  por decisão do usuário) — renomear forçaria tocar a API; (2) o texto
+  traduzido de cada valor nunca conteve a palavra "Project"/"Projeto"
+  (só "privado"/"interno"/"público"), então não haveria ganho visível
+  ao renomear, só risco.
+- **`Webkul\Project\Settings\TaskSettings::$enable_project_stages`**
+  (Spatie `laravel-settings`) — a PROPRIEDADE PHP e a CHAVE de
+  tradução (`enable-project-stages`/`enable-project-stages-helper-text`)
+  foram mantidas sem mudança — renomear uma propriedade de settings
+  exigiria uma migration de dados pro blob JSON armazenado, desproporcional
+  ao escopo pedido. O VALOR exibido ao usuário, porém, foi atualizado
+  pra dizer "processo" em vez de "projeto" nos 4 idiomas — separação
+  deliberada entre estabilidade do identificador interno e precisão do
+  texto visível.
+- **`protected static string $routePath = 'project';`** (`Dashboard`)
+  e **slugs com prefixo `project/`** (`ProcessoResource::$slug =
+  'project/processos'`, mesmo padrão em `ProcessoStageResource`) —
+  mantidos assim de propósito: esse segmento é o namespace de rota
+  COMPARTILHADO do plugin inteiro (mesmo prefixo usado por
+  `TaskResource`, `Dashboard`, etc.), não algo específico da entidade
+  Processo — renomear quebraria/mudaria TODAS as URLs do plugin, muito
+  além do escopo pedido (a tarefa só pedia pra confirmar que as URLs
+  não quebrassem, não pra mudá-las). `route:list` confirmado
+  inalterado nesse aspecto.
+- **`ProjectPlugin`** (`Webkul\Project\ProjectPlugin`, classe Filament
+  `Plugin` que registra os caminhos de descoberta do próprio plugin) —
+  não renomeada: é o nome do PLUGIN INTEIRO (equivalente a "o pacote
+  webkul/projects"), não da entidade Processo — mesma distinção já
+  registrada acima entre "Gestão de Processos" (rótulo do plugin) e
+  "Processo" (entidade interna).
+
+### Auto-correção durante a implementação: relação inversa de `ProcessoStage`
+
+Ao escrever `ProcessoStage.php`, uma relação inversa
+`projects(): HasMany` (um Estágio tem muitos Processos) foi
+inicialmente OMITIDA por engano (acreditei tê-la introduzido por erro
+numa passada anterior). Só depois, investigando por que
+`ProjectStageController`/`ProjectStageResource` (camada de API,
+preservados) referenciam `'projects'`/`whenLoaded('projects')`, foi
+confirmado via `git show HEAD:...ProjectStage.php` que essa relação
+JÁ EXISTIA no código original committado
+(`public function projects(): HasMany { return
+$this->hasMany(Project::class, 'stage_id'); }`) — restaurada
+corretamente como `public function processos(): HasMany { return
+$this->hasMany(Processo::class, 'stage_id'); }`.
+
+### Shield — mesmo fluxo já estabelecido (gerar, sincronizar, remover órfãs)
+
+`shield:generate --resource=ProcessoResource,ProcessoStageResource
+--panel=admin` processou 2 entidades e gerou 22 permissões novas
+(`*_project_processo`/`*_project_processo::stage`, guard `web` —
+confirmado que este plugin só usa permissões Shield no guard `web`,
+diferente de `perseu/*` que também tem entradas `sanctum` pra algumas
+delas). A permissão do widget renomeado
+(`widget_project_top_processos_widget`) **não** é gerada por
+`shield:generate` (widgets usam `HasWidgetShield`/
+`getWidgetPermission()` próprio, fora do fluxo de `--resource=`) —
+criada manualmente via tinker (`Permission::firstOrCreate(...)`, guards
+`web` e `sanctum`, espelhando os guards que a permissão antiga tinha).
+As 23 permissões novas (22 do Resource + 1 do widget, guard `web`)
+foram sincronizadas à role **Admin** via `givePermissionTo()`. As
+permissões órfãs antigas (`*_project_project`/`*_project_project::stage`
+nos guards `web` e `sanctum`, mais `widget_project_top_projects_widget`
+nos dois guards — 35 linhas no total) foram removidas via `DELETE`
+SQL direto em `permissions`/`role_has_permissions`/
+`model_has_permissions` (não `Permission::delete()` via Eloquent,
+mesma precaução da tarefa Projeto→Obra, embora desta vez a exclusão
+direta via SQL não tenha esbarrado no erro de guard `sanctum`
+encontrado naquela tarefa). `permission:cache-reset` executado depois.
+
+### Validado (tinker + Livewire, não só leitura de código)
+
+1. **Ciclo completo de criação** (dentro de transação revertida, com
+   usuário autenticado): `Processo::create()` → `TaskStage::create()`
+   → `Task::create()` → `Milestone::create()`, todos com
+   `company_id` derivado corretamente via `boot()`, relações
+   `$processo->tasks()`/`->milestones()`/`->tags()` e a relação
+   inversa `$stage->processos()` todas retornando os registros
+   corretos; `$task->update(...)` disparando o listener `updated()`
+   (sync de timesheets) sem erro.
+2. **Páginas Filament renderizadas via `Livewire::test()`**:
+   `ListProcessos` (contém "Processos", zero ocorrências de
+   "Projetos"), `ManageProcessoStages` (contém "etapas do processo",
+   zero "etapas do projeto"), `ListTasks` (coluna "Processo" presente)
+   — todas sem exceção.
+3. `route:list` conferido: as rotas da API (`admin/api/v1/projects/*`,
+   incluindo `.../projects/projects`, `.../projects/project-stages`)
+   continuam com os nomes/URIs antigos, exatamente como decidido.
+4. `find ... | php -l` em todos os 84 arquivos PHP do plugin: nenhum
+   erro de sintaxe.
+5. Varredura final `grep -rn "Project"`/`"project_id"`/`"->project"`
+   em `src/` (fora de `Http/`, que é a camada preservada): só restam as
+   exceções conscientes documentadas acima (`ProjectVisibility`,
+   `routePath`/slug `project/`, `ProjectPlugin`,
+   `NavigationGroup::Project`) — nenhum resíduo acidental.
+6. `ddev artisan optimize:clear` executado duas vezes (antes e depois
+   do `shield:generate`).
+
+### Pendência explícita (registrada, não corrigida aqui)
+
+A camada de API REST (`Http/Controllers/API/V1/*`,
+`Http/Resources/V1/*`, `Http/Requests/*`) e a suíte `tests/` continuam
+com nomenclatura "Project"/"project" — decisão consciente (ver acima),
+não uma omissão. Se essa API algum dia passar a ser consumida por
+algum sistema externo real, revisitar como uma tarefa própria de
+rename (nesse ponto, o `processo_id` que já mudou no payload precisará
+ser comunicado como breaking change aos consumidores).

@@ -25,7 +25,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\QueryException;
 use Webkul\Project\Filament\Clusters\Configurations;
 use Webkul\Project\Filament\Clusters\Configurations\Resources\TaskStageResource\Pages\ManageTaskStages;
-use Webkul\Project\Filament\Resources\ProjectResource\RelationManagers\TaskStagesRelationManager;
+use Webkul\Project\Filament\Resources\ProcessoResource\RelationManagers\TaskStagesRelationManager;
 use Webkul\Project\Models\TaskStage;
 
 class TaskStageResource extends Resource
@@ -63,10 +63,10 @@ class TaskStageResource extends Resource
                     ->label(__('projects::filament/clusters/configurations/resources/task-stage.form.name'))
                     ->required()
                     ->maxLength(255),
-                Select::make('project_id')
-                    ->label(__('projects::filament/clusters/configurations/resources/task-stage.form.project'))
+                Select::make('processo_id')
+                    ->label(__('projects::filament/clusters/configurations/resources/task-stage.form.processo'))
                     ->relationship(
-                        'project',
+                        'processo',
                         'name',
                         modifyQueryUsing: fn (Builder $query) => $query->withTrashed(),
                     )
@@ -90,22 +90,22 @@ class TaskStageResource extends Resource
                     ->label(__('projects::filament/clusters/configurations/resources/task-stage.table.columns.name'))
                     ->searchable()
                     ->sortable(),
-                TextColumn::make('project.name')
-                    ->label(__('projects::filament/clusters/configurations/resources/task-stage.table.columns.project'))
+                TextColumn::make('processo.name')
+                    ->label(__('projects::filament/clusters/configurations/resources/task-stage.table.columns.processo'))
                     ->hiddenOn(TaskStagesRelationManager::class)
                     ->sortable(),
             ])
             ->filters([
-                SelectFilter::make('project_id')
-                    ->label(__('projects::filament/clusters/configurations/resources/task-stage.table.filters.project'))
-                    ->relationship('project', 'name')
+                SelectFilter::make('processo_id')
+                    ->label(__('projects::filament/clusters/configurations/resources/task-stage.table.filters.processo'))
+                    ->relationship('processo', 'name')
                     ->hiddenOn(TaskStagesRelationManager::class)
                     ->searchable()
                     ->preload(),
             ])
             ->groups([
-                Group::make('project.name')
-                    ->label(__('projects::filament/clusters/configurations/resources/task-stage.table.groups.project')),
+                Group::make('processo.name')
+                    ->label(__('projects::filament/clusters/configurations/resources/task-stage.table.groups.processo')),
                 Group::make('created_at')
                     ->label(__('projects::filament/clusters/configurations/resources/task-stage.table.groups.created-at'))
                     ->date(),

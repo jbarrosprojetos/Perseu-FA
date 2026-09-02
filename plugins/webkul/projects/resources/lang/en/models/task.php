@@ -15,7 +15,7 @@ return [
         'deadline'          => 'Deadline',
         'allocated_hours'   => 'Allocated Hours',
         'stage'             => 'Stage',
-        'project'           => 'Project',
+        'processo'          => 'Process',
         'partner'           => 'Partner',
         'parent'            => 'Parent Task',
         'company'           => 'Company',

@@ -4,7 +4,7 @@ namespace Webkul\Project\Database\Factories;
 
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Webkul\Partner\Models\Partner;
-use Webkul\Project\Models\Project;
+use Webkul\Project\Models\Processo;
 use Webkul\Project\Models\Task;
 use Webkul\Project\Models\TaskStage;
 use Webkul\Security\Models\User;
@@ -51,7 +51,7 @@ class TaskFactory extends Factory
             'overtime'            => 0,
             'progress'            => 0,
             'parent_id'           => null,
-            'project_id'          => Project::factory(),
+            'processo_id'         => Processo::factory(),
             'stage_id'            => TaskStage::factory(),
             'partner_id'          => Partner::query()->value('id') ?? Partner::factory(),
             'creator_id'          => User::query()->value('id') ?? User::factory(),

@@ -15,7 +15,7 @@ return [
         'deadline'          => 'الموعد النهائي',
         'allocated_hours'   => 'الساعات المخصصة',
         'stage'             => 'المرحلة',
-        'project'           => 'المشروع',
+        'processo'          => 'العملية',
         'partner'           => 'الشريك',
         'parent'            => 'المهمة الرئيسية',
         'company'           => 'الشركة',

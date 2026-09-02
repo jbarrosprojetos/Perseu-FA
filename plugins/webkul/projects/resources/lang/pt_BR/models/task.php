@@ -15,7 +15,7 @@ return [
         'deadline'        => 'Prazo final',
         'allocated_hours' => 'Horas alocadas',
         'stage'           => 'Etapa',
-        'project'         => 'Projeto',
+        'processo'        => 'Processo',
         'partner'         => 'Parceiro',
         'parent'          => 'Tarefa pai',
         'company'         => 'Empresa',

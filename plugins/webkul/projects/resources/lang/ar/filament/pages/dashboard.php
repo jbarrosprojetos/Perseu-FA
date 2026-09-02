@@ -2,11 +2,11 @@
 
 return [
     'navigation' => [
-        'title' => 'المشاريع',
+        'title' => 'العمليات',
     ],
 
     'filters-form' => [
-        'project'    => 'المشروع',
+        'processo'   => 'العملية',
         'assignees'  => 'المُكلَّفون',
         'tags'       => 'الوسوم',
         'customer'   => 'العميل',

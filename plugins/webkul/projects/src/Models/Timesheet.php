@@ -24,9 +24,9 @@ class Timesheet extends Record
         });
     }
 
-    public function project(): BelongsTo
+    public function processo(): BelongsTo
     {
-        return $this->belongsTo(Project::class);
+        return $this->belongsTo(Processo::class);
     }
 
     public function task()

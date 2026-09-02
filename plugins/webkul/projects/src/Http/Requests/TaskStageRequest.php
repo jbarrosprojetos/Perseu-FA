@@ -17,8 +17,8 @@ class TaskStageRequest extends FormRequest
         $requiredRule = $isUpdate ? ['sometimes', 'required'] : ['required'];
 
         return [
-            'name'       => [...$requiredRule, 'string', 'max:255'],
-            'project_id' => [...$requiredRule, 'integer', 'exists:projects_projects,id'],
+            'name'        => [...$requiredRule, 'string', 'max:255'],
+            'processo_id' => [...$requiredRule, 'integer', 'exists:projects_processos,id'],
         ];
     }
 
@@ -29,8 +29,8 @@ class TaskStageRequest extends FormRequest
                 'description' => 'Task stage name.',
                 'example'     => 'Backlog',
             ],
-            'project_id' => [
-                'description' => 'Project ID this stage belongs to.',
+            'processo_id' => [
+                'description' => 'Processo ID this stage belongs to.',
                 'example'     => 1,
             ],
         ];

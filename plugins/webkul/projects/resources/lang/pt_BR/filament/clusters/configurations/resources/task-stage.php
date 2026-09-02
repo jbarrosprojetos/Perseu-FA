@@ -11,24 +11,24 @@ return [
 
     'form' => [
         'name'    => 'Nome',
-        'project' => 'Projeto',
+        'processo' => 'Processo',
     ],
 
     'table' => [
         'columns' => [
             'name'       => 'Nome',
-            'project'    => 'Projeto',
+            'processo'   => 'Processo',
             'created-at' => 'Criado em',
             'updated-at' => 'Atualizado em',
         ],
 
         'groups' => [
-            'project'    => 'Projeto',
+            'processo'   => 'Processo',
             'created-at' => 'Criado em',
         ],
 
         'filters' => [
-            'project' => 'Projeto',
+            'processo' => 'Processo',
         ],
 
         'actions' => [

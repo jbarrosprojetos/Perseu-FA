@@ -53,7 +53,7 @@ class Task extends Model implements Sortable
         'overtime',
         'progress',
         'stage_id',
-        'project_id',
+        'processo_id',
         'partner_id',
         'parent_id',
         'company_id',
@@ -101,7 +101,7 @@ class Task extends Model implements Sortable
             'deadline'          => __('projects::models/task.log-attributes.deadline'),
             'allocated_hours'   => __('projects::models/task.log-attributes.allocated_hours'),
             'stage.name'        => __('projects::models/task.log-attributes.stage'),
-            'project.name'      => __('projects::models/task.log-attributes.project'),
+            'processo.name'     => __('projects::models/task.log-attributes.processo'),
             'partner.name'      => __('projects::models/task.log-attributes.partner'),
             'parent.title'      => __('projects::models/task.log-attributes.parent'),
             'company.name'      => __('projects::models/task.log-attributes.company'),
@@ -124,9 +124,9 @@ class Task extends Model implements Sortable
         return $this->hasMany(self::class, 'parent_id');
     }
 
-    public function project(): BelongsTo
+    public function processo(): BelongsTo
     {
-        return $this->belongsTo(Project::class);
+        return $this->belongsTo(Processo::class);
     }
 
     public function milestone(): BelongsTo
@@ -192,14 +192,14 @@ class Task extends Model implements Sortable
 
             $task->creator_id ??= $authUser->id;
 
-            $task->company_id = Project::withoutGlobalScope(CompanyScope::class)->find($task->project_id)?->company_id ?? current_company_id();
+            $task->company_id = Processo::withoutGlobalScope(CompanyScope::class)->find($task->processo_id)?->company_id ?? current_company_id();
         });
 
         static::updated(function ($task) {
             $task->timesheets()->update([
-                'project_id' => $task->project_id,
-                'partner_id' => $task->partner_id ?? $task->project?->partner_id,
-                'company_id' => $task->company_id ?? $task->project?->company_id,
+                'processo_id' => $task->processo_id,
+                'partner_id'  => $task->partner_id ?? $task->processo?->partner_id,
+                'company_id'  => $task->company_id ?? $task->processo?->company_id,
             ]);
         });
     }

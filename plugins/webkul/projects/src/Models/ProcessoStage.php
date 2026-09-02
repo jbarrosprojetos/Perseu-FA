@@ -1,0 +1,78 @@
+<?php
+
+namespace Webkul\Project\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Auth;
+use Spatie\EloquentSortable\Sortable;
+use Spatie\EloquentSortable\SortableTrait;
+use Webkul\Field\Traits\HasCustomFields;
+use Webkul\Project\Database\Factories\ProcessoStageFactory;
+use Webkul\Security\Models\User;
+use Webkul\Support\Models\Company;
+use Webkul\Support\Traits\BelongsToCompany;
+
+class ProcessoStage extends Model implements Sortable
+{
+    use BelongsToCompany;
+    use HasCustomFields, HasFactory, SoftDeletes, SortableTrait;
+
+    protected $table = 'projects_processo_stages';
+
+    protected $fillable = [
+        'name',
+        'is_active',
+        'is_collapsed',
+        'sort',
+        'company_id',
+        'creator_id',
+    ];
+
+    protected $casts = [
+        'is_active'    => 'boolean',
+        'is_collapsed' => 'boolean',
+    ];
+
+    public $sortable = [
+        'order_column_name'  => 'sort',
+        'sort_when_creating' => true,
+    ];
+
+    public static function autoAssignsCompany(): bool
+    {
+        return false;
+    }
+
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
+    }
+
+    public function processos(): HasMany
+    {
+        return $this->hasMany(Processo::class, 'stage_id');
+    }
+
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::creating(function ($processoStage) {
+            $processoStage->creator_id ??= Auth::id();
+        });
+    }
+
+    protected static function newFactory(): ProcessoStageFactory
+    {
+        return ProcessoStageFactory::new();
+    }
+}

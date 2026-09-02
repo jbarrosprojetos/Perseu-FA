@@ -11,7 +11,7 @@ return [
         'inventory'     => 'Estoque',
         'maintenance'   => 'Manutenção',
         'manufacturing' => 'Produção',
-        'project'       => 'Projetos',
+        'project'       => 'Gestão de Processos',
         'pessoas'       => 'Pessoas',
         'comercial'     => 'Comercial',
         'employee'      => 'Colaboradores',

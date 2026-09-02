@@ -11,7 +11,7 @@ return [
         'inventory'     => 'المخزون',
         'maintenance'   => 'الصيانة',
         'manufacturing' => 'التصنيع',
-        'project'       => 'المشاريع',
+        'project'       => 'إدارة العمليات',
         'pessoas'       => 'الأشخاص',
         'comercial'     => 'المبيعات',
         'employee'      => 'الموظفين',

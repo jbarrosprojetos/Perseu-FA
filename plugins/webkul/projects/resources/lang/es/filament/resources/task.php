@@ -12,7 +12,7 @@ return [
     ],
 
     'global-search' => [
-        'project'   => 'Proyecto',
+        'processo'  => 'Proceso',
         'customer'  => 'Cliente',
         'milestone' => 'Hito',
     ],
@@ -29,7 +29,7 @@ return [
                     'name'              => 'Nombre',
                     'color'             => 'Color',
                     'description'       => 'Descripción',
-                    'project'           => 'Proyecto',
+                    'processo'          => 'Proceso',
                     'status'            => 'Estado',
                     'start_date'        => 'Fecha de inicio',
                     'end_date'          => 'Fecha de fin',
@@ -44,7 +44,7 @@ return [
                 'title' => 'Configuración',
 
                 'fields' => [
-                    'project'                     => 'Proyecto',
+                    'processo'                    => 'Proceso',
                     'milestone'                   => 'Hito',
                     'milestone-hint-text'         => 'Entregar automáticamente los servicios al alcanzar un hito vinculándolo a una línea de pedido de venta.',
                     'name'                        => 'Nombre',
@@ -67,8 +67,8 @@ return [
             'new-state'           => 'Nuevo estado',
             'update-state'        => 'Actualizar estado',
             'title'               => 'Título',
-            'project'             => 'Proyecto',
-            'project-placeholder' => 'Tarea privada',
+            'processo'            => 'Proceso',
+            'processo-placeholder' => 'Tarea privada',
             'milestone'           => 'Hito',
             'customer'            => 'Cliente',
             'assignees'           => 'Asignados',
@@ -83,7 +83,7 @@ return [
 
         'groups' => [
             'state'      => 'Estado',
-            'project'    => 'Proyecto',
+            'processo'   => 'Proceso',
             'milestone'  => 'Hito',
             'customer'   => 'Cliente',
             'deadline'   => 'Fecha límite',
@@ -108,7 +108,7 @@ return [
             'updated-at'        => 'Actualizado el',
             'assignees'         => 'Asignados',
             'customer'          => 'Cliente',
-            'project'           => 'Proyecto',
+            'processo'          => 'Proceso',
             'stage'             => 'Etapa',
             'milestone'         => 'Hito',
             'company'           => 'Empresa',
@@ -180,11 +180,11 @@ return [
                 ],
             ],
 
-            'project-information' => [
-                'title' => 'Información del proyecto',
+            'processo-information' => [
+                'title' => 'Información del proceso',
 
                 'entries' => [
-                    'project'   => 'Proyecto',
+                    'processo'  => 'Proceso',
                     'milestone' => 'Hito',
                     'customer'  => 'Cliente',
                     'assignees' => 'Asignados',

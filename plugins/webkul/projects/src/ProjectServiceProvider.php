@@ -8,7 +8,7 @@ use Webkul\PluginManager\Console\Commands\InstallCommand;
 use Webkul\PluginManager\Console\Commands\UninstallCommand;
 use Webkul\PluginManager\Package;
 use Webkul\PluginManager\PackageServiceProvider;
-use Webkul\Project\Models\Project;
+use Webkul\Project\Models\Processo;
 use Webkul\Project\Models\Task;
 
 class ProjectServiceProvider extends PackageServiceProvider
@@ -33,6 +33,7 @@ class ProjectServiceProvider extends PackageServiceProvider
                 '2024_12_12_101352_create_projects_task_tag_table',
                 '2024_12_18_145142_add_columns_to_analytic_records_table',
                 '2025_09_24_062711_remove_tags_column_from_projects_tasks_table',
+                '2026_09_02_100000_rename_project_to_processo',
             ])
             ->runsMigrations()
             ->hasSettings([
@@ -48,7 +49,7 @@ class ProjectServiceProvider extends PackageServiceProvider
             })
             ->hasUninstallCommand(function (UninstallCommand $command) {
                 $command->endWith(function () {
-                    ChatterCleanupService::purgeForModels([Project::class, Task::class]);
+                    ChatterCleanupService::purgeForModels([Processo::class, Task::class]);
                 });
             })
             ->icon('projects');

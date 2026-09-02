@@ -28,7 +28,7 @@ class TaskStage extends Model implements Sortable
         'is_active',
         'is_collapsed',
         'sort',
-        'project_id',
+        'processo_id',
         'company_id',
         'user_id',
         'creator_id',
@@ -49,9 +49,9 @@ class TaskStage extends Model implements Sortable
         return false;
     }
 
-    public function project(): BelongsTo
+    public function processo(): BelongsTo
     {
-        return $this->belongsTo(Project::class);
+        return $this->belongsTo(Processo::class);
     }
 
     public function tasks(): HasMany
@@ -81,7 +81,7 @@ class TaskStage extends Model implements Sortable
         static::creating(function ($taskStage) {
             $taskStage->creator_id ??= Auth::id();
 
-            $taskStage->company_id ??= $taskStage->project?->company_id;
+            $taskStage->company_id ??= $taskStage->processo?->company_id;
         });
     }
 

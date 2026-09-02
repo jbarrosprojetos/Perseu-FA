@@ -11,24 +11,24 @@ return [
 
     'form' => [
         'name'    => 'الاسم',
-        'project' => 'المشروع',
+        'processo' => 'العملية',
     ],
 
     'table' => [
         'columns' => [
             'name'       => 'الاسم',
-            'project'    => 'المشروع',
+            'processo'   => 'العملية',
             'created-at' => 'تاريخ الإنشاء',
             'updated-at' => 'تاريخ التحديث',
         ],
 
         'groups' => [
-            'project'    => 'المشروع',
+            'processo'   => 'العملية',
             'created-at' => 'تاريخ الإنشاء',
         ],
 
         'filters' => [
-            'project' => 'المشروع',
+            'processo' => 'العملية',
         ],
 
         'actions' => [

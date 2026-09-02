@@ -16,11 +16,11 @@ class MilestoneResource extends JsonResource
             'deadline'     => $this->deadline,
             'is_completed' => (bool) $this->is_completed,
             'completed_at' => $this->completed_at,
-            'project_id'   => $this->project_id,
+            'processo_id'  => $this->processo_id,
             'creator_id'   => $this->creator_id,
             'created_at'   => $this->created_at,
             'updated_at'   => $this->updated_at,
-            'project'      => new ProjectResource($this->whenLoaded('project')),
+            'processo'     => new ProjectResource($this->whenLoaded('processo')),
             'creator'      => new UserResource($this->whenLoaded('creator')),
         ];
     }

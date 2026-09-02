@@ -22,7 +22,7 @@ class ProjectRequest extends FormRequest
             'name'             => [...$requiredRule, 'string', 'max:255'],
             'description'      => ['nullable', 'string'],
             'visibility'       => [...$requiredRule, 'string', Rule::enum(ProjectVisibility::class)],
-            'stage_id'         => [...$requiredRule, 'integer', 'exists:projects_project_stages,id'],
+            'stage_id'         => [...$requiredRule, 'integer', 'exists:projects_processo_stages,id'],
             'user_id'          => ['nullable', 'integer', 'exists:users,id'],
             'partner_id'       => ['nullable', 'integer', 'exists:partners_partners,id'],
             'company_id'       => ['nullable', 'integer', 'exists:companies,id'],

@@ -13,7 +13,7 @@ return [
         'name'         => 'Nome',
         'deadline'     => 'Prazo final',
         'is-completed' => 'Está concluído',
-        'project'      => 'Projeto',
+        'processo'     => 'Processo',
     ],
 
     'table' => [
@@ -22,7 +22,7 @@ return [
             'deadline'     => 'Prazo final',
             'is-completed' => 'Está concluído',
             'completed-at' => 'Concluído em',
-            'project'      => 'Projeto',
+            'processo'     => 'Processo',
             'creator'      => 'Criador',
             'created-at'   => 'Criado em',
             'updated-at'   => 'Atualizado em',
@@ -31,13 +31,13 @@ return [
         'groups' => [
             'name'         => 'Nome',
             'is-completed' => 'Está concluído',
-            'project'      => 'Projeto',
+            'processo'     => 'Processo',
             'created-at'   => 'Criado em',
         ],
 
         'filters' => [
             'is-completed' => 'Está concluído',
-            'project'      => 'Projeto',
+            'processo'     => 'Processo',
             'creator'      => 'Criador',
         ],
 

@@ -14,8 +14,8 @@ use Webkul\Project\Filament\Widgets\StatsOverviewWidget;
 use Webkul\Project\Filament\Widgets\TaskByStageChart;
 use Webkul\Project\Filament\Widgets\TaskByStateChart;
 use Webkul\Project\Filament\Widgets\TopAssigneesWidget;
-use Webkul\Project\Filament\Widgets\TopProjectsWidget;
-use Webkul\Project\Models\Project;
+use Webkul\Project\Filament\Widgets\TopProcessosWidget;
+use Webkul\Project\Models\Processo;
 use Webkul\Project\Models\Tag;
 use Webkul\Security\Models\User;
 use Webkul\Support\Enums\NavigationGroup;
@@ -62,12 +62,12 @@ class Dashboard extends BaseDashboard
                     ])
 
                     ->schema([
-                        Select::make('selectedProjects')
-                            ->label(__('projects::filament/pages/dashboard.filters-form.project'))
+                        Select::make('selectedProcessos')
+                            ->label(__('projects::filament/pages/dashboard.filters-form.processo'))
                             ->multiple()
                             ->searchable()
                             ->preload()
-                            ->options(fn () => Project::pluck('name', 'id'))
+                            ->options(fn () => Processo::pluck('name', 'id'))
                             ->reactive(),
                         Select::make('selectedAssignees')
                             ->label(__('projects::filament/pages/dashboard.filters-form.assignees'))
@@ -105,7 +105,7 @@ class Dashboard extends BaseDashboard
             TaskByStageChart::class,
             TaskByStateChart::class,
             TopAssigneesWidget::class,
-            TopProjectsWidget::class,
+            TopProcessosWidget::class,
         ];
     }
 }

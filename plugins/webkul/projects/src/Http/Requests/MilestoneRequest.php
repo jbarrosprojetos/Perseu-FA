@@ -20,7 +20,7 @@ class MilestoneRequest extends FormRequest
             'name'         => [...$requiredRule, 'string', 'max:255'],
             'deadline'     => ['nullable', 'date'],
             'is_completed' => ['nullable', 'boolean'],
-            'project_id'   => [...$requiredRule, 'integer', 'exists:projects_projects,id'],
+            'processo_id'  => [...$requiredRule, 'integer', 'exists:projects_processos,id'],
         ];
     }
 
@@ -39,8 +39,8 @@ class MilestoneRequest extends FormRequest
                 'description' => 'Completion flag.',
                 'example'     => false,
             ],
-            'project_id' => [
-                'description' => 'Project ID.',
+            'processo_id' => [
+                'description' => 'Processo ID.',
                 'example'     => 1,
             ],
         ];

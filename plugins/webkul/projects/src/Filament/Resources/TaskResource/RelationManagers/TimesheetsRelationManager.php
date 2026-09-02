@@ -33,11 +33,11 @@ class TimesheetsRelationManager extends RelationManager
             return false;
         }
 
-        if (! $ownerRecord->project) {
+        if (! $ownerRecord->processo) {
             return true;
         }
 
-        return $ownerRecord->project->allow_timesheets;
+        return $ownerRecord->processo->allow_timesheets;
     }
 
     public function form(Schema $schema): Schema
@@ -136,9 +136,9 @@ class TimesheetsRelationManager extends RelationManager
                     ->mutateDataUsing(function (array $data): array {
                         $ownerRecord = $this->getOwnerRecord();
 
-                        $data['project_id'] = $ownerRecord->project_id;
+                        $data['processo_id'] = $ownerRecord->processo_id;
 
-                        $data['partner_id'] = $ownerRecord->partner_id ?? $ownerRecord->project?->partner_id;
+                        $data['partner_id'] = $ownerRecord->partner_id ?? $ownerRecord->processo?->partner_id;
 
                         return $data;
                     })

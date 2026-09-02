@@ -16,7 +16,7 @@ use Spatie\QueryBuilder\AllowedFilter;
 use Spatie\QueryBuilder\QueryBuilder;
 use Webkul\Project\Http\Requests\TaskRequest;
 use Webkul\Project\Http\Resources\V1\TaskResource;
-use Webkul\Project\Models\Project;
+use Webkul\Project\Models\Processo;
 use Webkul\Project\Models\Task;
 
 #[Group('Project API Management')]
@@ -26,7 +26,7 @@ class TaskController extends Controller
 {
     protected array $allowedIncludes = [
         'stage',
-        'project',
+        'processo',
         'milestone',
         'partner',
         'parent',
@@ -38,7 +38,7 @@ class TaskController extends Controller
     ];
 
     #[Endpoint('List tasks', 'Retrieve a paginated list of tasks with filtering and sorting')]
-    #[QueryParam('include', 'string', 'Comma-separated list of relationships to include. </br></br><b>Available options:</b> stage, project, milestone, partner, parent, company, creator, subTasks, users, tags', required: false, example: 'project,users')]
+    #[QueryParam('include', 'string', 'Comma-separated list of relationships to include. </br></br><b>Available options:</b> stage, processo, milestone, partner, parent, company, creator, subTasks, users, tags', required: false, example: 'processo,users')]
     #[QueryParam('filter[id]', 'string', 'Filter by task IDs', required: false, example: 'No-example')]
     #[QueryParam('filter[state]', 'string', 'Filter by task state', required: false, example: 'in_progress')]
     #[QueryParam('filter[trashed]', 'string', 'Filter by trashed status. </br></br><b>Available options:</b> with, only', required: false, example: 'with')]
@@ -53,7 +53,7 @@ class TaskController extends Controller
             ->allowedFilters(
                 AllowedFilter::exact('id'),
                 AllowedFilter::exact('stage_id'),
-                AllowedFilter::exact('project_id'),
+                AllowedFilter::exact('processo_id'),
                 AllowedFilter::exact('milestone_id'),
                 AllowedFilter::exact('partner_id'),
                 AllowedFilter::exact('parent_id'),
@@ -88,8 +88,8 @@ class TaskController extends Controller
 
             unset($data['users'], $data['tags'], $data['milestone_id']);
 
-            if (isset($data['project_id']) && ! array_key_exists('partner_id', $data)) {
-                $data['partner_id'] = Project::find($data['project_id'])?->partner_id;
+            if (isset($data['processo_id']) && ! array_key_exists('partner_id', $data)) {
+                $data['partner_id'] = Processo::find($data['processo_id'])?->partner_id;
             }
 
             $task = Task::create($data);
@@ -107,7 +107,7 @@ class TaskController extends Controller
                 $task->tags()->sync($tags);
             }
 
-            $task->load(['stage', 'project', 'milestone', 'partner', 'parent', 'company', 'creator', 'users', 'tags']);
+            $task->load(['stage', 'processo', 'milestone', 'partner', 'parent', 'company', 'creator', 'users', 'tags']);
 
             return (new TaskResource($task))
                 ->additional(['message' => 'Task created successfully.'])
@@ -118,7 +118,7 @@ class TaskController extends Controller
 
     #[Endpoint('Show task', 'Retrieve a specific task by ID')]
     #[UrlParam('id', 'integer', 'The task ID', required: true, example: 1)]
-    #[QueryParam('include', 'string', 'Comma-separated list of relationships to include. </br></br><b>Available options:</b> stage, project, milestone, partner, parent, company, creator, subTasks, users, tags', required: false, example: 'stage,tags')]
+    #[QueryParam('include', 'string', 'Comma-separated list of relationships to include. </br></br><b>Available options:</b> stage, processo, milestone, partner, parent, company, creator, subTasks, users, tags', required: false, example: 'stage,tags')]
     #[ResponseFromApiResource(TaskResource::class, Task::class)]
     #[Response(status: 404, description: 'Task not found', content: '{"message":"Resource not found."}')]
     #[Response(status: 401, description: 'Unauthenticated', content: '{"message": "Unauthenticated."}')]
@@ -154,8 +154,8 @@ class TaskController extends Controller
 
             unset($data['users'], $data['tags'], $data['milestone_id']);
 
-            if (isset($data['project_id']) && ! array_key_exists('partner_id', $data)) {
-                $data['partner_id'] = Project::find($data['project_id'])?->partner_id;
+            if (isset($data['processo_id']) && ! array_key_exists('partner_id', $data)) {
+                $data['partner_id'] = Processo::find($data['processo_id'])?->partner_id;
             }
 
             $task->update($data);
@@ -173,7 +173,7 @@ class TaskController extends Controller
                 $task->tags()->sync($tags);
             }
 
-            $task->load(['stage', 'project', 'milestone', 'partner', 'parent', 'company', 'creator', 'users', 'tags']);
+            $task->load(['stage', 'processo', 'milestone', 'partner', 'parent', 'company', 'creator', 'users', 'tags']);
 
             return (new TaskResource($task))
                 ->additional(['message' => 'Task updated successfully.']);
@@ -211,7 +211,7 @@ class TaskController extends Controller
 
         $task->restore();
 
-        return (new TaskResource($task->load(['stage', 'project', 'milestone', 'partner', 'parent', 'company', 'creator', 'users', 'tags'])))
+        return (new TaskResource($task->load(['stage', 'processo', 'milestone', 'partner', 'parent', 'company', 'creator', 'users', 'tags'])))
             ->additional(['message' => 'Task restored successfully.']);
     }
 

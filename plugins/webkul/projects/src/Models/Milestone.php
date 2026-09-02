@@ -22,7 +22,7 @@ class Milestone extends Model
         'deadline',
         'is_completed',
         'completed_at',
-        'project_id',
+        'processo_id',
         'creator_id',
     ];
 
@@ -32,9 +32,9 @@ class Milestone extends Model
         'completed_at' => 'datetime',
     ];
 
-    public function project(): BelongsTo
+    public function processo(): BelongsTo
     {
-        return $this->belongsTo(Project::class);
+        return $this->belongsTo(Processo::class);
     }
 
     public function creator(): BelongsTo

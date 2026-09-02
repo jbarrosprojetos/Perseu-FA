@@ -24,8 +24,8 @@ use Illuminate\Database\Eloquent\Builder;
 use Webkul\Field\Filament\Traits\HasCustomFields;
 use Webkul\Project\Filament\Clusters\Configurations;
 use Webkul\Project\Filament\Clusters\Configurations\Resources\MilestoneResource\Pages;
-use Webkul\Project\Filament\Resources\ProjectResource\Pages\ManageMilestones;
-use Webkul\Project\Filament\Resources\ProjectResource\RelationManagers\MilestonesRelationManager;
+use Webkul\Project\Filament\Resources\ProcessoResource\Pages\ManageMilestones;
+use Webkul\Project\Filament\Resources\ProcessoResource\RelationManagers\MilestonesRelationManager;
 use Webkul\Project\Models\Milestone;
 use Webkul\Project\Settings\TaskSettings;
 
@@ -43,7 +43,7 @@ class MilestoneResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->whereHas('project');
+        return parent::getEloquentQuery()->whereHas('processo');
     }
 
     public static function getModelLabel(): string
@@ -84,9 +84,9 @@ class MilestoneResource extends Resource
                 Toggle::make('is_completed')
                     ->label(__('projects::filament/clusters/configurations/resources/milestone.form.is-completed'))
                     ->required(),
-                Select::make('project_id')
-                    ->label(__('projects::filament/clusters/configurations/resources/milestone.form.project'))
-                    ->relationship('project', 'name')
+                Select::make('processo_id')
+                    ->label(__('projects::filament/clusters/configurations/resources/milestone.form.processo'))
+                    ->relationship('processo', 'name')
                     ->hiddenOn([
                         MilestonesRelationManager::class,
                         ManageMilestones::class,
@@ -124,8 +124,8 @@ class MilestoneResource extends Resource
                     ->label(__('projects::filament/clusters/configurations/resources/milestone.table.columns.completed-at'))
                     ->dateTime()
                     ->sortable(),
-                TextColumn::make('project.name')
-                    ->label(__('projects::filament/clusters/configurations/resources/milestone.table.columns.project'))
+                TextColumn::make('processo.name')
+                    ->label(__('projects::filament/clusters/configurations/resources/milestone.table.columns.processo'))
                     ->hiddenOn([
                         MilestonesRelationManager::class,
                         ManageMilestones::class,
@@ -146,8 +146,8 @@ class MilestoneResource extends Resource
                     ->toggleable(isToggledHiddenByDefault: true),
             ]))
             ->groups([
-                Group::make('project.name')
-                    ->label(__('projects::filament/clusters/configurations/resources/milestone.table.groups.project')),
+                Group::make('processo.name')
+                    ->label(__('projects::filament/clusters/configurations/resources/milestone.table.groups.processo')),
                 Group::make('is_completed')
                     ->label(__('projects::filament/clusters/configurations/resources/milestone.table.groups.is-completed')),
                 Group::make('created_at')
@@ -157,9 +157,9 @@ class MilestoneResource extends Resource
             ->filters(static::mergeCustomTableFilters([
                 TernaryFilter::make('is_completed')
                     ->label(__('projects::filament/clusters/configurations/resources/milestone.table.filters.is-completed')),
-                SelectFilter::make('project_id')
-                    ->label(__('projects::filament/clusters/configurations/resources/milestone.table.filters.project'))
-                    ->relationship('project', 'name')
+                SelectFilter::make('processo_id')
+                    ->label(__('projects::filament/clusters/configurations/resources/milestone.table.filters.processo'))
+                    ->relationship('processo', 'name')
                     ->hiddenOn([
                         MilestonesRelationManager::class,
                         ManageMilestones::class,

@@ -51,11 +51,11 @@ class ManageTimesheets extends ManageRelatedRecords
             return false;
         }
 
-        if (! $parameters['record']->project) {
+        if (! $parameters['record']->processo) {
             return true;
         }
 
-        return $parameters['record']->project->allow_timesheets;
+        return $parameters['record']->processo->allow_timesheets;
     }
 
     public function form(Schema $schema): Schema
@@ -154,9 +154,9 @@ class ManageTimesheets extends ManageRelatedRecords
                     ->mutateDataUsing(function (array $data): array {
                         $ownerRecord = $this->getOwnerRecord();
 
-                        $data['project_id'] = $ownerRecord->project_id;
+                        $data['processo_id'] = $ownerRecord->processo_id;
 
-                        $data['partner_id'] = $ownerRecord->partner_id ?? $ownerRecord->project?->partner_id;
+                        $data['partner_id'] = $ownerRecord->partner_id ?? $ownerRecord->processo?->partner_id;
 
                         return $data;
                     })
