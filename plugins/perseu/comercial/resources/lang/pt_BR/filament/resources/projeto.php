@@ -10,6 +10,12 @@ return [
     ],
 
     'form' => [
+        'sections' => [
+            'cabecalho' => [
+                'title'       => 'Dados do Projeto',
+                'description' => 'Informações administrativas do Projeto — cliente, endereço da obra e situação.',
+            ],
+        ],
         'descricao'      => 'Nome da Obra',
         'tipo-projeto'   => 'Tipo de Projeto',
         'situacoes'      => 'Situações',

@@ -10,6 +10,12 @@ return [
     ],
 
     'form' => [
+        'sections' => [
+            'cabecalho' => [
+                'title'       => 'Project Data',
+                'description' => 'Administrative information for the Project — client, job address and status.',
+            ],
+        ],
         'descricao'      => 'Job Name',
         'tipo-projeto'   => 'Project Type',
         'situacoes'      => 'Statuses',

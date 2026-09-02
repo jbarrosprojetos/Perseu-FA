@@ -17,7 +17,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Grid;
-use Filament\Schemas\Components\Html;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
@@ -70,12 +70,13 @@ class ProjetoResource extends Resource
         // Resource::form()'s top-level Schema tem grid de 2 colunas em telas
         // "lg" por padrão (Filament\Schemas\Concerns\HasColumns::columns(),
         // default 2 — confirmado via HTML renderizado, mesmo default que
-        // PessoaFisicaResource/PessoaJuridicaResource usam). Cada componente
-        // de nível mais alto que NÃO chama ->columnSpanFull() ocupa só 1 das
-        // 2 colunas e o grid faz auto-placement lado a lado — por isso os
-        // blocos de nível mais alto (as duas Grid::make(12) e o Select de
-        // Endereço) precisam de ->columnSpanFull() explícito, independente
-        // do columnSpan() interno de cada campo dentro deles.
+        // PessoaFisicaResource/PessoaJuridicaResource usam). A Section
+        // "Cabeçalho" abaixo é o único componente de nível mais alto do
+        // Schema hoje, por isso leva ->columnSpanFull() — os campos DENTRO
+        // dela (as duas Grid::make(12) e o Select de Endereço) continuam
+        // precisando do próprio ->columnSpanFull(), porque a Section tem
+        // sua própria grid interna de 1 coluna por padrão, independente da
+        // grid externa do Schema.
         //
         // Layout por Grid::make(12) + columnSpan() numérico por campo, em
         // vez do antigo padrão Flex (static::flexRow() + HasCompactFieldWidth
@@ -109,271 +110,294 @@ class ProjetoResource extends Resource
         // já usada em HasCompactFieldWidth::flexRow().
         $gridGap = ['style' => 'gap: 1rem !important;'];
 
+        // Todos os campos atuais (Linhas 1-3 abaixo) vivem dentro de uma
+        // Section "Cabeçalho" — separa visualmente os dados administrativos
+        // do Projeto de uma futura Section "Itens do Projeto" (ainda não
+        // implementada), que deve ser adicionada como um item IRMÃO desta
+        // Section aqui em `$schema->components([...])`, sempre ANTES dos
+        // botões Salvar/Cancelar (que não fazem parte deste array — são
+        // renderizados pela própria página Create/Edit, fora do form()).
+        // Isso evita que os dados do Projeto e os Itens pareçam um bloco
+        // único quando a segunda Section existir.
+        //
+        // Sem espaçador manual entre o fim da Section e os botões — causa
+        // raiz investigada (2026-09-02): o `<form class="fi-sc-form">` que
+        // envolve TODO o conteúdo do form + o footer de Actions já tem
+        // `gap-6` (1.5rem) nativo do Filament entre os dois (confirmado
+        // lendo vendor/filament/schemas/resources/css/components/form.css
+        // e inspecionando o HTML renderizado — a Action footer é filha
+        // direta desse `<form>`, não do Schema interno). Um `Html::make()`
+        // com `<div style="height:...">` usado antes (3rem, depois 1rem)
+        // ficava por dentro da Section/Schema, ANTES desse gap nativo —
+        // ou seja, SOMAVA ao gap-6 em vez de defini-lo, e por isso "ainda
+        // ficava distante" mesmo depois de reduzir o valor. Reduzir de novo
+        // não resolveria a causa; remover o spacer resolve, porque o
+        // `gap-6` sozinho já é o espaçamento padrão do Filament entre
+        // conteúdo e footer de Actions em qualquer página do sistema.
         return $schema
             ->components([
-                // Linha 1: numero_projeto/revisao/data_cadastro (1 coluna
-                // cada) + descricao "Nome da Obra" (4) + tipo_projeto_id
-                // (2) + situacoes (3) = 12 colunas.
-                Grid::make(12)
+                Section::make(__('comercial::filament/resources/projeto.form.sections.cabecalho.title'))
+                    ->description(__('comercial::filament/resources/projeto.form.sections.cabecalho.description'))
                     ->columnSpanFull()
-                    ->extraAttributes($gridGap)
                     ->schema([
-                        // fi-entry-bold: classe própria (ver
-                        // resources/css/filament/admin-entry-content.css) pra
-                        // aplicar negrito só ao VALOR desses 3 campos —
-                        // contato_email/contato_telefone (abaixo, Linha 2)
-                        // recebem a correção de tipografia/alinhamento do
-                        // mesmo CSS, mas sem essa classe, então sem negrito.
-                        Placeholder::make('numero_projeto')
-                            ->label(__('comercial::filament/resources/projeto.form.numero-projeto'))
-                            ->content(fn (?Projeto $record) => $record?->numero_projeto
-                                ?? __('comercial::filament/resources/projeto.form.numero-projeto-pendente'))
-                            ->extraAttributes(['class' => 'fi-entry-bold'])
-                            ->columnSpan(1),
-                        Placeholder::make('revisao_display')
-                            ->label(__('comercial::filament/resources/projeto.form.revisao'))
-                            ->content(fn (?Projeto $record) => str_pad((string) ($record->revisao ?? 0), 2, '0', STR_PAD_LEFT))
-                            ->extraAttributes(['class' => 'fi-entry-bold'])
-                            ->columnSpan(1),
-                        Placeholder::make('data_cadastro')
-                            ->label(__('comercial::filament/resources/projeto.form.data-cadastro'))
-                            ->content(fn (?Projeto $record) => $record?->data_cadastro?->format('d/m/Y')
-                                ?? __('comercial::filament/resources/projeto.form.data-cadastro-pendente'))
-                            ->extraAttributes(['class' => 'fi-entry-bold'])
-                            ->columnSpan(1),
-                        TextInput::make('descricao')
-                            ->label(__('comercial::filament/resources/projeto.form.descricao'))
-                            ->required()
-                            ->maxLength(255)
-                            ->columnSpan(4),
-                        Select::make('tipo_projeto_id')
-                            ->label(__('comercial::filament/resources/projeto.form.tipo-projeto'))
-                            ->relationship('tipoProjeto', 'descricao')
-                            ->required()
-                            ->searchable()
-                            ->preload()
-                            ->columnSpan(2),
-                        Select::make('situacoes')
-                            ->label(__('comercial::filament/resources/projeto.form.situacoes'))
-                            ->relationship(name: 'situacoes', titleAttribute: 'descricao')
-                            ->multiple()
-                            ->preload()
-                            ->searchable()
-                            ->columnSpan(3),
-                    ]),
+                        // Linha 1: numero_projeto/revisao/data_cadastro (1
+                        // coluna cada) + descricao "Nome da Obra" (4) +
+                        // tipo_projeto_id (2) + situacoes (3) = 12 colunas.
+                        Grid::make(12)
+                            ->columnSpanFull()
+                            ->extraAttributes($gridGap)
+                            ->schema([
+                                // fi-entry-bold: classe própria (ver
+                                // resources/css/filament/admin-entry-content.css) pra
+                                // aplicar negrito só ao VALOR desses 3 campos —
+                                // contato_email/contato_telefone (abaixo, Linha 2)
+                                // recebem a correção de tipografia/alinhamento do
+                                // mesmo CSS, mas sem essa classe, então sem negrito.
+                                Placeholder::make('numero_projeto')
+                                    ->label(__('comercial::filament/resources/projeto.form.numero-projeto'))
+                                    ->content(fn (?Projeto $record) => $record?->numero_projeto
+                                        ?? __('comercial::filament/resources/projeto.form.numero-projeto-pendente'))
+                                    ->extraAttributes(['class' => 'fi-entry-bold'])
+                                    ->columnSpan(1),
+                                Placeholder::make('revisao_display')
+                                    ->label(__('comercial::filament/resources/projeto.form.revisao'))
+                                    ->content(fn (?Projeto $record) => str_pad((string) ($record->revisao ?? 0), 2, '0', STR_PAD_LEFT))
+                                    ->extraAttributes(['class' => 'fi-entry-bold'])
+                                    ->columnSpan(1),
+                                Placeholder::make('data_cadastro')
+                                    ->label(__('comercial::filament/resources/projeto.form.data-cadastro'))
+                                    ->content(fn (?Projeto $record) => $record?->data_cadastro?->format('d/m/Y')
+                                        ?? __('comercial::filament/resources/projeto.form.data-cadastro-pendente'))
+                                    ->extraAttributes(['class' => 'fi-entry-bold'])
+                                    ->columnSpan(1),
+                                TextInput::make('descricao')
+                                    ->label(__('comercial::filament/resources/projeto.form.descricao'))
+                                    ->required()
+                                    ->maxLength(255)
+                                    ->columnSpan(4),
+                                Select::make('tipo_projeto_id')
+                                    ->label(__('comercial::filament/resources/projeto.form.tipo-projeto'))
+                                    ->relationship('tipoProjeto', 'descricao')
+                                    ->required()
+                                    ->searchable()
+                                    ->preload()
+                                    ->columnSpan(2),
+                                Select::make('situacoes')
+                                    ->label(__('comercial::filament/resources/projeto.form.situacoes'))
+                                    ->relationship(name: 'situacoes', titleAttribute: 'descricao')
+                                    ->multiple()
+                                    ->preload()
+                                    ->searchable()
+                                    ->columnSpan(3),
+                            ]),
 
-                // Linha 2: tipo_contratante (Radio Física/Jurídica, 3) +
-                // Select de Cliente — pessoa_fisica_id OU pessoa_juridica_id,
-                // ambos no mesmo columnSpan(4), logo após o Radio; só um
-                // fica ->visible() por vez conforme o Radio, então o outro
-                // simplesmente não é renderizado e não deixa buraco na
-                // grid — + Contato (2) + Email do Contato (2) + Telefone do
-                // Contato (1) = 12 colunas.
-                Grid::make(12)
-                    ->columnSpanFull()
-                    ->extraAttributes($gridGap)
-                    ->schema([
-                        Radio::make('tipo_contratante')
-                            ->label(__('comercial::filament/resources/projeto.form.tipo-contratante'))
-                            ->options([
-                                'pf' => __('comercial::filament/resources/projeto.form.tipo-contratante-options.pessoa-fisica'),
-                                'pj' => __('comercial::filament/resources/projeto.form.tipo-contratante-options.pessoa-juridica'),
-                            ])
-                            ->inline()
-                            ->live()
-                            ->dehydrated(false)
-                            ->afterStateHydrated(function (Radio $component, ?Model $record): void {
-                                if (! $record) {
-                                    return;
-                                }
+                        // Linha 2: tipo_contratante (Radio Física/Jurídica, 3) +
+                        // Select de Cliente — pessoa_fisica_id OU pessoa_juridica_id,
+                        // ambos no mesmo columnSpan(4), logo após o Radio; só um
+                        // fica ->visible() por vez conforme o Radio, então o outro
+                        // simplesmente não é renderizado e não deixa buraco na
+                        // grid — + Contato (2) + Email do Contato (2) + Telefone do
+                        // Contato (1) = 12 colunas.
+                        Grid::make(12)
+                            ->columnSpanFull()
+                            ->extraAttributes($gridGap)
+                            ->schema([
+                                Radio::make('tipo_contratante')
+                                    ->label(__('comercial::filament/resources/projeto.form.tipo-contratante'))
+                                    ->options([
+                                        'pf' => __('comercial::filament/resources/projeto.form.tipo-contratante-options.pessoa-fisica'),
+                                        'pj' => __('comercial::filament/resources/projeto.form.tipo-contratante-options.pessoa-juridica'),
+                                    ])
+                                    ->inline()
+                                    ->live()
+                                    ->dehydrated(false)
+                                    ->afterStateHydrated(function (Radio $component, ?Model $record): void {
+                                        if (! $record) {
+                                            return;
+                                        }
 
-                                $component->state(match (true) {
-                                    filled($record->pessoa_juridica_id) => 'pj',
-                                    filled($record->pessoa_fisica_id) => 'pf',
-                                    default => null,
-                                });
-                            })
-                            ->afterStateUpdated(function (Set $set, ?string $state): void {
-                                if ($state !== 'pf') {
-                                    $set('pessoa_fisica_id', null);
-                                }
+                                        $component->state(match (true) {
+                                            filled($record->pessoa_juridica_id) => 'pj',
+                                            filled($record->pessoa_fisica_id) => 'pf',
+                                            default => null,
+                                        });
+                                    })
+                                    ->afterStateUpdated(function (Set $set, ?string $state): void {
+                                        if ($state !== 'pf') {
+                                            $set('pessoa_fisica_id', null);
+                                        }
 
-                                if ($state !== 'pj') {
-                                    $set('pessoa_juridica_id', null);
-                                    $set('contato_pessoa_fisica_id', null);
-                                }
+                                        if ($state !== 'pj') {
+                                            $set('pessoa_juridica_id', null);
+                                            $set('contato_pessoa_fisica_id', null);
+                                        }
 
-                                $set('endereco_id', null);
-                            })
-                            ->required()
-                            ->columnSpan(3),
+                                        $set('endereco_id', null);
+                                    })
+                                    ->required()
+                                    ->columnSpan(3),
 
-                        Select::make('pessoa_fisica_id')
-                            ->label(__('comercial::filament/resources/projeto.form.pessoa-fisica'))
-                            ->relationship(
-                                name: 'pessoaFisica',
-                                titleAttribute: 'nome',
-                                modifyQueryUsing: fn (Builder $query) => $query->whereHas(
-                                    'categorias',
-                                    fn (Builder $query) => $query->where('e_cliente', true),
-                                ),
-                            )
-                            ->searchable()
-                            ->preload()
-                            ->live()
-                            ->afterStateUpdated(fn (Set $set) => $set('endereco_id', null))
-                            ->visible(fn (Get $get) => $get('tipo_contratante') === 'pf')
-                            ->required(fn (Get $get) => $get('tipo_contratante') === 'pf')
-                            ->columnSpan(4),
+                                Select::make('pessoa_fisica_id')
+                                    ->label(__('comercial::filament/resources/projeto.form.pessoa-fisica'))
+                                    ->relationship(
+                                        name: 'pessoaFisica',
+                                        titleAttribute: 'nome',
+                                        modifyQueryUsing: fn (Builder $query) => $query->whereHas(
+                                            'categorias',
+                                            fn (Builder $query) => $query->where('e_cliente', true),
+                                        ),
+                                    )
+                                    ->searchable()
+                                    ->preload()
+                                    ->live()
+                                    ->afterStateUpdated(fn (Set $set) => $set('endereco_id', null))
+                                    ->visible(fn (Get $get) => $get('tipo_contratante') === 'pf')
+                                    ->required(fn (Get $get) => $get('tipo_contratante') === 'pf')
+                                    ->columnSpan(4),
 
-                        Select::make('pessoa_juridica_id')
-                            ->label(__('comercial::filament/resources/projeto.form.pessoa-juridica'))
-                            ->relationship(
-                                name: 'pessoaJuridica',
-                                titleAttribute: 'nome_fantasia',
-                                modifyQueryUsing: fn (Builder $query) => $query->whereHas(
-                                    'categorias',
-                                    fn (Builder $query) => $query->where('e_cliente', true),
-                                ),
-                            )
-                            ->searchable()
-                            ->preload()
-                            ->live()
-                            ->afterStateUpdated(function (Set $set): void {
-                                $set('contato_pessoa_fisica_id', null);
-                                $set('endereco_id', null);
-                            })
-                            ->visible(fn (Get $get) => $get('tipo_contratante') === 'pj')
-                            ->required(fn (Get $get) => $get('tipo_contratante') === 'pj')
-                            ->columnSpan(4),
+                                Select::make('pessoa_juridica_id')
+                                    ->label(__('comercial::filament/resources/projeto.form.pessoa-juridica'))
+                                    ->relationship(
+                                        name: 'pessoaJuridica',
+                                        titleAttribute: 'nome_fantasia',
+                                        modifyQueryUsing: fn (Builder $query) => $query->whereHas(
+                                            'categorias',
+                                            fn (Builder $query) => $query->where('e_cliente', true),
+                                        ),
+                                    )
+                                    ->searchable()
+                                    ->preload()
+                                    ->live()
+                                    ->afterStateUpdated(function (Set $set): void {
+                                        $set('contato_pessoa_fisica_id', null);
+                                        $set('endereco_id', null);
+                                    })
+                                    ->visible(fn (Get $get) => $get('tipo_contratante') === 'pj')
+                                    ->required(fn (Get $get) => $get('tipo_contratante') === 'pj')
+                                    ->columnSpan(4),
 
-                        Select::make('contato_pessoa_fisica_id')
-                            ->label(__('comercial::filament/resources/projeto.form.contato'))
+                                Select::make('contato_pessoa_fisica_id')
+                                    ->label(__('comercial::filament/resources/projeto.form.contato'))
+                                    ->options(function (Get $get): array {
+                                        $pessoaJuridicaId = $get('pessoa_juridica_id');
+
+                                        if (blank($pessoaJuridicaId)) {
+                                            return [];
+                                        }
+
+                                        return Contato::query()
+                                            ->where('pessoa_juridica_id', $pessoaJuridicaId)
+                                            ->with('pessoaFisica')
+                                            ->get()
+                                            ->mapWithKeys(fn (Contato $contato) => [
+                                                $contato->pessoa_fisica_id => $contato->pessoaFisica?->nome,
+                                            ])
+                                            ->filter()
+                                            ->toArray();
+                                    })
+                                    ->searchable()
+                                    ->live()
+                                    ->visible(fn (Get $get) => $get('tipo_contratante') === 'pj')
+                                    ->columnSpan(2),
+
+                                Placeholder::make('contato_email')
+                                    ->label(__('comercial::filament/resources/projeto.form.contato-email'))
+                                    ->content(fn (Get $get) => static::contatoSelecionado($get)?->email)
+                                    ->visible(fn (Get $get) => $get('tipo_contratante') === 'pj' && filled($get('contato_pessoa_fisica_id')))
+                                    ->columnSpan(2),
+
+                                Placeholder::make('contato_telefone')
+                                    ->label(__('comercial::filament/resources/projeto.form.contato-telefone'))
+                                    ->content(fn (Get $get) => static::contatoSelecionado($get)?->telefone)
+                                    ->visible(fn (Get $get) => $get('tipo_contratante') === 'pj' && filled($get('contato_pessoa_fisica_id')))
+                                    ->columnSpan(1),
+                            ]),
+
+                        // Linha 3: Endereço da Obra sozinho, largura total — não
+                        // precisa de Grid, o próprio campo com columnSpanFull() já
+                        // ocupa a linha inteira. Último campo da Section.
+                        Select::make('endereco_id')
+                            ->label(__('comercial::filament/resources/projeto.form.endereco'))
                             ->options(function (Get $get): array {
+                                return static::enderecoObraOptionsFor($get('pessoa_fisica_id'), $get('pessoa_juridica_id'));
+                            })
+                            ->helperText(function (Get $get): ?string {
+                                // Só mostra o aviso depois de um Cliente selecionado E
+                                // sem nenhum endereço-obra — antes disso (nenhum
+                                // Cliente ainda) o campo já fica vazio por padrão, sem
+                                // precisar de explicação.
+                                if (blank($get('pessoa_fisica_id')) && blank($get('pessoa_juridica_id'))) {
+                                    return null;
+                                }
+
+                                return filled(static::enderecoObraOptionsFor($get('pessoa_fisica_id'), $get('pessoa_juridica_id')))
+                                    ? null
+                                    : __('comercial::filament/resources/projeto.form.endereco-sem-tag-obra');
+                            })
+                            ->columnSpanFull()
+                            ->searchable()
+                            ->live()
+                            ->createOptionForm([
+                                TextInput::make('cep')
+                                    ->label(__('comercial::filament/resources/projeto.form.endereco-form.cep'))
+                                    ->mask('99999-999')
+                                    ->live(onBlur: true)
+                                    ->afterStateUpdated(fn (Set $set, ?string $state) => ViaCepLookup::fill($set, $state)),
+                                TextInput::make('logradouro')
+                                    ->label(__('comercial::filament/resources/projeto.form.endereco-form.logradouro')),
+                                TextInput::make('numero')
+                                    ->label(__('comercial::filament/resources/projeto.form.endereco-form.numero')),
+                                TextInput::make('complemento')
+                                    ->label(__('comercial::filament/resources/projeto.form.endereco-form.complemento')),
+                                TextInput::make('bairro')
+                                    ->label(__('comercial::filament/resources/projeto.form.endereco-form.bairro')),
+                                TextInput::make('municipio')
+                                    ->label(__('comercial::filament/resources/projeto.form.endereco-form.municipio')),
+                                TextInput::make('uf')
+                                    ->label(__('comercial::filament/resources/projeto.form.endereco-form.uf'))
+                                    ->maxLength(2),
+                            ])
+                            ->createOptionUsing(function (array $data, Get $get): int {
+                                $endereco = Endereco::create($data);
+
+                                $pessoaFisicaId = $get('pessoa_fisica_id');
                                 $pessoaJuridicaId = $get('pessoa_juridica_id');
 
-                                if (blank($pessoaJuridicaId)) {
-                                    return [];
+                                // O endereço só serve pra algo aqui se ficar vinculado ao
+                                // contratante selecionado — senão desaparece da lista de
+                                // opções assim que o formulário recalcular. "Obra" (a tag
+                                // do enum TipoEndereco, sem relação com o nome deste
+                                // cadastro — ver CLAUDE.md de perseu/pessoas, "Tipo de
+                                // Endereço como tag") é a mais coerente com o contexto
+                                // (endereço da obra/canteiro em execução). Tag única e
+                                // deliberada aqui, NÃO todas marcadas por padrão — essa
+                                // regra vale só para o CheckboxList do formulário manual
+                                // de Endereços; este é preenchimento automático sem
+                                // interação do usuário.
+                                if (filled($pessoaFisicaId)) {
+                                    PessoaFisica::find($pessoaFisicaId)?->enderecos()->attach($endereco->id, [
+                                        'principal' => false,
+                                    ]);
+                                } elseif (filled($pessoaJuridicaId)) {
+                                    PessoaJuridica::find($pessoaJuridicaId)?->enderecos()->attach($endereco->id, [
+                                        'principal' => false,
+                                    ]);
                                 }
 
-                                return Contato::query()
-                                    ->where('pessoa_juridica_id', $pessoaJuridicaId)
-                                    ->with('pessoaFisica')
-                                    ->get()
-                                    ->mapWithKeys(fn (Contato $contato) => [
-                                        $contato->pessoa_fisica_id => $contato->pessoaFisica?->nome,
-                                    ])
-                                    ->filter()
-                                    ->toArray();
-                            })
-                            ->searchable()
-                            ->live()
-                            ->visible(fn (Get $get) => $get('tipo_contratante') === 'pj')
-                            ->columnSpan(2),
+                                $endereco->tipos()->create(['tipo' => TipoEndereco::Obra->value]);
 
-                        Placeholder::make('contato_email')
-                            ->label(__('comercial::filament/resources/projeto.form.contato-email'))
-                            ->content(fn (Get $get) => static::contatoSelecionado($get)?->email)
-                            ->visible(fn (Get $get) => $get('tipo_contratante') === 'pj' && filled($get('contato_pessoa_fisica_id')))
-                            ->columnSpan(2),
-
-                        Placeholder::make('contato_telefone')
-                            ->label(__('comercial::filament/resources/projeto.form.contato-telefone'))
-                            ->content(fn (Get $get) => static::contatoSelecionado($get)?->telefone)
-                            ->visible(fn (Get $get) => $get('tipo_contratante') === 'pj' && filled($get('contato_pessoa_fisica_id')))
-                            ->columnSpan(1),
+                                return $endereco->id;
+                            }),
                     ]),
 
-                // Linha 3: Endereço da Obra sozinho, largura total — não
-                // precisa de Grid, o próprio campo com columnSpanFull() já
-                // ocupa a linha inteira.
-                Select::make('endereco_id')
-                    ->label(__('comercial::filament/resources/projeto.form.endereco'))
-                    ->options(function (Get $get): array {
-                        return static::enderecoObraOptionsFor($get('pessoa_fisica_id'), $get('pessoa_juridica_id'));
-                    })
-                    ->helperText(function (Get $get): ?string {
-                        // Só mostra o aviso depois de um Cliente selecionado E
-                        // sem nenhum endereço-obra — antes disso (nenhum
-                        // Cliente ainda) o campo já fica vazio por padrão, sem
-                        // precisar de explicação.
-                        if (blank($get('pessoa_fisica_id')) && blank($get('pessoa_juridica_id'))) {
-                            return null;
-                        }
-
-                        return filled(static::enderecoObraOptionsFor($get('pessoa_fisica_id'), $get('pessoa_juridica_id')))
-                            ? null
-                            : __('comercial::filament/resources/projeto.form.endereco-sem-tag-obra');
-                    })
-                    ->columnSpanFull()
-                    ->searchable()
-                    ->live()
-                    ->createOptionForm([
-                        TextInput::make('cep')
-                            ->label(__('comercial::filament/resources/projeto.form.endereco-form.cep'))
-                            ->mask('99999-999')
-                            ->live(onBlur: true)
-                            ->afterStateUpdated(fn (Set $set, ?string $state) => ViaCepLookup::fill($set, $state)),
-                        TextInput::make('logradouro')
-                            ->label(__('comercial::filament/resources/projeto.form.endereco-form.logradouro')),
-                        TextInput::make('numero')
-                            ->label(__('comercial::filament/resources/projeto.form.endereco-form.numero')),
-                        TextInput::make('complemento')
-                            ->label(__('comercial::filament/resources/projeto.form.endereco-form.complemento')),
-                        TextInput::make('bairro')
-                            ->label(__('comercial::filament/resources/projeto.form.endereco-form.bairro')),
-                        TextInput::make('municipio')
-                            ->label(__('comercial::filament/resources/projeto.form.endereco-form.municipio')),
-                        TextInput::make('uf')
-                            ->label(__('comercial::filament/resources/projeto.form.endereco-form.uf'))
-                            ->maxLength(2),
-                    ])
-                    ->createOptionUsing(function (array $data, Get $get): int {
-                        $endereco = Endereco::create($data);
-
-                        $pessoaFisicaId = $get('pessoa_fisica_id');
-                        $pessoaJuridicaId = $get('pessoa_juridica_id');
-
-                        // O endereço só serve pra algo aqui se ficar vinculado ao
-                        // contratante selecionado — senão desaparece da lista de
-                        // opções assim que o formulário recalcular. "Obra" (a tag
-                        // do enum TipoEndereco, sem relação com o nome deste
-                        // cadastro — ver CLAUDE.md de perseu/pessoas, "Tipo de
-                        // Endereço como tag") é a mais coerente com o contexto
-                        // (endereço da obra/canteiro em execução). Tag única e
-                        // deliberada aqui, NÃO todas marcadas por padrão — essa
-                        // regra vale só para o CheckboxList do formulário manual
-                        // de Endereços; este é preenchimento automático sem
-                        // interação do usuário.
-                        if (filled($pessoaFisicaId)) {
-                            PessoaFisica::find($pessoaFisicaId)?->enderecos()->attach($endereco->id, [
-                                'principal' => false,
-                            ]);
-                        } elseif (filled($pessoaJuridicaId)) {
-                            PessoaJuridica::find($pessoaJuridicaId)?->enderecos()->attach($endereco->id, [
-                                'principal' => false,
-                            ]);
-                        }
-
-                        $endereco->tipos()->create(['tipo' => TipoEndereco::Obra->value]);
-
-                        return $endereco->id;
-                    }),
-
-                // Linha 4: respiro visual entre Endereço e os botões
-                // Salvar/Cancelar — Endereço já é o último campo do form,
-                // então os botões (renderizados pela própria página
-                // Create/Edit, fora deste form()) ficam logo abaixo desta
-                // linha. Altura reduzida de 3rem para 1rem (2026-09-02) pra
-                // diminuir a distância/rolagem até os botões, mantendo só
-                // um respiro mínimo. Não existe um componente "spacer"
-                // dedicado em filament/schemas (mesma lacuna documentada no
-                // CLAUDE.md para o Divider entre form/Relation Manager) —
-                // Html::make() com um <div> de altura fixa é o mecanismo
-                // idiomático disponível pra isso (mesmo usado no CLAUDE.md
-                // para o <hr> de divisor).
-                Html::make('<div style="height: 1rem;"></div>')
-                    ->columnSpanFull(),
+                // Espaço reservado para uma futura Section::make('Itens do
+                // Projeto') aqui — item IRMÃO da Section "Cabeçalho" acima,
+                // dentro deste mesmo array. Continuará sendo o penúltimo
+                // elemento da página: os botões Salvar/Cancelar não fazem
+                // parte deste array (são renderizados pela página Create/
+                // Edit, fora do form()), então permanecem como último
+                // elemento sem exigir nenhum ajuste aqui quando a Section de
+                // Itens for adicionada.
             ]);
     }
 
