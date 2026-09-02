@@ -4,7 +4,7 @@ namespace Perseu\Auditoria\Support;
 
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
-use Perseu\Comercial\Models\Obra;
+use Perseu\Comercial\Models\Projeto;
 use Perseu\Comercial\Models\ReferenciaPreco;
 use Perseu\Pessoas\Models\PessoaFisica;
 use Perseu\Pessoas\Models\PessoaJuridica;
@@ -17,7 +17,7 @@ use Perseu\Pessoas\Models\PessoaJuridica;
  * plugins/perseu`) antes de escrever esta lista, não assumido: estes
  * 4 (`ReferenciaPreco` adicionado na tarefa do Cluster Referências,
  * 2026-08-30, já nascendo com `SoftDeletes` desde a criação, seguindo
- * a convenção) — Categoria de Pessoa, Setor, Tipo/Situação de Obra
+ * a convenção) — Categoria de Pessoa, Setor, Tipo/Situação de Projeto
  * NÃO usam `SoftDeletes` hoje (limitação já documentada, ver
  * "Limitação conhecida" no CLAUDE.md).
  *
@@ -41,7 +41,7 @@ class TrashCatalog
     public static function models(): array
     {
         return [
-            Obra::class,
+            Projeto::class,
             ReferenciaPreco::class,
             PessoaJuridica::class,
             PessoaFisica::class,

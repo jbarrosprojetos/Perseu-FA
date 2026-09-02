@@ -93,7 +93,7 @@ class AuditoriaServiceProvider extends PackageServiceProvider
                     // `filament.{painel}.resources.{plural-kebab}.edit`, que
                     // não existe pra NENHUM dos nossos Resources clusterizados
                     // (rota real leva o slug do Cluster no meio, ex.
-                    // `filament.admin.comercial.resources.obras.edit`) — a
+                    // `filament.admin.comercial.resources.projetos.edit`) — a
                     // troca falha (`RouteNotFoundException`, capturada) e
                     // devolve sempre `'#'`, confirmado testando com
                     // `ActivitylogResource::getResourceUrl()` num registro

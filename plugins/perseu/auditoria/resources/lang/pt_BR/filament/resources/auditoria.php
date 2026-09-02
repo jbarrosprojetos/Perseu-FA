@@ -17,9 +17,9 @@ return [
     // depender de chamar Resources de outros plugins pra montar seus
     // próprios rótulos).
     'subject_types' => [
-        'obra'            => 'Obra',
-        'tipo-obra'       => 'Tipo de Obra',
-        'situacao-obra'   => 'Situação de Obra',
+        'projeto'          => 'Projeto',
+        'tipo-projeto'     => 'Tipo de Projeto',
+        'situacao-projeto' => 'Situação de Projeto',
         'referencia-preco' => 'Preço',
         'pessoa-fisica'   => 'Pessoa Física',
         'pessoa-juridica' => 'Pessoa Jurídica',
@@ -43,7 +43,7 @@ return [
         // Caixa "Pesquisar" padrão do Filament (topo da tabela) —
         // busca unificada por nome/razão social/número, ver
         // AuditoriaResource::getSubjectReferenceColumnComponent().
-        'search_placeholder' => 'Buscar por nome, razão social ou número da Obra...',
+        'search_placeholder' => 'Buscar por nome, razão social ou número do Projeto...',
         'filters' => [
             'modulo' => [
                 'label' => 'Módulo',

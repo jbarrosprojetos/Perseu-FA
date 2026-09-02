@@ -4,14 +4,14 @@ namespace Perseu\Comercial;
 
 use Filament\Panel;
 use Illuminate\Support\Facades\Gate;
-use Perseu\Comercial\Models\Obra;
+use Perseu\Comercial\Models\Projeto;
 use Perseu\Comercial\Models\ReferenciaPreco;
-use Perseu\Comercial\Models\SituacaoObra;
-use Perseu\Comercial\Models\TipoObra;
-use Perseu\Comercial\Policies\ObraPolicy;
+use Perseu\Comercial\Models\SituacaoProjeto;
+use Perseu\Comercial\Models\TipoProjeto;
+use Perseu\Comercial\Policies\ProjetoPolicy;
 use Perseu\Comercial\Policies\ReferenciaPrecoPolicy;
-use Perseu\Comercial\Policies\SituacaoObraPolicy;
-use Perseu\Comercial\Policies\TipoObraPolicy;
+use Perseu\Comercial\Policies\SituacaoProjetoPolicy;
+use Perseu\Comercial\Policies\TipoProjetoPolicy;
 use Webkul\PluginManager\Console\Commands\InstallCommand;
 use Webkul\PluginManager\Console\Commands\UninstallCommand;
 use Webkul\PluginManager\Package;
@@ -48,6 +48,7 @@ class ComercialServiceProvider extends PackageServiceProvider
                 '2026_08_30_150000_add_valor_pecas_fatores_to_referencias_precos_table',
                 '2026_09_01_100000_drop_revisao_from_obras_table',
                 '2026_09_02_100000_add_revisao_back_to_obras_table',
+                '2026_09_02_110000_rename_obra_to_projeto',
             ])
             ->runsMigrations()
             ->hasDependency('auditoria')
@@ -59,9 +60,9 @@ class ComercialServiceProvider extends PackageServiceProvider
 
     public function packageBooted(): void
     {
-        Gate::policy(SituacaoObra::class, SituacaoObraPolicy::class);
-        Gate::policy(TipoObra::class, TipoObraPolicy::class);
-        Gate::policy(Obra::class, ObraPolicy::class);
+        Gate::policy(SituacaoProjeto::class, SituacaoProjetoPolicy::class);
+        Gate::policy(TipoProjeto::class, TipoProjetoPolicy::class);
+        Gate::policy(Projeto::class, ProjetoPolicy::class);
         Gate::policy(ReferenciaPreco::class, ReferenciaPrecoPolicy::class);
     }
 

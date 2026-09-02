@@ -5,10 +5,10 @@ namespace Perseu\Auditoria\Support;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
-use Perseu\Comercial\Models\Obra;
+use Perseu\Comercial\Models\Projeto;
 use Perseu\Comercial\Models\ReferenciaPreco;
-use Perseu\Comercial\Models\SituacaoObra;
-use Perseu\Comercial\Models\TipoObra;
+use Perseu\Comercial\Models\SituacaoProjeto;
+use Perseu\Comercial\Models\TipoProjeto;
 use Perseu\Pessoas\Models\CategoriaPessoa;
 use Perseu\Pessoas\Models\Contato;
 use Perseu\Pessoas\Models\Endereco;
@@ -23,7 +23,7 @@ use Perseu\Pessoas\Models\Setor;
  * então o valor salvo é sempre o nome completo da classe) para o que a
  * central de Auditoria (Configurações > Auditoria) exibe/filtra: rótulo
  * amigável, módulo/plugin de origem, e uma referência textual ao registro
- * específico (nome, razão social, número de Obra etc.).
+ * específico (nome, razão social, número de Projeto etc.).
  *
  * A lista de classes aqui precisa cobrir todo Model que usa
  * `Perseu\Auditoria\Traits\LogsBusinessActivity` (checar com
@@ -43,9 +43,9 @@ class SubjectTypeCatalog
     protected static function labelSlugs(): array
     {
         return [
-            Obra::class           => 'obra',
-            TipoObra::class       => 'tipo-obra',
-            SituacaoObra::class   => 'situacao-obra',
+            Projeto::class          => 'projeto',
+            TipoProjeto::class      => 'tipo-projeto',
+            SituacaoProjeto::class  => 'situacao-projeto',
             ReferenciaPreco::class => 'referencia-preco',
             PessoaFisica::class   => 'pessoa-fisica',
             PessoaJuridica::class => 'pessoa-juridica',
@@ -62,9 +62,9 @@ class SubjectTypeCatalog
     protected static function modulos(): array
     {
         return [
-            Obra::class            => self::MODULO_COMERCIAL,
-            TipoObra::class        => self::MODULO_COMERCIAL,
-            SituacaoObra::class    => self::MODULO_COMERCIAL,
+            Projeto::class          => self::MODULO_COMERCIAL,
+            TipoProjeto::class      => self::MODULO_COMERCIAL,
+            SituacaoProjeto::class  => self::MODULO_COMERCIAL,
             ReferenciaPreco::class => self::MODULO_COMERCIAL,
             PessoaFisica::class    => self::MODULO_PESSOAS,
             PessoaJuridica::class  => self::MODULO_PESSOAS,
@@ -132,9 +132,9 @@ class SubjectTypeCatalog
 
     /**
      * Referência textual pro registro específico afetado pelo log —
-     * "Obra", "Pessoa Jurídica" etc. já contam pela coluna de cadastro;
+     * "Projeto", "Pessoa Jurídica" etc. já contam pela coluna de cadastro;
      * esta é a parte que muda de linha pra linha (nome, razão social,
-     * número da Obra...). Retorna `null` quando o subject não está mais
+     * número do Projeto...). Retorna `null` quando o subject não está mais
      * disponível (excluído em definitivo) ou é de um tipo não mapeado.
      */
     public static function referenceFor(?Model $subject): ?string
@@ -144,10 +144,10 @@ class SubjectTypeCatalog
         }
 
         return match ($subject::class) {
-            Obra::class => trim(
-                ($subject->numero_obra ? "{$subject->numero_obra} — " : '') . $subject->descricao
+            Projeto::class => trim(
+                ($subject->numero_projeto ? "{$subject->numero_projeto} — " : '') . $subject->descricao
             ),
-            TipoObra::class, SituacaoObra::class, ReferenciaPreco::class, CategoriaPessoa::class, Setor::class => $subject->descricao,
+            TipoProjeto::class, SituacaoProjeto::class, ReferenciaPreco::class, CategoriaPessoa::class, Setor::class => $subject->descricao,
             PessoaFisica::class => $subject->nome,
             PessoaJuridica::class => $subject->razao_social,
             Endereco::class => trim(
@@ -160,7 +160,7 @@ class SubjectTypeCatalog
 
     /**
      * Aplica o termo digitado na caixa "Pesquisar" da central de
-     * Auditoria (nome, razão social, número de Obra etc.) via
+     * Auditoria (nome, razão social, número de Projeto etc.) via
      * `whereHasMorph` — um único termo pesquisado na(s) coluna(s)
      * certa(s) de cada tipo de subject mapeado, sem precisar de uma
      * coluna própria na tabela `activity_log` (a referência é derivada
@@ -184,10 +184,10 @@ class SubjectTypeCatalog
             array_keys(static::labelSlugs()),
             function (Builder $subQuery, string $type) use ($termo) {
                 match ($type) {
-                    Obra::class => $subQuery->where(fn ($q) => $q
+                    Projeto::class => $subQuery->where(fn ($q) => $q
                         ->where('descricao', 'like', "%{$termo}%")
-                        ->orWhere('numero_obra', 'like', "%{$termo}%")),
-                    TipoObra::class, SituacaoObra::class, ReferenciaPreco::class, CategoriaPessoa::class, Setor::class => $subQuery
+                        ->orWhere('numero_projeto', 'like', "%{$termo}%")),
+                    TipoProjeto::class, SituacaoProjeto::class, ReferenciaPreco::class, CategoriaPessoa::class, Setor::class => $subQuery
                         ->where('descricao', 'like', "%{$termo}%"),
                     PessoaFisica::class => $subQuery->where('nome', 'like', "%{$termo}%"),
                     PessoaJuridica::class => $subQuery->where(fn ($q) => $q

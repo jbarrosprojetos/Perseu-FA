@@ -44,13 +44,13 @@ use Webkul\Support\Filament\Clusters\Settings;
  *
  * Central única de auditoria (2026-08-29): esta lista passou a ser o
  * ÚNICO lugar do sistema pra ver histórico de atividade — as abas
- * "Atividades" que existiam dentro de Pessoa Jurídica/Física/Obra
+ * "Atividades" que existiam dentro de Pessoa Jurídica/Física/Projeto
  * (`ActivitylogRelationManager`) foram removidas (informação
  * duplicada, já que esta lista mostra TUDO de qualquer módulo). Pra
  * compensar a perda do atalho "aba dentro do próprio registro", esta
  * página ganhou filtro por cadastro/módulo/usuário de origem
  * (`SubjectTypeCatalog`) e busca textual (nome, razão social, número
- * de Obra etc.) — inicialmente um `Filter` separado, depois unificada
+ * de Projeto etc.) — inicialmente um `Filter` separado, depois unificada
  * (2026-08-29) na caixa "Pesquisar" padrão do Filament, ver
  * `getSubjectReferenceColumnComponent()`. `table()` sobrescreve o do
  * pacote por completo (em vez de tentar compor com os métodos
@@ -205,7 +205,7 @@ class AuditoriaResource extends ActivitylogResource
 
     /**
      * Referência textual ao registro específico afetado (nome, razão
-     * social, número de Obra...) — não é uma coluna real de
+     * social, número de Projeto...) — não é uma coluna real de
      * `activity_log`, o valor vem do `subject` (já eager-loaded por
      * `ActivitylogResource::getEloquentQuery()`, inclusive
      * soft-deleted).
@@ -225,7 +225,7 @@ class AuditoriaResource extends ActivitylogResource
      * busca fazendo a mesma coisa confundia o usuário).
      *
      * Case-insensitive "de graça": todas as 14 colunas reais que
-     * `applyBusca()` compara (`descricao`, `numero_obra`, `nome`,
+     * `applyBusca()` compara (`descricao`, `numero_projeto`, `nome`,
      * `razao_social`, `nome_fantasia`, `cnpj`, `logradouro`, `bairro`,
      * `municipio`, `cargo`) usam collation `utf8mb4_unicode_ci`
      * (confirmado com `SHOW FULL COLUMNS` em cada tabela) — `LIKE` do

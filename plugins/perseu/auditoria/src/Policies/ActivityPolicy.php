@@ -10,7 +10,7 @@ use Webkul\Security\Models\User;
  * Controla a página central de Auditoria (Configurações → Auditoria).
  *
  * Até 2026-08-29 esta policy também controlava a aba "Atividades"
- * embutida em Pessoa Jurídica/Física/Obra
+ * embutida em Pessoa Jurídica/Física/Projeto
  * (`Rmsramos\Activitylog\RelationManagers\ActivitylogRelationManager`,
  * que se autorizava chamando `authorize('viewAny', Activity::class)`
  * via `RelationManager::canViewForRecord()`) — essas abas foram

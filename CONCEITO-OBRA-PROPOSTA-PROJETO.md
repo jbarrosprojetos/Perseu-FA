@@ -466,8 +466,9 @@ como estado atual.
 Quadro final de nomenclatura:
 
 - **"Projeto"** — a entidade de negócio raiz em `perseu/comercial`
-  (hoje chamada "Obra", numeração AAT####). Rename Obra → Projeto
-  ainda a ser feito.
+  (numeração AAT####, antes chamada "Obra"). Rename Obra → Projeto
+  **concluído em 02/09/2026** — ver seção "Rename Obra → Projeto
+  concluído" abaixo.
 - **"Processo"** — a entidade interna do plugin `webkul/projects`
   (hoje "Project"/"Projeto" internamente no código), que passa a ter
   as **Tarefas** dentro dela. Um Processo representa **todo o ciclo
@@ -483,8 +484,8 @@ Quadro final de nomenclatura:
   um cadastro separado), conforme já registrado.
 
 **Relação entre Projeto (Comercial) e Processo (Gestão de Processos)**:
-ainda não desenhada tecnicamente — a ideia é que cada Projeto (Obra)
-tenha (ou gere) um Processo correspondente, que acompanha seu ciclo de
+ainda não desenhada tecnicamente — a ideia é que cada Projeto tenha (ou
+gere) um Processo correspondente, que acompanha seu ciclo de
 vida operacional completo via Tarefas/Etapas/Marcos do plugin de
 Gestão de Processos. Como exatamente essas duas entidades se conectam
 (1:1? o Processo é criado automaticamente quando o Projeto muda de
@@ -498,9 +499,12 @@ agora.
    02/09/2026** — ver seção "Rename interno Project → Processo
    concluído" abaixo e `CLAUDE.md` para o detalhamento técnico
    completo.
-2. Rename completo `Obra` → `Projeto` em `perseu/comercial`. **Próximo
-   passo, ainda não feito.**
-3. Desenho da relação entre Projeto e Processo.
+2. ~~Rename completo `Obra` → `Projeto` em `perseu/comercial`.~~
+   **Concluído em 02/09/2026** — ver seção "Rename Obra → Projeto
+   concluído" abaixo e `HISTORICO-DESENVOLVIMENTO.md` para o
+   detalhamento técnico completo.
+3. Desenho da relação entre Projeto e Processo. **Próximo passo, ainda
+   não feito.**
 4. Detalhamento dos valores de Situação (incluindo "Proposta").
 
 ## Rename interno Project → Processo concluído (02/09/2026)
@@ -531,3 +535,32 @@ contrato JSON da API continuam com "project"/"projects" (com uma
 pequena exceção aceita: o campo `processo_id` no payload JSON, já que
 a coluna em si mudou de nome). Se um dia essa API for exposta a algum
 consumidor real, revisitar esse rename como uma tarefa própria.
+
+## Rename Obra → Projeto concluído (02/09/2026)
+
+O passo 2 da ordem de execução acima está **feito**: o cadastro de
+negócio central de `perseu/comercial` teve sua entidade interna
+renomeada de `Obra` para `Projeto` de ponta a ponta — Model, tabelas
+(`obras` → `projetos`, e as 4 tabelas/colunas relacionadas), Filament
+Resources (`ProjetoResource`/`SituacaoProjetoResource`/
+`TipoProjetoResource`), páginas, permissões Shield
+(`*_comercial_projeto`), traduções (pt_BR/en) e as referências
+cruzadas em `perseu/auditoria` (`SubjectTypeCatalog`, `TrashCatalog`,
+Central de Auditoria, Lixeira Central — incluindo a atualização dos
+`activity_log.subject_type` já gravados, pra não perder o histórico de
+auditoria anterior ao rename). Detalhamento técnico completo
+(arquivos alterados, migration, achado sobre `activity_log`, exceções
+conscientes como `TipoEndereco::Obra` e `fator_mao_obra`) está
+registrado no `HISTORICO-DESENVOLVIMENTO.md`, seção "Rename Obra →
+Projeto no plugin perseu/comercial".
+
+`obras.revisao` não mudou de significado — só acompanhou o rename da
+tabela (virou `projetos.revisao`). A decisão de Revisão se tornar um
+atributo formal de uma futura Situação "Proposta" continua sendo a
+etapa 4 deste plano, ainda não feita.
+
+**Não confundido com o rename anterior `Project → Processo`** (passo
+1, `webkul/projects`) — namespaces e tabelas totalmente distintos, sem
+FK entre si; a única relação entre os dois é conceitual (ver "Relação
+entre Projeto (Comercial) e Processo (Gestão de Processos)" acima,
+ainda não desenhada tecnicamente — próximo passo, etapa 3).

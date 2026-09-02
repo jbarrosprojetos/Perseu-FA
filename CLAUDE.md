@@ -116,7 +116,7 @@ silenciosamente ignorado.
   Classe utilitária pura, sem estado, sem depender de Model/Resource —
   chamável de qualquer formulário que tenha esses campos, dentro ou
   fora do plugin Pessoas. Usada por `HasEnderecoRelationManagerSchema`
-  e pelo `createOptionForm` de Endereço em `ObraResource`.
+  e pelo `createOptionForm` de Endereço em `ProjetoResource`.
 - **CNPJ**: `Perseu\Pessoas\Support\BrasilApiCnpjLookup::fill(Set $set,
   Get $get, ?string $cnpj, string $razaoSocialField = 'razao_social')`
   — consulta `https://brasilapi.com.br/api/cnpj/v1/{cnpj}` (timeout
@@ -309,7 +309,7 @@ com `guard_name = 'sanctum'`.
 
 ## Convenção para Model novo de cadastro de negócio
 
-Sempre que criar um novo Model de cadastro de negócio (Obra, Pessoa
+Sempre que criar um novo Model de cadastro de negócio (Projeto, Pessoa
 Física/Jurídica, Referência de Preços, etc.), siga desde o primeiro
 commit:
 
@@ -370,8 +370,8 @@ form, só não some com a listagem).
   `view_any_auditoria_auditoria`/`view_auditoria_auditoria`.
 - `Perseu\Auditoria\Support\SubjectTypeCatalog` é o mapeamento único
   FQCN → rótulo/módulo/referência amigável/escopo de busca para os 9
-  Models hoje auditados (Obra, TipoObra, SituacaoObra, ReferenciaPreco
-  — módulo Comercial; PessoaFisica, PessoaJuridica, CategoriaPessoa,
+  Models hoje auditados (Projeto, TipoProjeto, SituacaoProjeto,
+  ReferenciaPreco — módulo Comercial; PessoaFisica, PessoaJuridica, CategoriaPessoa,
   Setor, Endereco, Contato — módulo Pessoas). O projeto não define
   `Relation::morphMap()`, então `activity_log.subject_type` guarda o
   FQCN completo.
@@ -385,8 +385,8 @@ form, só não some com a listagem).
 
   | Cadastro | Coluna(s) pesquisada(s) |
   |---|---|
-  | Obra | `descricao`, `numero_obra` |
-  | Tipo de Obra, Situação de Obra, Categoria de Pessoa, Setor | `descricao` |
+  | Projeto | `descricao`, `numero_projeto` |
+  | Tipo de Projeto, Situação de Projeto, Categoria de Pessoa, Setor | `descricao` |
   | Pessoa Física | `nome` |
   | Pessoa Jurídica | `razao_social`, `nome_fantasia`, `cnpj` |
   | Endereço | `logradouro`, `bairro`, `municipio` |
@@ -418,7 +418,7 @@ form, só não some com a listagem).
   imutabilidade da auditoria de qualquer forma.
 - **Lixeira Central** (Configurações → Lixeira,
   `Perseu\Auditoria\Filament\Pages\Lixeira`) agrega os Excluídos de
-  TODOS os cadastros com `SoftDeletes` numa tabela só (hoje: Obra,
+  TODOS os cadastros com `SoftDeletes` numa tabela só (hoje: Projeto,
   Pessoa Física, Pessoa Jurídica, Referência de Preços —
   `Perseu\Auditoria\Support\TrashCatalog::models()` é a lista oficial;
   Categoria/Setor/Tipo/Situação NÃO têm `SoftDeletes`, então não
@@ -432,7 +432,7 @@ form, só não some com a listagem).
   Policy do Model real (`Gate::allows('restore'|'forceDelete',
   $modelReal)`).
 - **Pendente**: o filtro "Excluídos"/`RestoreAction`/`ForceDeleteAction`
-  em cada Resource individual (Obra/PF/PJ) continuam ativos — só devem
+  em cada Resource individual (Projeto/PF/PJ) continuam ativos — só devem
   ser removidos depois que o usuário confirmar que a Lixeira Central
   substitui bem esse acesso. Não remover sem essa confirmação.
 - **Não implementado (levantado, ver `HISTORICO-DESENVOLVIMENTO.md`)**:
@@ -457,8 +457,8 @@ como item único.
 
 Um Cluster é a ferramenta certa quando o objetivo é o OPOSTO: UM item
 no dropdown que abre uma sidebar própria com sub-hierarquia (padrão
-"Configurações", "Obras", "Referências" — ver
-`Perseu\Comercial\Filament\Clusters\{Obras,Referencias}`). Nesse caso:
+"Configurações", "Projetos", "Referências" — ver
+`Perseu\Comercial\Filament\Clusters\{Projetos,Referencias}`). Nesse caso:
 - `getNavigationGroup()` só no Cluster, nunca nos Resources filhos —
   se o Resource também declarar (herança do padrão achatado), a
   sidebar do Cluster lança `\Exception` quando o grupo tem ícone E os
@@ -486,17 +486,18 @@ compartilhado, escondido do dropdown da topbar.
 | Conceito | Nome ATUAL | Namespace/plugin |
 |---|---|---|
 | Entidade interna de gestão de processos (Kanban/tarefas internas) | **Processo** (antes "Project"/"Projeto") | `Webkul\Project\Models\Processo` — plugin core `webkul/projects` |
-| Cadastro de negócio de marcenaria (obras da F.A. Marcenaria) | **Obra** (antes "Projeto") — rename para **"Projeto"** é decisão futura, ainda PENDENTE | `Perseu\Comercial\Models\Obra` — plugin `perseu/comercial` |
+| Cadastro de negócio de marcenaria (obras da F.A. Marcenaria) | **Projeto** (antes "Obra", que por sua vez tinha sido renomeado de "Projeto" originalmente — ver histórico) | `Perseu\Comercial\Models\Projeto` — plugin `perseu/comercial` |
 
 Não confundir os dois: são namespaces/tabelas totalmente independentes,
 sem FK entre si. A relação entre eles ainda não foi desenhada
 tecnicamente (ver `CONCEITO-OBRA-PROPOSTA-PROJETO.md`).
 
-`obras.revisao` existe (`unsignedInteger`, `default(0)`, sem lógica de
-autoincremento, exibido como Placeholder somente-leitura zero-padded
-em 2 dígitos) — fora do `$fillable`, sem input editável em lugar
-nenhum. A ideia conceitual atual é que "Obra + Revisão" já representa
-o que seria uma "Proposta", sem Model/Resource separado por enquanto.
+`projetos.revisao` existe (`unsignedInteger`, `default(0)`, sem lógica
+de autoincremento, exibido como Placeholder somente-leitura
+zero-padded em 2 dígitos) — fora do `$fillable`, sem input editável em
+lugar nenhum. A ideia conceitual atual é que "Projeto + Revisão" já
+representa o que seria uma "Proposta", sem Model/Resource separado por
+enquanto.
 
 **Pendência conhecida**: a camada de API REST
 (`Http/Controllers/API/V1/*`, `Http/Resources/V1/*`,
@@ -510,22 +511,24 @@ relação ao nome antigo `project_id`).
 ## Roadmap / Pendências em aberto
 
 - **PDF de Proposta**: ao final do fluxo comercial, gerar PDF no
-  estilo do documento real da F.A. Marcenaria (cabeçalho obra/
+  estilo do documento real da F.A. Marcenaria (cabeçalho projeto/
   contratante/contratada, itens/serviços com valores, condições de
   pagamento, cláusulas, assinaturas). Avaliar `barryvdh/laravel-dompdf`
   (já no `composer.json`). Cluster "Referências" (Preços) já existe
   como base de dados para isso; Propostas/Contratos/Termos de
   Entrega/Garantia ainda não têm Model/Resource.
-- **Vínculo Obra ↔ Processo** (plugin de Tarefas): decidir só depois
-  do plugin de Tarefas estar estável em uso real — Opção A (Processo
-  espelho por Obra, exige sincronização) vs. Opção B (Processo único
-  "guarda-chuva", referência só em texto). Definir no momento de
-  implementar a automação de criação de tarefas (ex.: disparo por
-  mudança de Situação da Obra).
-- **Rename Obra → Projeto**: decisão de nomenclatura final tomada
-  (`CONCEITO-OBRA-PROPOSTA-PROJETO.md`), passo 1 (Project → Processo no
-  plugin core) já feito; passo 2 (Obra → Projeto em
-  `perseu/comercial`) ainda não iniciado.
+- **Vínculo Projeto ↔ Processo** (plugin de Gestão de Processos):
+  decidir só depois do plugin de Gestão de Processos estar estável em
+  uso real — Opção A (Processo espelho por Projeto, exige
+  sincronização) vs. Opção B (Processo único "guarda-chuva", referência
+  só em texto). Definir no momento de implementar a automação de
+  criação de tarefas (ex.: disparo por mudança de Situação do Projeto).
+  Próximo passo do plano de 4 etapas em
+  `CONCEITO-OBRA-PROPOSTA-PROJETO.md` (passos 1 e 2 já concluídos).
+- **Rename Obra → Projeto**: **concluído em 2026-09-02** — detalhamento
+  técnico completo em `HISTORICO-DESENVOLVIMENTO.md` ("Rename Obra →
+  Projeto no plugin perseu/comercial"), decisão de negócio em
+  `CONCEITO-OBRA-PROPOSTA-PROJETO.md`.
 - **Company/Branch e NF-e**: `bairro`/`numero` de Company não são
   sincronizados para o Partner vinculado hoje (nenhum consumidor
   precisa ainda) — estender `Company::boot()` quando a emissão de NF-e
@@ -534,13 +537,13 @@ relação ao nome antigo `project_id`).
   próxima edição (a validação `CnpjValido` vai bloquear até lá).
 - **Restaurar a partir da Auditoria**: levantado, não implementado —
   ver "Auditoria e Lixeira" acima e `HISTORICO-DESENVOLVIMENTO.md`.
-- **Remover Lixeira/TrashedFilter individual de Obra/PF/PJ**: só
+- **Remover Lixeira/TrashedFilter individual de Projeto/PF/PJ**: só
   depois de confirmação explícita do usuário de que a Lixeira Central
   já basta.
 
 ## Limitações conhecidas
 
-- Categoria de Pessoa, Setor, Situação de Obra e Tipo de Obra usam o
+- Categoria de Pessoa, Setor, Situação de Projeto e Tipo de Projeto usam o
   padrão `ManageRecords` do Filament (uma página só, modal) — sem
   `SoftDeletes`, sem Lixeira, sem aba de Atividades própria (mas
   continuam auditados pela Central). Não expandir isso preventivamente

@@ -10,9 +10,9 @@ return [
     ],
 
     'subject_types' => [
-        'obra'            => 'Work',
-        'tipo-obra'       => 'Work Type',
-        'situacao-obra'   => 'Work Status',
+        'projeto'          => 'Project',
+        'tipo-projeto'     => 'Project Type',
+        'situacao-projeto' => 'Project Status',
         'referencia-preco' => 'Price',
         'pessoa-fisica'   => 'Individual',
         'pessoa-juridica' => 'Company',
@@ -33,7 +33,7 @@ return [
             'subject_reference' => 'Record',
             'subject_reference_unavailable' => 'Permanently deleted record',
         ],
-        'search_placeholder' => 'Search by name, company name or Work number...',
+        'search_placeholder' => 'Search by name, company name or Project number...',
         'filters' => [
             'modulo' => [
                 'label' => 'Module',

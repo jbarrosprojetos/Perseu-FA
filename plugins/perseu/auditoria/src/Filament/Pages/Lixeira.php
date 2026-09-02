@@ -29,13 +29,13 @@ use Webkul\Support\Filament\Clusters\Settings;
 /**
  * Lixeira Central — agrega os registros excluídos (soft-deleted) de
  * TODOS os Models com Lixeira de verdade hoje (`TrashCatalog::models()`
- * — Obra, Pessoa Jurídica, Pessoa Física), numa única listagem, pra não
+ * — Projeto, Pessoa Jurídica, Pessoa Física), numa única listagem, pra não
  * precisar visitar cada Resource individualmente só pra restaurar ou
  * limpar a lixeira.
  *
  * DIFERENTE da página de Auditoria (que lista `activity_log`, uma
  * tabela só): esta página opera sobre os registros de negócio reais,
- * cada um numa tabela própria (`obras`, `pessoas_juridicas`,
+ * cada um numa tabela própria (`projetos`, `pessoas_juridicas`,
  * `pessoas_fisicas`). Um `Filament\Resources\Resource` (e o `table()`
  * "normal" do Filament) é desenhado em torno de UM Model/UMA query —
  * não há suporte nativo a "misturar" 3 Models heterogêneos numa
@@ -57,7 +57,7 @@ use Webkul\Support\Filament\Clusters\Settings;
  * descartada por criar uma dependência circular de plugins: `comercial`
  * e `pessoas` já dependem de `auditoria` (`->hasDependency('auditoria')`,
  * por causa do trait `LogsBusinessActivity`) — uma `VIEW` referenciando
- * `obras`/`pessoas_juridicas`/`pessoas_fisicas` viveria naturalmente em
+ * `projetos`/`pessoas_juridicas`/`pessoas_fisicas` viveria naturalmente em
  * `auditoria` (mesmo lugar desta página), o que exigiria
  * `auditoria->hasDependency('comercial')` e
  * `auditoria->hasDependency('pessoas')` — ciclo de dependência
@@ -80,7 +80,7 @@ use Webkul\Support\Filament\Clusters\Settings;
  *
  * Cada linha é um ARRAY (`Filament\Support\ArrayRecord`), não uma
  * instância real do Model — os 3 Models têm PKs numéricas que colidem
- * entre si (ex.: Obra #5 e Pessoa Jurídica #5), então a chave única de
+ * entre si (ex.: Projeto #5 e Pessoa Jurídica #5), então a chave única de
  * cada linha (`ArrayRecord::getKeyName()`, `'__key'` por padrão) é
  * sintética (`"{$modelKey}-{$id}"`). As Actions de Restaurar/Excluir
  * Definitivamente NÃO usam `Filament\Actions\RestoreAction`/
@@ -101,10 +101,10 @@ use Webkul\Support\Filament\Clusters\Settings;
  * genérica "gerenciar lixeira de tudo"). Cada linha usa a Policy JÁ
  * REGISTRADA do Model real (`Gate::allows('restore', $modelReal)` /
  * `Gate::allows('forceDelete', $modelReal)`) — o mesmo
- * `ObraPolicy`/`PessoaFisicaPolicy`/`PessoaJuridicaPolicy` que já
- * controla o Resource individual. Um usuário sem `restore_comercial_obra`
- * não vê o botão Restaurar numa linha de Obra aqui, exatamente como não
- * veria em Comercial → Obras.
+ * `ProjetoPolicy`/`PessoaFisicaPolicy`/`PessoaJuridicaPolicy` que já
+ * controla o Resource individual. Um usuário sem `restore_comercial_projeto`
+ * não vê o botão Restaurar numa linha de Projeto aqui, exatamente como não
+ * veria em Comercial → Projetos.
  */
 class Lixeira extends Page implements HasTable
 {
@@ -451,7 +451,7 @@ class Lixeira extends Page implements HasTable
     /**
      * Ação em lote — reaproveita `restoreRecord()`/`forceDeleteRecord()`
      * linha a linha (mesma checagem de permissão individual: uma
-     * seleção heterogênea pode ter, por exemplo, uma Obra que o usuário
+     * seleção heterogênea pode ter, por exemplo, um Projeto que o usuário
      * pode restaurar e uma Pessoa Jurídica que não pode — cada uma é
      * autorizada separadamente, e o resultado final informa quantas
      * foram puladas por falta de permissão).

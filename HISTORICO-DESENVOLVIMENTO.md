@@ -2057,3 +2057,220 @@ sistema externo real, revisitar como uma tarefa própria de rename
 (nesse ponto, o `processo_id` que já mudou no payload precisará ser
 comunicado como breaking change aos consumidores). Ver `CLAUDE.md`
 para o resumo do estado atual desta nomenclatura.
+
+---
+
+## Rename Obra → Projeto no plugin `perseu/comercial` (2026-09-02)
+
+Passo 2 da "Decisão final de nomenclatura" registrada em
+`CONCEITO-OBRA-PROPOSTA-PROJETO.md` (02/09/2026): com a palavra
+"Projeto" já liberada pelo rename `Project → Processo` em
+`webkul/projects` (passo 1, ver seção anterior), o cadastro de negócio
+central de `perseu/comercial` — hoje "Obra", que por sua vez já tinha
+sido renomeado de "Projeto" em 2026-08-28 — volta a se chamar
+**Projeto**, agora sem conflito de nome com o plugin de tarefas. Rename
+completo: Model, tabelas, colunas de FK, Filament Resources, páginas,
+permissões Shield, traduções (só pt_BR/en, depois da redução de
+locales feita antes desta tarefa) e as referências cruzadas em
+`perseu/auditoria` (Central de Auditoria + Lixeira Central).
+
+Backup confirmado antes de começar (`~/backup-perseu.sh`, rodado no
+início da tarefa mesmo já existindo um backup de ~4h antes, por ser
+uma migration de rename com dados reais em jogo).
+
+### Cuidado com falsos positivos de "obra" (palavra comum em português)
+
+Confirmado por grep, **NÃO tocados** por serem conceitos totalmente
+diferentes que só coincidem no nome:
+- `Perseu\Pessoas\Enums\TipoEndereco::Obra` (valor 4) — tipo de
+  endereço "Obra"/"Construction site" (endereço do canteiro de obras),
+  usado em `PessoaFisica`/`PessoaJuridica`/no `createOptionForm` de
+  Endereço do próprio `ProjetoResource`. Continua se chamando "Obra"
+  porque é um conceito de negócio genuinamente diferente (tipo de
+  endereço, não o cadastro raiz) — confirmado com o usuário antes de
+  excluir da lista de mudanças.
+- Coluna `referencias_precos.fator_mao_obra` ("Fator Mão de Obra" /
+  "Labor Factor") — "mão de obra" = trabalho humano/labor, nada a ver
+  com o cadastro de Obra/Projeto. Nome de coluna, label, `$fillable` e
+  `$casts` mantidos exatamente como estavam.
+
+### O que mudou
+
+| Antes | Depois |
+|---|---|
+| `Perseu\Comercial\Models\Obra` | `Perseu\Comercial\Models\Projeto` |
+| `Perseu\Comercial\Models\SituacaoObra` | `Perseu\Comercial\Models\SituacaoProjeto` |
+| `Perseu\Comercial\Models\TipoObra` | `Perseu\Comercial\Models\TipoProjeto` |
+| `Perseu\Comercial\Services\GeradorNumeroObra` | `Perseu\Comercial\Services\GeradorNumeroProjeto` |
+| `ObraResource`/`SituacaoObraResource`/`TipoObraResource` | `ProjetoResource`/`SituacaoProjetoResource`/`TipoProjetoResource` (+ Pages, Policies) |
+| `Perseu\Comercial\Filament\Clusters\Obras` | `Perseu\Comercial\Filament\Clusters\Projetos` |
+| tabela `obras` | tabela `projetos` |
+| tabela `situacoes_obra` | tabela `situacoes_projeto` |
+| tabela `tipos_obra` | tabela `tipos_projeto` |
+| tabela `obra_numero_sequencias` | tabela `projeto_numero_sequencias` |
+| tabela `obra_situacao` | tabela `projeto_situacao` |
+| coluna `obras.tipo_obra_id` | `projetos.tipo_projeto_id` |
+| coluna `obras.numero_obra` | `projetos.numero_projeto` |
+| coluna `obra_numero_sequencias.tipo_obra_id` | `tipo_projeto_id` |
+| colunas `obra_situacao.obra_id`/`situacao_obra_id` | `projeto_situacao.projeto_id`/`situacao_projeto_id` |
+| slug `comercial/obras` | slug `comercial/projetos` |
+| slug `tipo-obras`/`situacao-obras` | `tipo-projetos`/`situacao-projetos` |
+| permissões `*_comercial_obra`/`*_situacao::obra`/`*_tipo::obra` | `*_comercial_projeto`/`*_situacao::projeto`/`*_tipo::projeto` |
+
+**`obras.revisao` não mudou de significado** — só acompanhou o rename
+da tabela (continua `unsignedInteger`, `default(0)`, sem lógica de
+autoincremento, fora do `$fillable`, exibido como Placeholder
+zero-padded). A decisão de Revisão virar um atributo formal de uma
+futura Situação "Proposta" continua sendo a etapa 4 do plano, ainda
+não feita.
+
+**Numeração automática (prefixo AAT####) não mudou** — código de
+`GeradorNumeroProjeto::gerar()` idêntico ao antigo
+`GeradorNumeroObra::gerar()`, só nomes de classe/tabela/coluna
+mudaram; testado gerando um Projeto novo (dentro de transação
+revertida) depois da migration: número gerado seguiu a sequência
+existente normalmente.
+
+### Migration — `Schema::rename()`/`renameColumn()`, mesma técnica de sempre
+
+`2026_09_02_110000_rename_obra_to_projeto.php`: tabelas primeiro,
+colunas depois (já com o nome novo da tabela) — na prática, o inverso
+exato da migration anterior `2026_08_28_120000_rename_projeto_to_obra.php`
+(que não foi editada, só revertida por uma migration nova). FKs
+preservadas automaticamente pelo MySQL/MariaDB ao renomear
+tabela/coluna. Confirmado via `information_schema.KEY_COLUMN_USAGE`
+depois de rodar: `projetos.tipo_projeto_id` aponta pra
+`tipos_projeto.id`, `projeto_situacao.projeto_id`/`situacao_projeto_id`
+apontam pra `projetos.id`/`situacoes_projeto.id`. Curiosamente, os
+NOMES das constraints (que ficaram com resíduo `projetos_*`/`projeto_*`
+desde a criação original, nunca corrigidos no rename anterior por
+serem cosméticos) voltaram a bater exatamente com os nomes de
+tabela/coluna atuais — coincidência de reverter para o nome original.
+
+A migration foi adicionada ao array explícito de
+`ComercialServiceProvider::configureCustomPackage()->hasMigrations([...])`
+— esse array é a lista que `loadMigrationsFrom()` realmente carrega
+(um comentário already existente no arquivo documenta que 3 migrations
+anteriores tinham ficado de fora dessa lista por engano numa tarefa
+revertida; não repetir esse erro).
+
+### `activity_log.subject_type` também precisou ser atualizado (achado desta tarefa)
+
+Diferente do rename `Project → Processo` (cuja entidade não é
+auditada pela Central, então esse problema nunca apareceu), `Obra`/
+`SituacaoObra`/`TipoObra` SÃO auditados via `LogsBusinessActivity` +
+`SubjectTypeCatalog`. O Spatie Activitylog grava o FQCN cru em
+`activity_log.subject_type` (sem `Relation::morphMap()` neste
+projeto) — renomear só a CLASSE deixaria os 62 logs já existentes
+(49 de Obra, 7 de SituacaoObra, 6 de TipoObra, confirmado por query
+antes de migrar) órfãos: a Central de Auditoria pararia de reconhecer
+esses registros antigos (cairiam no fallback de `label()`, perderiam
+filtro dedicado e referência amigável).
+
+Resolvido dentro da própria migration de rename (`up()`/`down()`
+simétricos): um `DB::table('activity_log')->where('subject_type',
+$fqcnAntigo)->update(['subject_type' => $fqcnNovo])` pras 3 classes.
+Confirmado depois de rodar: os mesmos 62 registros agora têm
+`subject_type` = `Perseu\Comercial\Models\Projeto` (49) /
+`SituacaoProjeto` (7) / `TipoProjeto` (6) — nenhum perdido, nenhum
+duplicado. (Existem também 4 registros órfãos de
+`Perseu\Comercial\Models\Proposta`/`SituacaoProposta` no
+`activity_log`, resíduo da tentativa de Cluster "Propostas" separado
+implementada e depois revertida — ver
+`CONCEITO-OBRA-PROPOSTA-PROJETO.md` — fora do escopo desta tarefa,
+não tocados.)
+
+### Chaves de tradução também renomeadas, não só os valores
+
+Diferente de manter só os VALORES traduzidos e renomear apenas
+arquivos/classes, as CHAVES internas do array de tradução também
+mudaram (`tipo-obra` → `tipo-projeto`, `numero-obra` → `numero-projeto`
+dentro de `filament/resources/projeto.php`) — consistente com o pedido
+explícito da tarefa ("renomear chaves/arquivos", não só arquivos).
+Isso exigiu atualizar os `__('comercial::filament/resources/projeto.form.tipo-projeto')`
+correspondentes no `ProjetoResource` junto, não é uma mudança
+"cosmética isolada" no arquivo de lang.
+
+### Referências cruzadas em `perseu/auditoria` atualizadas
+
+- `SubjectTypeCatalog`: imports, `labelSlugs()`, `modulos()`,
+  `referenceFor()` (agora lê `numero_projeto`) e `applyBusca()` (busca
+  agora em `numero_projeto`) — todos atualizados.
+- `TrashCatalog::models()`: `Obra::class` → `Projeto::class`.
+- `Lixeira.php`/`AuditoriaResource.php`/`ActivityPolicy.php`/
+  `LogsBusinessActivity.php`: comentários mencionando "Obra" (incluindo
+  um exemplo de nome de rota, `filament.admin.comercial.resources.obras.edit`,
+  corrigido para `...resources.projetos.edit`) e a permissão de exemplo
+  `restore_comercial_obra` → `restore_comercial_projeto`.
+- `resources/lang/{pt_BR,en}/filament/resources/auditoria.php`: chaves
+  `subject_types.obra`/`tipo-obra`/`situacao-obra` →
+  `projeto`/`tipo-projeto`/`situacao-projeto`, e o
+  `search_placeholder` ("número da Obra..." → "número do Projeto...").
+
+### Shield — mesmo fluxo já estabelecido, com uma descoberta sobre guards
+
+`shield:generate --resource=ProjetoResource,SituacaoProjetoResource,TipoProjetoResource
+--panel=admin` (o formato com FQCN completo via `use` não funcionou,
+0 processados — só o formato com basename da classe funcionou, mesmo
+padrão já usado nos renames anteriores) gerou 22 permissões novas,
+guard `web`. Sincronizadas à role Admin via `givePermissionTo()`.
+
+As 44 permissões órfãs antigas (`_comercial_obra`/
+`_comercial_situacao::obra`/`_comercial_tipo::obra`) foram removidas
+via `DELETE` SQL direto em `permissions` +
+`role_has_permissions`/`model_has_permissions` (mesma precaução dos
+renames anteriores por causa do erro conhecido do `Permission::delete()`
+via Eloquent no guard `sanctum`). **Achado**: essas 44 órfãs existiam
+em DOIS guards (`web` E `sanctum`, 22 cada) — diferente do que o
+rename anterior (`Project → Processo`) tinha encontrado (só guard
+`web` lá). Confirmado depois, porém, que as 22 permissões NOVAS de
+Projeto (e as de `ReferenciaPreco`, não tocada nesta tarefa) existem
+só em guard `web` — os duplicados em `sanctum` das permissões antigas
+de Obra parecem ter sido um resíduo de um processo anterior (não
+identificado a fundo, não crítico), não o padrão atual do projeto.
+Não recriados em `sanctum` de propósito, por consistência com o padrão
+atual observado em `ReferenciaPreco`. `permission:cache-reset`
+executado depois.
+
+### Validado (tinker + Livewire, não só leitura de código)
+
+1. Todas as tabelas/colunas renomeadas confirmadas via
+   `Schema::getTableListing()` e `information_schema.KEY_COLUMN_USAGE`;
+   nenhuma tabela com "obra" no nome sobrou.
+2. Dados preservados: `Projeto::with(['tipoProjeto', 'situacoes',
+   'pessoaFisica', 'pessoaJuridica'])->first()` retornou os relacionamentos
+   corretos; um registro já soft-deleted antes da migration continuou
+   acessível via `Projeto::onlyTrashed()`, com `SubjectTypeCatalog::referenceFor()`
+   formatando a referência corretamente com o `numero_projeto` novo.
+3. `Projeto::create()` (dentro de transação revertida) gerou
+   `numero_projeto` corretamente via `GeradorNumeroProjeto`, continuando
+   a sequência existente.
+4. `Livewire::test()` renderizado (autenticado como Admin) em
+   `ListProjetos`, `ManageTiposProjeto`, `ManageSituacoesProjeto`,
+   `ListAuditoria`, `Lixeira` e `ListReferenciasPrecos` — todos sem
+   erro, todos contendo "Projeto" nos textos esperados, `ListProjetos`
+   confirmado SEM nenhuma ocorrência de "Obra" isolada no HTML
+   renderizado.
+5. `route:list` conferido: `admin/comercial/projetos`,
+   `admin/comercial/tipo-projetos`, `admin/comercial/situacao-projetos`
+   — nomes de rota batendo exatamente com o que foi documentado nos
+   comentários atualizados de `AuditoriaServiceProvider`.
+6. `find ... | php -l` em todos os 75 arquivos PHP dos plugins
+   `comercial`+`auditoria` (mais o 1 arquivo extra editado em
+   `pessoas/Support/ViaCepLookup.php`): nenhum erro de sintaxe.
+7. `ddev artisan optimize:clear` executado antes e depois da migration
+   e do `shield:generate`.
+8. Varredura final de grep em todo o projeto (não só os 2 plugins) por
+   `ObraResource`/`Models\Obra`/`SituacaoObra`/`TipoObra`/
+   `GeradorNumeroObra`/`ObraPolicy`/`Clusters\Obras`/`numero_obra`/
+   `obra_situacao`/`obra_numero_sequencias`/`tipo_obra_id`: só restaram
+   os falsos positivos já documentados (`TipoEndereco::Obra`,
+   `fator_mao_obra`) e as migrations históricas (nunca editadas).
+
+### Pendência explícita (não fazer agora)
+
+Etapa 3 do plano (desenho da relação técnica entre `Projeto`
+(`perseu/comercial`) e `Processo` (`webkul/projects`, "Gestão de
+Processos")) e etapa 4 (detalhamento dos valores de Situação do
+Projeto, incluindo "Proposta" como um deles) — ambas explicitamente
+fora do escopo desta tarefa, ver `CONCEITO-OBRA-PROPOSTA-PROJETO.md`.

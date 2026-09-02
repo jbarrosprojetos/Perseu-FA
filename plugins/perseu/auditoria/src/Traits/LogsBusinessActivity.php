@@ -63,7 +63,7 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * Só registra o listener em Models que REALMENTE usam `SoftDeletes`
  * (`forceDeleted()` é um método estático que só existe nesse trait —
  * chamá-lo num Model sem `SoftDeletes` explodiria com "Call to
- * undefined method"). Hoje isso é `Obra`/`PessoaFisica`/
+ * undefined method"). Hoje isso é `Projeto`/`PessoaFisica`/
  * `PessoaJuridica` — os 3 únicos Models de negócio com `SoftDeletes`
  * (ver `Perseu\Auditoria\Support\TrashCatalog`).
  */
