@@ -37,6 +37,23 @@ Todo o sistema deve ser traduzido/adaptado para português do Brasil,
 incluindo campos específicos do Brasil (CPF, CNPJ, RG, Inscrição
 Estadual) quando aplicável.
 
+**Locales suportados: só `pt_BR` e `en`** (2026-09-01, removido
+suporte a Espanhol `es` e Árabe `ar`, herdados do AureusERP original
+— sem uso real num sistema 100% voltado à F.A. Marcenaria, no Brasil).
+`pt_BR` é o locale principal (`config/app.php` → `locale`, refletido
+em `.env` → `APP_LOCALE`); `en` é mantido só como `fallback_locale`
+técnico padrão do Laravel e para legibilidade de código por qualquer
+desenvolvedor. `config('app.supported_locales')` (`config/app.php`) é
+a fonte única que alimenta o seletor de idioma da topbar
+(`resources/views/filament/components/language-switcher.blade.php`),
+o RTL (`Webkul\Support\Traits\HasRtlSupport`), o middleware
+`App\Http\Middleware\SetLocale` e o Select de idioma em Perfil/Usuário
+— **todo Model/Resource novo só precisa de arquivo de tradução em
+`lang/pt_BR/` e `lang/en/` (ou `resources/lang/pt_BR|en/` de plugin),
+não mais 4 idiomas.** Não recriar diretórios `lang/es`/`lang/ar` nem
+adicionar `es`/`ar` de volta a `supported_locales` sem decisão
+consciente nova.
+
 ## Atenção: Resources duplicados entre plugins
 Alguns Resources existem em mais de um plugin (ex: CompanyResource
 existe em "security" E "support" — o de "support" é o que efetivamente

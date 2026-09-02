@@ -97,28 +97,16 @@ return [
     */
 
     'supported_locales' => [
-        'en' => [
-            'label'  => 'English',
-            'native' => 'English',
-            'flag'   => 'us',
-            'rtl'    => false,
-        ],
-        'ar' => [
-            'label'  => 'Arabic',
-            'native' => 'العربية',
-            'flag'   => 'sa',
-            'rtl'    => true,
-        ],
-        'es' => [
-            'label'  => 'Spanish',
-            'native' => 'Español',
-            'flag'   => 'es',
-            'rtl'    => false,
-        ],
         'pt_BR' => [
             'label'  => 'Portuguese (Brazil)',
             'native' => 'Português (Brasil)',
             'flag'   => 'br',
+            'rtl'    => false,
+        ],
+        'en' => [
+            'label'  => 'English',
+            'native' => 'English',
+            'flag'   => 'us',
             'rtl'    => false,
         ],
     ],
