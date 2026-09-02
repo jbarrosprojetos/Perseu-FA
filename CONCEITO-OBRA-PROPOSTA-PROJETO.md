@@ -265,7 +265,9 @@ visão de ciclo completo, sem detalhamento nesta sessão.
   Hellomob) — provavelmente são formatos diferentes entre si, exigindo
   parsers distintos ou uma camada de normalização.
 - Como modelar o catálogo de "produto padrão" vs. "desenvolvimento
-  novo" — depende do futuro módulo de Produtos/Materiais, ainda não
+  novo" — decisão de arquitetura registrada na seção seguinte ("Itens
+  do Projeto: dois tipos, não um cadastro único"); o schema exato
+  ainda depende do futuro módulo de Produtos/Materiais, ainda não
   iniciado.
 - Mecanismo genérico de "tarefa entre departamentos" (hand-off) — se
   será construído em cima do plugin de Tarefas existente de forma
@@ -278,6 +280,47 @@ visão de ciclo completo, sem detalhamento nesta sessão.
   anterior deste documento) interagem com XMLs já gerados — um XML
   gerado antes de uma revisão de escopo fica obsoleto? precisa
   regenerar?
+
+## Itens do Projeto: dois tipos, não um cadastro único (registrado em 02/09/2026)
+
+> Avança o ponto em aberto "Como modelar o catálogo de 'produto
+> padrão' vs. 'desenvolvimento novo'", da seção anterior — não resolve
+> o schema exato (isso continua para uma tarefa futura específica),
+> mas registra a decisão de arquitetura que vai orientar esse desenho,
+> pra não perder o racional entre sessões.
+
+Ao detalhar o conteúdo de um Projeto (peças/produtos que serão
+fabricados/entregues), ficou claro que existem DOIS tipos distintos de
+"item", e o sistema precisa suportar ambos, não forçar um modelo
+único:
+
+1. **Item vinculado a um Produto do cadastro convencional** — o
+   "produto padrão" já citado na seção anterior. Usado quando o item é
+   algo padronizado, de linha de produção, que já tem toda sua
+   estrutura definida previamente (ficha técnica, composição de
+   matéria-prima/serviços, tabela de preços) no futuro cadastro de
+   Produtos. Neste caso o item do Projeto apenas referencia esse
+   Produto existente (FK), sem duplicar dados.
+2. **Item avulso, exclusivo daquele Projeto** — o "desenvolvimento
+   novo" já citado na seção anterior. Usado quando o item é um
+   desenvolvimento sob medida, específico para aquele cliente/projeto,
+   que NÃO deve virar um cadastro de Produto reutilizável. Este é o
+   caso mais comum na marcenaria: cada móvel é pensado e dimensionado
+   milimetricamente para um cliente específico, raramente se repetindo
+   de forma idêntica em outro projeto (exceto alguns itens
+   convencionais de linha, que se enquadram no caso 1). Este item
+   existe só dentro do Projeto, com sua própria composição de
+   matéria-prima e serviços utilizados (usando a Referência de Preços
+   como base de custos/fatores), sem nunca gerar um registro
+   correspondente no cadastro de Produtos.
+
+**Implicação de design**: a estrutura de "Item do Projeto" não pode
+assumir que todo item tem um Produto de cadastro por trás. Precisa
+suportar um item "solo" com sua própria descrição e composição,
+coexistindo na mesma listagem com itens que apontam para o cadastro de
+Produtos. O desenho detalhado de campos/tabelas fica para uma tarefa
+futura específica — este registro é só a decisão de arquitetura que
+orienta esse desenho.
 
 ## Templates de Proposta/Contrato/Termos (registrado em 30/08/2026)
 
