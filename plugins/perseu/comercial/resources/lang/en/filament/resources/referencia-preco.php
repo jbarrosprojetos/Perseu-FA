@@ -11,6 +11,8 @@ return [
 
     'form' => [
         'descricao'             => 'Reference Description',
+        'created-at'            => 'Created At',
+        'created-at-pendente'   => 'Automatically filled on save',
         'laminacao'             => 'Lamination',
         'corte'                 => 'Cutting',
         'hora-producao'         => 'Production Hour',
@@ -74,6 +76,16 @@ return [
                     'body'  => 'The price table has been permanently deleted successfully.',
                 ],
             ],
+        ],
+    ],
+
+    'notifications' => [
+        'vinculada' => [
+            'title' => 'Cannot change or delete',
+            'body'  => 'This reference is linked to :count Project — unlink it before deleting or editing this price table.|This reference is linked to :count Projects — unlink them before deleting or editing this price table.',
+        ],
+        'vinculada-em-massa' => [
+            'body' => 'The references ":descricoes" are linked to at least one Project — unlink them before deleting or editing.',
         ],
     ],
 ];

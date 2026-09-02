@@ -10,6 +10,7 @@ use Filament\Actions\ForceDeleteAction;
 use Filament\Actions\ForceDeleteBulkAction;
 use Filament\Actions\RestoreAction;
 use Filament\Actions\RestoreBulkAction;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
@@ -18,6 +19,7 @@ use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Collection;
 use Perseu\Comercial\Filament\Clusters\Referencias;
 use Perseu\Comercial\Filament\Clusters\Referencias\Resources\ReferenciaPrecoResource\Pages\ListReferenciasPrecos;
 use Perseu\Comercial\Models\ReferenciaPreco;
@@ -76,6 +78,23 @@ class ReferenciaPrecoResource extends Resource
                     ->label(__('comercial::filament/resources/referencia-preco.form.descricao'))
                     ->required()
                     ->maxLength(255)
+                    ->columnSpanFull(),
+
+                // Descrição sozinha NÃO é única (de propósito, ver
+                // CLAUDE.md — "Data/Hora de criação como identidade
+                // visual") — duas referências podem ter a mesma
+                // Descrição desde que criadas em momentos diferentes
+                // (ex.: revisões de uma mesma tabela de preços ao longo
+                // do tempo). Este Placeholder deixa isso visível pro
+                // usuário logo abaixo da Descrição, sem ser uma
+                // constraint de banco (created_at tem precisão de
+                // segundo — duas criações simultâneas poderiam colidir
+                // em teoria, então a "unicidade" aqui é só de
+                // identificação visual, não uma regra de validação).
+                Placeholder::make('created_at')
+                    ->label(__('comercial::filament/resources/referencia-preco.form.created-at'))
+                    ->content(fn (?ReferenciaPreco $record) => $record?->created_at?->format('d/m/Y H:i')
+                        ?? __('comercial::filament/resources/referencia-preco.form.created-at-pendente'))
                     ->columnSpanFull(),
 
                 Grid::make(2)
@@ -166,6 +185,15 @@ class ReferenciaPrecoResource extends Resource
                     ->label(__('comercial::filament/resources/referencia-preco.table.columns.descricao'))
                     ->searchable()
                     ->sortable(),
+                // Logo após a Descrição, visível por padrão (não mais
+                // toggleable-hidden) — ver CLAUDE.md, "Data/Hora de
+                // criação como identidade visual": duas referências
+                // podem ter a mesma Descrição, então a Data/Hora de
+                // criação precisa aparecer de cara pra diferenciá-las.
+                TextColumn::make('created_at')
+                    ->label(__('comercial::filament/resources/referencia-preco.table.columns.created-at'))
+                    ->dateTime('d/m/Y H:i')
+                    ->sortable(),
                 TextColumn::make('laminacao')
                     ->label(__('comercial::filament/resources/referencia-preco.table.columns.laminacao'))
                     ->money('BRL')
@@ -224,11 +252,6 @@ class ReferenciaPrecoResource extends Resource
                     ->formatStateUsing(fn (?string $state) => static::formatPercent($state))
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('created_at')
-                    ->label(__('comercial::filament/resources/referencia-preco.table.columns.created-at'))
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
                 TrashedFilter::make()
@@ -236,6 +259,7 @@ class ReferenciaPrecoResource extends Resource
             ])
             ->recordActions([
                 EditAction::make()
+                    ->before(fn (ReferenciaPreco $record, EditAction $action) => static::bloquearSeVinculada($record, $action))
                     ->successNotification(
                         Notification::make()
                             ->success()
@@ -243,6 +267,7 @@ class ReferenciaPrecoResource extends Resource
                             ->body(__('comercial::filament/resources/referencia-preco.table.actions.edit.notification.body')),
                     ),
                 DeleteAction::make()
+                    ->before(fn (ReferenciaPreco $record, DeleteAction $action) => static::bloquearSeVinculada($record, $action))
                     ->successNotification(
                         Notification::make()
                             ->success()
@@ -257,6 +282,7 @@ class ReferenciaPrecoResource extends Resource
                             ->body(__('comercial::filament/resources/referencia-preco.table.actions.restore.notification.body')),
                     ),
                 ForceDeleteAction::make()
+                    ->before(fn (ReferenciaPreco $record, ForceDeleteAction $action) => static::bloquearSeVinculada($record, $action))
                     ->successNotification(
                         Notification::make()
                             ->success()
@@ -266,11 +292,67 @@ class ReferenciaPrecoResource extends Resource
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
+                    DeleteBulkAction::make()
+                        ->before(fn (Collection $records, DeleteBulkAction $action) => static::bloquearSeAlgumaVinculada($records, $action)),
                     RestoreBulkAction::make(),
-                    ForceDeleteBulkAction::make(),
+                    ForceDeleteBulkAction::make()
+                        ->before(fn (Collection $records, ForceDeleteBulkAction $action) => static::bloquearSeAlgumaVinculada($records, $action)),
                 ]),
             ]);
+    }
+
+    /**
+     * Trava de exclusão/edição (ver CLAUDE.md, "Trava de exclusão/edição
+     * com Projeto vinculado"): uma Referência de Preços com pelo menos
+     * um Projeto vinculado não pode ser excluída nem editada — evita que
+     * o valor de Venda de um Projeto já calculado mude retroativamente
+     * ou fique órfão. Os botões continuam visíveis/clicáveis (permissão
+     * normal da Policy não muda) — o bloqueio acontece ao TENTAR
+     * (`->before()`, antes do formulário salvar/do registro ser
+     * excluído), com notificação clara do motivo, em vez de esconder o
+     * botão sem explicação nenhuma.
+     */
+    protected static function bloquearSeVinculada(ReferenciaPreco $referenciaPreco, $action): void
+    {
+        $totalProjetos = $referenciaPreco->projetos()->count();
+
+        if ($totalProjetos === 0) {
+            return;
+        }
+
+        Notification::make()
+            ->danger()
+            ->title(__('comercial::filament/resources/referencia-preco.notifications.vinculada.title'))
+            ->body(trans_choice(
+                'comercial::filament/resources/referencia-preco.notifications.vinculada.body',
+                $totalProjetos,
+                ['count' => $totalProjetos],
+            ))
+            ->send();
+
+        $action->halt();
+    }
+
+    /**
+     * @param  Collection<int, ReferenciaPreco>  $referenciasPrecos
+     */
+    protected static function bloquearSeAlgumaVinculada(Collection $referenciasPrecos, $action): void
+    {
+        $vinculadas = $referenciasPrecos->filter(fn (ReferenciaPreco $referenciaPreco) => $referenciaPreco->projetos()->exists());
+
+        if ($vinculadas->isEmpty()) {
+            return;
+        }
+
+        Notification::make()
+            ->danger()
+            ->title(__('comercial::filament/resources/referencia-preco.notifications.vinculada.title'))
+            ->body(__('comercial::filament/resources/referencia-preco.notifications.vinculada-em-massa.body', [
+                'descricoes' => $vinculadas->pluck('descricao')->unique()->implode(', '),
+            ]))
+            ->send();
+
+        $action->halt();
     }
 
     public static function getPages(): array

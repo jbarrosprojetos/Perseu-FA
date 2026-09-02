@@ -11,6 +11,8 @@ return [
 
     'form' => [
         'descricao'             => 'Descrição da Referência',
+        'created-at'            => 'Criado em',
+        'created-at-pendente'   => 'Preenchido automaticamente ao salvar',
         'laminacao'             => 'Laminação',
         'corte'                 => 'Corte',
         'hora-producao'         => 'Hora de Produção',
@@ -74,6 +76,16 @@ return [
                     'body'  => 'A tabela de preços foi excluída permanentemente com sucesso.',
                 ],
             ],
+        ],
+    ],
+
+    'notifications' => [
+        'vinculada' => [
+            'title' => 'Não é possível alterar ou excluir',
+            'body'  => 'Esta referência está vinculada a :count Projeto — desvincule-o antes de excluir ou editar esta tabela de preços.|Esta referência está vinculada a :count Projetos — desvincule-os antes de excluir ou editar esta tabela de preços.',
+        ],
+        'vinculada-em-massa' => [
+            'body' => 'As referências ":descricoes" estão vinculadas a pelo menos um Projeto — desvincule-as antes de excluir ou editar.',
         ],
     ],
 ];

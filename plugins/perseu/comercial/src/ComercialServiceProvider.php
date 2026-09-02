@@ -49,6 +49,7 @@ class ComercialServiceProvider extends PackageServiceProvider
                 '2026_09_01_100000_drop_revisao_from_obras_table',
                 '2026_09_02_100000_add_revisao_back_to_obras_table',
                 '2026_09_02_110000_rename_obra_to_projeto',
+                '2026_09_02_130000_add_referencia_preco_id_to_projetos_table',
             ])
             ->runsMigrations()
             ->hasDependency('auditoria')

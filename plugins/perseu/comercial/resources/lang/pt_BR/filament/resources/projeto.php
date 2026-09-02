@@ -40,6 +40,8 @@ return [
             'uf'          => 'UF',
         ],
         'endereco-sem-tag-obra' => 'Este cliente não tem nenhum endereço marcado com a tag Obra. Cadastre um endereço com essa tag no cadastro do cliente, ou use o "+" acima para criar um novo aqui.',
+        'referencia-preco'        => 'Referência de Preços',
+        'referencia-preco-aviso'  => 'Nenhuma referência de preços selecionada — necessária para calcular o valor de venda',
         'numero-projeto'          => 'Projeto',
         'numero-projeto-pendente' => 'Gerado automaticamente ao salvar',
         'revisao'                 => 'Revisão',

@@ -30,6 +30,7 @@ class Projeto extends Model
         'contato_pessoa_fisica_id',
         'tipo_projeto_id',
         'endereco_id',
+        'referencia_preco_id',
         'descricao',
     ];
 
@@ -60,6 +61,11 @@ class Projeto extends Model
     public function endereco(): BelongsTo
     {
         return $this->belongsTo(Endereco::class);
+    }
+
+    public function referenciaPreco(): BelongsTo
+    {
+        return $this->belongsTo(ReferenciaPreco::class);
     }
 
     public function situacoes(): BelongsToMany

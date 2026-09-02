@@ -40,6 +40,8 @@ return [
             'uf'          => 'State',
         ],
         'endereco-sem-tag-obra' => 'This client has no address tagged as Job. Add that tag to an address in the client\'s own record, or use the "+" above to create one here.',
+        'referencia-preco'        => 'Price Reference',
+        'referencia-preco-aviso'  => 'No price reference selected — required to calculate the sale value',
         'numero-projeto'          => 'Project',
         'numero-projeto-pendente' => 'Automatically generated on save',
         'revisao'                 => 'Revision',

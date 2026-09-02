@@ -31,6 +31,7 @@ use Perseu\Comercial\Filament\Clusters\Comercial\Resources\ProjetoResource\Pages
 use Perseu\Comercial\Filament\Clusters\Comercial\Resources\ProjetoResource\Pages\ListProjetos;
 use Perseu\Comercial\Filament\Clusters\Projetos;
 use Perseu\Comercial\Models\Projeto;
+use Perseu\Comercial\Models\ReferenciaPreco;
 use Perseu\Pessoas\Enums\TipoEndereco;
 use Perseu\Pessoas\Models\Contato;
 use Perseu\Pessoas\Models\Endereco;
@@ -313,81 +314,104 @@ class ProjetoResource extends Resource
                                     ->columnSpan(1),
                             ]),
 
-                        // Linha 3: Endereço da Obra sozinho, largura total — não
-                        // precisa de Grid, o próprio campo com columnSpanFull() já
-                        // ocupa a linha inteira. Último campo da Section.
-                        Select::make('endereco_id')
-                            ->label(__('comercial::filament/resources/projeto.form.endereco'))
-                            ->options(function (Get $get): array {
-                                return static::enderecoObraOptionsFor($get('pessoa_fisica_id'), $get('pessoa_juridica_id'));
-                            })
-                            ->helperText(function (Get $get): ?string {
-                                // Só mostra o aviso depois de um Cliente selecionado E
-                                // sem nenhum endereço-obra — antes disso (nenhum
-                                // Cliente ainda) o campo já fica vazio por padrão, sem
-                                // precisar de explicação.
-                                if (blank($get('pessoa_fisica_id')) && blank($get('pessoa_juridica_id'))) {
-                                    return null;
-                                }
-
-                                return filled(static::enderecoObraOptionsFor($get('pessoa_fisica_id'), $get('pessoa_juridica_id')))
-                                    ? null
-                                    : __('comercial::filament/resources/projeto.form.endereco-sem-tag-obra');
-                            })
+                        // Linha 3: Endereço da Obra (8) + Referência de Preços
+                        // (4) lado a lado = 12 colunas. Referência de Preços é
+                        // opcional (usada futuramente pra calcular o valor de
+                        // Venda do Projeto, ver CLAUDE.md) — sem ->required(),
+                        // com aviso em vermelho via ->hint()/->hintColor()
+                        // quando nada está selecionado.
+                        Grid::make(12)
                             ->columnSpanFull()
-                            ->searchable()
-                            ->live()
-                            ->createOptionForm([
-                                TextInput::make('cep')
-                                    ->label(__('comercial::filament/resources/projeto.form.endereco-form.cep'))
-                                    ->mask('99999-999')
-                                    ->live(onBlur: true)
-                                    ->afterStateUpdated(fn (Set $set, ?string $state) => ViaCepLookup::fill($set, $state)),
-                                TextInput::make('logradouro')
-                                    ->label(__('comercial::filament/resources/projeto.form.endereco-form.logradouro')),
-                                TextInput::make('numero')
-                                    ->label(__('comercial::filament/resources/projeto.form.endereco-form.numero')),
-                                TextInput::make('complemento')
-                                    ->label(__('comercial::filament/resources/projeto.form.endereco-form.complemento')),
-                                TextInput::make('bairro')
-                                    ->label(__('comercial::filament/resources/projeto.form.endereco-form.bairro')),
-                                TextInput::make('municipio')
-                                    ->label(__('comercial::filament/resources/projeto.form.endereco-form.municipio')),
-                                TextInput::make('uf')
-                                    ->label(__('comercial::filament/resources/projeto.form.endereco-form.uf'))
-                                    ->maxLength(2),
-                            ])
-                            ->createOptionUsing(function (array $data, Get $get): int {
-                                $endereco = Endereco::create($data);
+                            ->extraAttributes($gridGap)
+                            ->schema([
+                                Select::make('endereco_id')
+                                    ->label(__('comercial::filament/resources/projeto.form.endereco'))
+                                    ->options(function (Get $get): array {
+                                        return static::enderecoObraOptionsFor($get('pessoa_fisica_id'), $get('pessoa_juridica_id'));
+                                    })
+                                    ->helperText(function (Get $get): ?string {
+                                        // Só mostra o aviso depois de um Cliente selecionado E
+                                        // sem nenhum endereço-obra — antes disso (nenhum
+                                        // Cliente ainda) o campo já fica vazio por padrão, sem
+                                        // precisar de explicação.
+                                        if (blank($get('pessoa_fisica_id')) && blank($get('pessoa_juridica_id'))) {
+                                            return null;
+                                        }
 
-                                $pessoaFisicaId = $get('pessoa_fisica_id');
-                                $pessoaJuridicaId = $get('pessoa_juridica_id');
+                                        return filled(static::enderecoObraOptionsFor($get('pessoa_fisica_id'), $get('pessoa_juridica_id')))
+                                            ? null
+                                            : __('comercial::filament/resources/projeto.form.endereco-sem-tag-obra');
+                                    })
+                                    ->columnSpan(8)
+                                    ->searchable()
+                                    ->live()
+                                    ->createOptionForm([
+                                        TextInput::make('cep')
+                                            ->label(__('comercial::filament/resources/projeto.form.endereco-form.cep'))
+                                            ->mask('99999-999')
+                                            ->live(onBlur: true)
+                                            ->afterStateUpdated(fn (Set $set, ?string $state) => ViaCepLookup::fill($set, $state)),
+                                        TextInput::make('logradouro')
+                                            ->label(__('comercial::filament/resources/projeto.form.endereco-form.logradouro')),
+                                        TextInput::make('numero')
+                                            ->label(__('comercial::filament/resources/projeto.form.endereco-form.numero')),
+                                        TextInput::make('complemento')
+                                            ->label(__('comercial::filament/resources/projeto.form.endereco-form.complemento')),
+                                        TextInput::make('bairro')
+                                            ->label(__('comercial::filament/resources/projeto.form.endereco-form.bairro')),
+                                        TextInput::make('municipio')
+                                            ->label(__('comercial::filament/resources/projeto.form.endereco-form.municipio')),
+                                        TextInput::make('uf')
+                                            ->label(__('comercial::filament/resources/projeto.form.endereco-form.uf'))
+                                            ->maxLength(2),
+                                    ])
+                                    ->createOptionUsing(function (array $data, Get $get): int {
+                                        $endereco = Endereco::create($data);
 
-                                // O endereço só serve pra algo aqui se ficar vinculado ao
-                                // contratante selecionado — senão desaparece da lista de
-                                // opções assim que o formulário recalcular. "Obra" (a tag
-                                // do enum TipoEndereco, sem relação com o nome deste
-                                // cadastro — ver CLAUDE.md de perseu/pessoas, "Tipo de
-                                // Endereço como tag") é a mais coerente com o contexto
-                                // (endereço da obra/canteiro em execução). Tag única e
-                                // deliberada aqui, NÃO todas marcadas por padrão — essa
-                                // regra vale só para o CheckboxList do formulário manual
-                                // de Endereços; este é preenchimento automático sem
-                                // interação do usuário.
-                                if (filled($pessoaFisicaId)) {
-                                    PessoaFisica::find($pessoaFisicaId)?->enderecos()->attach($endereco->id, [
-                                        'principal' => false,
-                                    ]);
-                                } elseif (filled($pessoaJuridicaId)) {
-                                    PessoaJuridica::find($pessoaJuridicaId)?->enderecos()->attach($endereco->id, [
-                                        'principal' => false,
-                                    ]);
-                                }
+                                        $pessoaFisicaId = $get('pessoa_fisica_id');
+                                        $pessoaJuridicaId = $get('pessoa_juridica_id');
 
-                                $endereco->tipos()->create(['tipo' => TipoEndereco::Obra->value]);
+                                        // O endereço só serve pra algo aqui se ficar vinculado ao
+                                        // contratante selecionado — senão desaparece da lista de
+                                        // opções assim que o formulário recalcular. "Obra" (a tag
+                                        // do enum TipoEndereco, sem relação com o nome deste
+                                        // cadastro — ver CLAUDE.md de perseu/pessoas, "Tipo de
+                                        // Endereço como tag") é a mais coerente com o contexto
+                                        // (endereço da obra/canteiro em execução). Tag única e
+                                        // deliberada aqui, NÃO todas marcadas por padrão — essa
+                                        // regra vale só para o CheckboxList do formulário manual
+                                        // de Endereços; este é preenchimento automático sem
+                                        // interação do usuário.
+                                        if (filled($pessoaFisicaId)) {
+                                            PessoaFisica::find($pessoaFisicaId)?->enderecos()->attach($endereco->id, [
+                                                'principal' => false,
+                                            ]);
+                                        } elseif (filled($pessoaJuridicaId)) {
+                                            PessoaJuridica::find($pessoaJuridicaId)?->enderecos()->attach($endereco->id, [
+                                                'principal' => false,
+                                            ]);
+                                        }
 
-                                return $endereco->id;
-                            }),
+                                        $endereco->tipos()->create(['tipo' => TipoEndereco::Obra->value]);
+
+                                        return $endereco->id;
+                                    }),
+
+                                Select::make('referencia_preco_id')
+                                    ->label(__('comercial::filament/resources/projeto.form.referencia-preco'))
+                                    ->relationship(name: 'referenciaPreco', titleAttribute: 'descricao')
+                                    ->getOptionLabelFromRecordUsing(fn (ReferenciaPreco $record) => trim(
+                                        "{$record->descricao} — {$record->created_at?->format('d/m/Y H:i')}"
+                                    ))
+                                    ->searchable()
+                                    ->preload()
+                                    ->live()
+                                    ->hint(fn (Get $get) => blank($get('referencia_preco_id'))
+                                        ? __('comercial::filament/resources/projeto.form.referencia-preco-aviso')
+                                        : null)
+                                    ->hintColor('danger')
+                                    ->columnSpan(4),
+                            ]),
                     ]),
 
                 // Espaço reservado para uma futura Section::make('Itens do

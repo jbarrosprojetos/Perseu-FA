@@ -3,6 +3,7 @@
 namespace Perseu\Comercial\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Perseu\Auditoria\Traits\LogsBusinessActivity;
 
@@ -51,4 +52,15 @@ class ReferenciaPreco extends Model
         'fator_ferragens_miscelanias' => 'decimal:2',
         'fator_mao_obra'              => 'decimal:2',
     ];
+
+    /**
+     * Projetos vinculados a esta Referência de Preços — usado pela
+     * trava de exclusão/edição em `ReferenciaPrecoPolicy` (uma
+     * Referência com pelo menos um Projeto vinculado não pode ser
+     * excluída nem editada, ver CLAUDE.md).
+     */
+    public function projetos(): HasMany
+    {
+        return $this->hasMany(Projeto::class);
+    }
 }
