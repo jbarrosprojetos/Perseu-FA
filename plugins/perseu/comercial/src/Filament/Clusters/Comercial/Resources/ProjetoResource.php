@@ -537,9 +537,9 @@ class ProjetoResource extends Resource
                         // origem "Item Avulso" — só os RÓTULOS por enquanto,
                         // nenhuma linha de dado/campo editável ainda (vem
                         // numa tarefa futura, junto com a tabela de Itens).
-                        // "Desconto" e "Total Custo" já reservam a coluna
-                        // (`Text::make('')`) mas ficam sem texto — ainda em
-                        // definição. 1+4+7+1+3+3+1+1+3 = 24.
+                        // Última coluna (3) fica sem rótulo — espaço
+                        // reservado, sem uso definido ainda.
+                        // 1+3+6+1+2+3+1+1+3+3 = 24.
                         Grid::make(24)
                             ->columnSpanFull()
                             ->extraAttributes($gridGap)
@@ -550,25 +550,29 @@ class ProjetoResource extends Resource
                                     ->columnSpan(1),
                                 Text::make(__('comercial::filament/resources/projeto.form.itens.cabecalho-item-avulso.referencia'))
                                     ->weight(FontWeight::Bold)
-                                    ->columnSpan(4),
+                                    ->columnSpan(3),
                                 Text::make(__('comercial::filament/resources/projeto.form.itens.cabecalho-item-avulso.descricao'))
                                     ->weight(FontWeight::Bold)
-                                    ->columnSpan(7),
+                                    ->columnSpan(6),
                                 Text::make(__('comercial::filament/resources/projeto.form.itens.cabecalho-item-avulso.quantidade'))
                                     ->weight(FontWeight::Bold)
                                     ->columnSpan(1),
                                 Text::make(__('comercial::filament/resources/projeto.form.itens.cabecalho-item-avulso.valor-unitario'))
                                     ->weight(FontWeight::Bold)
-                                    ->columnSpan(3),
+                                    ->columnSpan(2),
                                 Text::make(__('comercial::filament/resources/projeto.form.itens.cabecalho-item-avulso.valor-total'))
                                     ->weight(FontWeight::Bold)
                                     ->columnSpan(3),
                                 Text::make(__('comercial::filament/resources/projeto.form.itens.cabecalho-item-avulso.imposto'))
                                     ->weight(FontWeight::Bold)
                                     ->columnSpan(1),
-                                Text::make('') // Desconto — sem rótulo ainda, só reserva a coluna.
+                                Text::make(__('comercial::filament/resources/projeto.form.itens.cabecalho-item-avulso.porcentagem'))
+                                    ->weight(FontWeight::Bold)
                                     ->columnSpan(1),
-                                Text::make('') // Total Custo — sem rótulo ainda, só reserva a coluna.
+                                Text::make(__('comercial::filament/resources/projeto.form.itens.cabecalho-item-avulso.total-custo'))
+                                    ->weight(FontWeight::Bold)
+                                    ->columnSpan(3),
+                                Text::make('') // Sem rótulo — espaço reservado, sem uso definido ainda.
                                     ->columnSpan(3),
                             ]),
 

@@ -182,21 +182,23 @@ de salvamento.
   apareciam duplicados; com o override, aparecem uma única vez, na
   posição certa.
 
-### Cabeçalho estilo planilha para "Item Avulso" (2026-09-03)
+### Cabeçalho estilo planilha para "Item Avulso" (2026-09-03, colunas corrigidas 2026-09-03)
 
 Ao clicar "Inserir" com "Item Avulso" selecionado, em vez da
 notificação placeholder aparece um cabeçalho de colunas — `Grid::make(24)`
-com 9 colunas (`columnSpan`: Item 1, Referência 4, Descrição 7,
-Quantidade 1, Valor Unitário 3, Valor Total 3, Imposto 1, Desconto 1,
-Total Custo 3 — soma 24), no espaço reservado logo abaixo do
-Select+Botão, dentro da mesma Section "Itens". Ainda SÓ o cabeçalho —
-nenhuma linha de dado, nenhum campo editável; a inspiração é a aba "00"
-do Excel `260000 Cliente Padrão Proposta 00.xlsm` usado hoje pela F.A.
-Marcenaria. "Desconto" e "Total Custo" já reservam a coluna
-(`Text::make('')`) mas ficam sem texto — nomenclatura final ainda em
-definição. As outras 6 origens do dropdown continuam com a notificação
-placeholder normal; só "Item Avulso" tem comportamento próprio até
-agora.
+com 10 colunas (`columnSpan`: Item 1, Referência 3, Descrição 6, Qtde.
+1, Valor Unit. 2, Valor Total 3, Imp.% 1, Porc.% 1, Total Custo 3,
+última coluna sem rótulo 3 — soma 24), no espaço reservado logo abaixo
+do Select+Botão, dentro da mesma Section "Itens". Ainda SÓ o
+cabeçalho — nenhuma linha de dado, nenhum campo editável; a inspiração
+é a aba "00" do Excel `260000 Cliente Padrão Proposta 00.xlsm` usado
+hoje pela F.A. Marcenaria. Todos os rótulos aparecem abreviados
+("Qtde.", "Valor Unit.", "Imp.%", "Porc.%") — **"Porc.%" é a mesma
+coluna que já passou por "Desconto" → "Porcentagem" → "Porc.%"**, não
+confundir com uma coluna nova; a última coluna (3) continua reservada,
+sem texto — sem uso definido ainda. As outras 6 origens do dropdown
+continuam com a notificação placeholder normal; só "Item Avulso" tem
+comportamento próprio até agora.
 
 - **`Filament\Schemas\Components\Text`, não `Placeholder`** — é só
   rótulo/label de coluna (um `<span>`, sem wrapper de campo de
