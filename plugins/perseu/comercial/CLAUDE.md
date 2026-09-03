@@ -138,6 +138,97 @@ usado futuramente pra calcular o valor de Venda do Projeto.
   `$fillable` de `Projeto`, `LogsBusinessActivity` já audita mudanças
   nele automaticamente, sem código extra.
 
+### Section "Itens" e reposicionamento de Salvar/Cancelar (2026-09-03)
+
+`ProjetoResource::form()` ganhou uma segunda Section, "Itens", irmã de
+"Cabeçalho" — por ora só a interface (`Select` de origem, não
+persistido, `dehydrated(false)`, com 7 opções fixas: Item Avulso, Item
+de Linha, Promob Plus, Promob Start, Sketchup Hellomob, Sketchup
+CutList, CortCloud + botão "Inserir" com notificação placeholder). A
+lógica real de cada origem e a listagem dos itens já inseridos ficam
+para uma etapa futura (depende de uma tabela de Itens que ainda não
+existe).
+
+Como a Section "Itens" vai ganhar sua própria dinâmica de salvar/
+editar/excluir por item (ações individuais e imediatas, fora do ciclo
+de "Salvar alterações" do formulário principal), os botões Salvar/
+Cancelar da página foram **reposicionados** para logo após a Section
+"Cabeçalho" e ANTES de "Itens" — não fazia mais sentido eles ficarem
+no fim da página, depois de uma Section que não usa esse mesmo ciclo
+de salvamento.
+
+- Por padrão o Filament renderiza Salvar/Cancelar FORA do array de
+  `components()` do `form()` do Resource — `CreateRecord`/`EditRecord`
+  os anexam via `->footer([$this->getFormActionsContentComponent()])`
+  dentro de `getFormContentComponent()`, sempre depois de TUDO que o
+  Resource declarar.
+- Solução: `ProjetoResource::form()` chama
+  `$schema->getLivewire()->getFormActionsContentComponent()`
+  diretamente como um item do array `components()`, entre as duas
+  Sections. `getFormActionsContentComponent()` é público em
+  `CreateRecord`/`EditRecord` e monta o mesmo `Actions::make([...])`
+  com `getSubmitFormAction()`/`getCancelFormAction()` que a página já
+  usaria — chamado uma única vez, sem duplicar lógica de submit.
+  `$schema->getLivewire()` retorna a página (Create/Edit) porque o
+  Schema já vem vinculado a ela nesse ponto (`Schema::make($this)`,
+  `Filament\Schemas\Concerns\BelongsToLivewire`).
+- Contrapartida obrigatória: `CreateProjeto`/`EditProjeto` sobrescrevem
+  `getFormContentComponent()` (copiado do vendor, só removendo a
+  chamada a `->footer([...])`) — senão o mesmo
+  `Actions::make(...)->key('form-actions')` seria chamado DUAS vezes
+  (uma pelo Resource, outra pelo rodapé padrão da página), duplicando
+  os botões na tela com a mesma key colidindo. Confirmado por teste
+  (`Livewire::test()`): sem esse override, `fi-sc-actions`/`type="submit"`
+  apareciam duplicados; com o override, aparecem uma única vez, na
+  posição certa.
+
+### Cabeçalho estilo planilha para "Item Avulso" (2026-09-03)
+
+Ao clicar "Inserir" com "Item Avulso" selecionado, em vez da
+notificação placeholder aparece um cabeçalho de colunas — `Grid::make(24)`
+com 9 colunas (`columnSpan`: Item 1, Referência 4, Descrição 7,
+Quantidade 1, Valor Unitário 3, Valor Total 3, Imposto 1, Desconto 1,
+Total Custo 3 — soma 24), no espaço reservado logo abaixo do
+Select+Botão, dentro da mesma Section "Itens". Ainda SÓ o cabeçalho —
+nenhuma linha de dado, nenhum campo editável; a inspiração é a aba "00"
+do Excel `260000 Cliente Padrão Proposta 00.xlsm` usado hoje pela F.A.
+Marcenaria. "Desconto" e "Total Custo" já reservam a coluna
+(`Text::make('')`) mas ficam sem texto — nomenclatura final ainda em
+definição. As outras 6 origens do dropdown continuam com a notificação
+placeholder normal; só "Item Avulso" tem comportamento próprio até
+agora.
+
+- **`Filament\Schemas\Components\Text`, não `Placeholder`** — é só
+  rótulo/label de coluna (um `<span>`, sem wrapper de campo de
+  formulário com label+conteúdo empilhados), mais leve e mais adequado
+  a um cabeçalho estilo planilha. `Grid` (não Flex) porque todo campo
+  tem largura fixa em número de colunas, mesmo critério já registrado
+  em "Grid vs. static::flexRow()" (`plugins/perseu/pessoas/CLAUDE.md`).
+- **Estado via `Hidden::make('origem_item_inserida')`** (`dehydrated(false)`,
+  fora do `$fillable`) — guarda qual origem teve seu botão "Inserir"
+  clicado por último; a Action de "Inserir" faz `$set()` nesse campo
+  (`'item_avulso'` só quando essa origem é a selecionada, `null` nos
+  demais casos) e o `Grid::make(24)` do cabeçalho usa
+  `->visible(fn (Get $get) => $get('origem_item_inserida') === 'item_avulso')`.
+  Precisa ser um campo à parte do `Select::make('origem_item_selecionada')`
+  (que reflete a opção escolhida no dropdown, mudando a cada seleção) —
+  o cabeçalho só deve reagir ao CLIQUE em "Inserir", não à troca de
+  opção no Select antes de clicar.
+- **Achado de teste**: `Livewire\Testing\Testable::html()` devolve o
+  HTML do ÚLTIMO ciclo de vida real do componente (`$this->lastState`)
+  — chamar a action via `$test->instance()->mountAction(...)` direto
+  (bypass do pipeline) executa a lógica (inclusive `Notification::make()
+  ->send()`, cujo efeito fica visível lendo `session('filament.notifications')`
+  depois) mas NÃO atualiza esse HTML cacheado; para inspecionar o HTML
+  pós-clique é preciso passar pelo pipeline de verdade
+  (`$test->call('mountAction', 'inserirItem', [], ['schemaComponent' => 'form'])`).
+  Também por passar pelo pipeline completo, essa segunda forma já
+  consome/limpa a notificação da sessão como aconteceria numa
+  requisição real — para inspecionar o CONTEÚDO da notificação em teste,
+  usar a chamada direta (`$test->instance()->mountAction(...)`); para
+  inspecionar o HTML renderizado, usar `$test->call(...)`. Nenhuma das
+  duas cobre as duas coisas ao mesmo tempo.
+
 ## Limitações conhecidas
 
 - Situação de Projeto e Tipo de Projeto usam o padrão `ManageRecords`

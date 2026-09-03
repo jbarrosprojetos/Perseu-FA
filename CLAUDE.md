@@ -9,6 +9,18 @@
 Este projeto é baseado no AureusERP, customizado para uma marcenaria
 industrial (Perseu).
 
+## Idioma de comunicação
+
+Todas as respostas, resumos, explicações e perguntas do Claude Code
+neste projeto devem ser sempre em Português do Brasil, independente do
+idioma em que a tarefa foi escrita. Isso vale para comunicação com o
+usuário — não afeta nomes de variáveis, funções, classes ou
+comentários de código, que seguem a convenção de nomenclatura já usada
+no projeto (majoritariamente português nos domínios de negócio,
+conforme já é o padrão). Não confundir com a seção "Idioma" abaixo,
+que trata dos idiomas DO SISTEMA/interface para usuários finais
+(`pt_BR`/`en`) — assunto diferente.
+
 ## Antes de qualquer tarefa de código, consulte:
 - Este arquivo (convenções universais, válidas pra qualquer plugin).
 - O `CLAUDE.md` do plugin específico em que a tarefa mexe (ver índice

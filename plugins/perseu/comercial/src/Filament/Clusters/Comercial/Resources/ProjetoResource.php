@@ -2,6 +2,7 @@
 
 namespace Perseu\Comercial\Filament\Clusters\Comercial\Resources;
 
+use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
@@ -10,17 +11,21 @@ use Filament\Actions\ForceDeleteAction;
 use Filament\Actions\ForceDeleteBulkAction;
 use Filament\Actions\RestoreAction;
 use Filament\Actions\RestoreBulkAction;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Radio;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Actions;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Text;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
+use Filament\Support\Enums\FontWeight;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
@@ -414,15 +419,183 @@ class ProjetoResource extends Resource
                             ]),
                     ]),
 
-                // Espaço reservado para uma futura Section::make('Itens do
-                // Projeto') aqui — item IRMÃO da Section "Cabeçalho" acima,
-                // dentro deste mesmo array. Continuará sendo o penúltimo
-                // elemento da página: os botões Salvar/Cancelar não fazem
-                // parte deste array (são renderizados pela página Create/
-                // Edit, fora do form()), então permanecem como último
-                // elemento sem exigir nenhum ajuste aqui quando a Section de
-                // Itens for adicionada.
+                // Botões Salvar/Cancelar da própria página (Create/Edit),
+                // reposicionados aqui — item IRMÃO das duas Sections, entre
+                // "Cabeçalho" e "Itens". Por padrão o Filament os renderiza
+                // FORA deste array (`getFormContentComponent()` da página
+                // Create/Edit os anexa como `->footer()` do wrapper
+                // `<form class="fi-sc-form">`, depois de TUDO — inclusive de
+                // qualquer Section futura), o que deixou de fazer sentido
+                // quando a Section "Itens" ganhou sua própria dinâmica de
+                // salvar por item (ver `plugins/perseu/comercial/CLAUDE.md`)
+                // — o Salvar/Cancelar aqui deve servir só aos campos
+                // administrativos da Section "Cabeçalho" acima.
+                //
+                // `$schema->getLivewire()` retorna a própria página (Create/
+                // Edit), já vinculada ao Schema neste ponto
+                // (`Schema::make($this)`, ver `BelongsToLivewire`).
+                // `getFormActionsContentComponent()` é público em
+                // `CreateRecord`/`EditRecord` e monta o MESMO
+                // `Actions::make([...])` com `getSubmitFormAction()`/
+                // `getCancelFormAction()` que a página já usaria por padrão
+                // — chamado aqui uma única vez, sem duplicar lógica de
+                // submit. A contrapartida obrigatória é `CreateProjeto`/
+                // `EditProjeto` sobrescreverem `getFormContentComponent()`
+                // para NÃO chamar esse mesmo método de novo como `->footer()`
+                // do form — senão os botões apareceriam duas vezes (aqui E
+                // no rodapé), com o mesmo `key('form-actions')` colidindo.
+                $schema->getLivewire()->getFormActionsContentComponent()
+                    ->columnSpanFull(),
+
+                // Section "Itens" — item IRMÃO da Section "Cabeçalho" acima
+                // (ver comentário dela sobre a separação visual). Por ora só
+                // a interface do seletor de origem + botão "Inserir": a
+                // lógica de cada origem (o que o botão realmente faz) e a
+                // listagem dos itens já inseridos dependem de uma tabela de
+                // Itens que ainda não existe — ver
+                // CONCEITO-OBRA-PROPOSTA-PROJETO.md quando essa etapa for
+                // desenhada. `origem_item_selecionada` é um campo de
+                // controle do formulário, não do Model (`dehydrated(false)`
+                // + fora do `$fillable` de Projeto), por isso não precisa de
+                // migration.
+                Section::make(__('comercial::filament/resources/projeto.form.sections.itens.title'))
+                    ->description(__('comercial::filament/resources/projeto.form.sections.itens.description'))
+                    ->columnSpanFull()
+                    ->schema([
+                        Grid::make(12)
+                            ->columnSpanFull()
+                            ->extraAttributes($gridGap)
+                            ->schema([
+                                Select::make('origem_item_selecionada')
+                                    ->label(__('comercial::filament/resources/projeto.form.itens.origem'))
+                                    ->options(fn () => static::origensItemOptions())
+                                    ->live()
+                                    ->dehydrated(false)
+                                    ->columnSpan(4),
+
+                                // Campo de controle (não persiste, não tem
+                                // input visível — `columnSpan(['default' =>
+                                // 'hidden'])` já vem por padrão do próprio
+                                // `Hidden`) que guarda qual origem teve seu
+                                // cabeçalho de colunas exibido pelo botão
+                                // "Inserir" — hoje só "Item Avulso" liga essa
+                                // exibição (ver Action abaixo); as outras 6
+                                // origens continuam de fora, com a
+                                // notificação placeholder.
+                                Hidden::make('origem_item_inserida')
+                                    ->dehydrated(false),
+
+                                Actions::make([
+                                    Action::make('inserirItem')
+                                        ->label(__('comercial::filament/resources/projeto.form.itens.inserir'))
+                                        ->action(function (Get $get, Set $set): void {
+                                            $origem = $get('origem_item_selecionada');
+
+                                            if (blank($origem)) {
+                                                $set('origem_item_inserida', null);
+
+                                                Notification::make()
+                                                    ->warning()
+                                                    ->title(__('comercial::filament/resources/projeto.form.itens.notification.sem-selecao'))
+                                                    ->send();
+
+                                                return;
+                                            }
+
+                                            // "Item Avulso" é a única origem com
+                                            // comportamento real por enquanto —
+                                            // mostra o cabeçalho de colunas
+                                            // (Grid::make(24) logo abaixo, ainda
+                                            // sem nenhuma linha de dado). As
+                                            // outras 6 origens continuam com a
+                                            // notificação placeholder até
+                                            // ganharem sua própria lógica numa
+                                            // tarefa futura.
+                                            if ($origem === 'item_avulso') {
+                                                $set('origem_item_inserida', $origem);
+
+                                                return;
+                                            }
+
+                                            $set('origem_item_inserida', null);
+
+                                            Notification::make()
+                                                ->info()
+                                                ->title(__('comercial::filament/resources/projeto.form.itens.notification.pendente-title'))
+                                                ->body(__('comercial::filament/resources/projeto.form.itens.notification.pendente-body', [
+                                                    'origem' => static::origensItemOptions()[$origem] ?? $origem,
+                                                ]))
+                                                ->send();
+                                        }),
+                                ])
+                                    ->verticallyAlignEnd()
+                                    ->columnSpan(2),
+                            ]),
+
+                        // Cabeçalho de colunas estilo planilha (ver aba "00"
+                        // do Excel de referência da F.A. Marcenaria) para a
+                        // origem "Item Avulso" — só os RÓTULOS por enquanto,
+                        // nenhuma linha de dado/campo editável ainda (vem
+                        // numa tarefa futura, junto com a tabela de Itens).
+                        // "Desconto" e "Total Custo" já reservam a coluna
+                        // (`Text::make('')`) mas ficam sem texto — ainda em
+                        // definição. 1+4+7+1+3+3+1+1+3 = 24.
+                        Grid::make(24)
+                            ->columnSpanFull()
+                            ->extraAttributes($gridGap)
+                            ->visible(fn (Get $get) => $get('origem_item_inserida') === 'item_avulso')
+                            ->schema([
+                                Text::make(__('comercial::filament/resources/projeto.form.itens.cabecalho-item-avulso.item'))
+                                    ->weight(FontWeight::Bold)
+                                    ->columnSpan(1),
+                                Text::make(__('comercial::filament/resources/projeto.form.itens.cabecalho-item-avulso.referencia'))
+                                    ->weight(FontWeight::Bold)
+                                    ->columnSpan(4),
+                                Text::make(__('comercial::filament/resources/projeto.form.itens.cabecalho-item-avulso.descricao'))
+                                    ->weight(FontWeight::Bold)
+                                    ->columnSpan(7),
+                                Text::make(__('comercial::filament/resources/projeto.form.itens.cabecalho-item-avulso.quantidade'))
+                                    ->weight(FontWeight::Bold)
+                                    ->columnSpan(1),
+                                Text::make(__('comercial::filament/resources/projeto.form.itens.cabecalho-item-avulso.valor-unitario'))
+                                    ->weight(FontWeight::Bold)
+                                    ->columnSpan(3),
+                                Text::make(__('comercial::filament/resources/projeto.form.itens.cabecalho-item-avulso.valor-total'))
+                                    ->weight(FontWeight::Bold)
+                                    ->columnSpan(3),
+                                Text::make(__('comercial::filament/resources/projeto.form.itens.cabecalho-item-avulso.imposto'))
+                                    ->weight(FontWeight::Bold)
+                                    ->columnSpan(1),
+                                Text::make('') // Desconto — sem rótulo ainda, só reserva a coluna.
+                                    ->columnSpan(1),
+                                Text::make('') // Total Custo — sem rótulo ainda, só reserva a coluna.
+                                    ->columnSpan(3),
+                            ]),
+
+                        // Espaço reservado para a listagem dos itens já
+                        // inseridos no Projeto — depende da tabela de Itens
+                        // (ainda não criada) e vem numa próxima etapa.
+                    ]),
             ]);
+    }
+
+    /**
+     * Opções de origem do item — só a estrutura do seletor por enquanto;
+     * a lógica de inserção de cada origem é definida numa tarefa futura.
+     *
+     * @return array<string, string>
+     */
+    protected static function origensItemOptions(): array
+    {
+        return [
+            'item_avulso'       => __('comercial::filament/resources/projeto.form.itens.origens.item-avulso'),
+            'item_linha'        => __('comercial::filament/resources/projeto.form.itens.origens.item-linha'),
+            'promob_plus'       => __('comercial::filament/resources/projeto.form.itens.origens.promob-plus'),
+            'promob_start'      => __('comercial::filament/resources/projeto.form.itens.origens.promob-start'),
+            'sketchup_hellomob' => __('comercial::filament/resources/projeto.form.itens.origens.sketchup-hellomob'),
+            'sketchup_cutlist'  => __('comercial::filament/resources/projeto.form.itens.origens.sketchup-cutlist'),
+            'cortcloud'         => __('comercial::filament/resources/projeto.form.itens.origens.cortcloud'),
+        ];
     }
 
     protected static function contatoSelecionado(Get $get): ?PessoaFisica
