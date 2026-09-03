@@ -25,6 +25,7 @@ return [
             'inserir'            => 'Inserir',
             'mobilizacao-frete'  => 'Mobilização e Frete',
             'confirmar'          => 'Confirmar',
+            'descricao-atalhos'  => 'Use atalhos de teclado para formatar o texto, se necessário: Ctrl+B (negrito), Ctrl+I (itálico), Ctrl+U (sublinhado).',
             'origens'  => [
                 'item-avulso'       => 'Item Avulso',
                 'item-linha'        => 'Item de Linha',

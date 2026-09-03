@@ -657,13 +657,24 @@ class ProjetoResource extends Resource
                                 Text::make('')
                                     ->columnSpan(3),
 
-                                // Toolbar sempre visível, com TODAS as
-                                // ferramentas padrão (sem ->toolbarButtons()
-                                // restringindo) — investigado e descartado um
-                                // modo "aparece só em foco, some ao perder
-                                // foco" (bubble menu), ver CLAUDE.md.
+                                // Toolbar REMOVIDA (`->toolbarButtons([])`)
+                                // — depois de investigar e descartar o modo
+                                // "bubble menu" (aparece só em foco, ver
+                                // CLAUDE.md), a decisão foi tirar a barra de
+                                // botões de vez e orientar por atalhos de
+                                // teclado (`->helperText()` abaixo). O campo
+                                // continua sendo um RichEditor de verdade —
+                                // todas as extensões (Bold, Italic,
+                                // Underline etc.) seguem carregadas e os
+                                // atalhos funcionam normalmente, só o botão
+                                // visual é que some (`getToolbarButtons()`
+                                // vazio pula o `<div class="fi-fo-rich-
+                                // editor-toolbar">` inteiro no render, ver
+                                // `RichEditor::toEmbeddedHtml()`).
                                 RichEditor::make('novo_item_descricao')
                                     ->hiddenLabel()
+                                    ->toolbarButtons([])
+                                    ->helperText(__('comercial::filament/resources/projeto.form.itens.descricao-atalhos'))
                                     ->dehydrated(false)
                                     ->columnSpan(6),
 

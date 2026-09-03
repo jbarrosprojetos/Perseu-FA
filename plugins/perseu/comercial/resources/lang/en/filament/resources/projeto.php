@@ -25,6 +25,7 @@ return [
             'inserir'           => 'Insert',
             'mobilizacao-frete' => 'Mobilization and Freight',
             'confirmar'         => 'Confirm',
+            'descricao-atalhos' => 'Use keyboard shortcuts to format the text, if needed: Ctrl+B (bold), Ctrl+I (italic), Ctrl+U (underline).',
             'origens'  => [
                 'item-avulso'       => 'Standalone Item',
                 'item-linha'        => 'Line Item',

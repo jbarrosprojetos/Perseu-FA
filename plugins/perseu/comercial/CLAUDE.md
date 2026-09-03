@@ -285,8 +285,71 @@ real de confirmar/salvar ficam pra uma próxima etapa.
   reativo e religar `x-show` manualmente no wrapper da toolbar,
   mantido à mão em todo upgrade do Filament (alto risco de quebrar
   silenciosamente numa atualização futura). Estimativa: 1-2 dias +
-  manutenção contínua — não vale o custo/risco agora. Toolbar
-  permanece sempre visível, com o conjunto DEFAULT completo.
+  manutenção contínua — não vale o custo/risco agora.
+  **Decisão seguinte (2026-09-03): toolbar removida de vez**
+  (`->toolbarButtons([])`), sem tentar escondê-la condicionalmente —
+  ver subseção seguinte.
+
+### Toolbar do RichEditor de "Item Avulso" removida — atalhos de teclado (2026-09-03)
+
+Em vez do "aparece só em foco" (descartado acima), a decisão foi tirar
+a barra de ferramentas de vez: `RichEditor::make('novo_item_descricao')
+->toolbarButtons([])` — `getToolbarButtons()` retorna array vazio,
+`RichEditor::toEmbeddedHtml()` pula o `<div class="fi-fo-rich-editor-
+toolbar">` inteiro (`if ((! $isDisabled) && filled($toolbarButtons))`),
+sem afetar nada mais: as extensões TipTap continuam TODAS carregadas
+(`toolbarButtons()` só controla quais BOTÕES aparecem, não quais
+extensões/marcas o editor sabe processar), então os atalhos de teclado
+de cada uma continuam funcionando normalmente. `->helperText(...)`
+abaixo do campo orienta o usuário pros atalhos mais úteis.
+
+**Atalhos confirmados** (lidos direto do bundle compilado
+`vendor/filament/forms/dist/components/rich-editor.js`, procurando
+`addKeyboardShortcuts()` de cada extensão TipTap realmente carregada
+em `vendor/filament/forms/resources/js/components/rich-editor/extensions.js`
+— não presumidos da documentação genérica do TipTap):
+
+| Atalho | Ação |
+|---|---|
+| `Ctrl+B` | Negrito (bold) |
+| `Ctrl+I` | Itálico (italic) |
+| `Ctrl+U` | Sublinhado (underline) |
+| `Ctrl+Shift+S` | Tachado (strike) |
+| `Ctrl+E` | Código inline (code) |
+| `Ctrl+Shift+H` | Marca-texto (highlight) |
+| `Ctrl+Shift+B` | Citação (blockquote) |
+| `Ctrl+Shift+7` / `Ctrl+Shift+8` | Lista numerada / com marcadores |
+| `Ctrl+Alt+C` | Bloco de código |
+| `Ctrl+Alt+0` | Volta pra parágrafo normal |
+| `Ctrl+Shift+L/E/R/J` | Alinhar esquerda/centro/direita/justificado |
+| `Ctrl+Z` / `Ctrl+Shift+Z` ou `Ctrl+Y` | Desfazer / refazer |
+
+O helper text mostrado ao usuário só cita os 3 primeiros (Bold/Italic/
+Underline) por brevidade — os demais ficam registrados aqui caso o
+helper text precise crescer no futuro. **Confirmado que NÃO existe**
+uma extensão de lista de tarefas carregada (`Mod-Shift-9`/`toggleTaskList`
+aparece no bundle, mas pertence a um "listKit" que não é importado em
+`extensions.js` — só `BulletList`/`ListItem`/`OrderedList` individuais
+são de fato usados), então esse atalho específico NÃO funcionaria
+mesmo citando-o — por isso não faz parte da tabela acima.
+
+**Limitação de teste confirmada**: `Livewire::test()` não serve pra
+verificar visualmente que o texto continua formatado (negrito/itálico)
+sem a toolbar — o conteúdo do `RichEditor` é renderizado inteiramente
+no CLIENTE via TipTap/Alpine (`wire:ignore` na div raiz, conteúdo
+passado como JSON via `$wire.entangle()`, DOM populado por JS depois
+do carregamento da página), então o HTML devolvido por
+`Testable::html()` nunca contém o texto formatado renderizado — só o
+wrapper/toolbar/estado inicial. O que DÁ pra confirmar via teste:
+que `$set('novo_item_descricao', '<p><strong>...</strong></p>')`
+converte corretamente pro formato interno JSON do TipTap (`RichEditor
+StateCast`, campo guarda `{"type":"doc","content":[...,{"marks":
+[{"type":"bold"}]}]}`, não a string HTML crua) preservando a marca
+`bold` — ou seja, a INTEGRIDADE do dado sobrevive à remoção da
+toolbar (esperado, já que `toolbarButtons()` é puramente de
+renderização, não mexe no processamento de marcas) — mas a
+confirmação visual de que aparece formatado na tela exige navegador de
+verdade.
 - **Qtde.** (1) e **Porc.%** (1): `TextInput` `->numeric()->integer()`,
   `->live(onBlur: true)`, disparam o recálculo (ver fórmula abaixo).
   Porc.% SEM `->minValue()` — aceita negativo de propósito (acréscimo/
