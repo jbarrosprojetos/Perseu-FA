@@ -586,9 +586,15 @@ class ProjetoResource extends Resource
                         // origem "Item Avulso" — só os RÓTULOS; a linha de
                         // INPUT de verdade é o próximo Grid::make(24) logo
                         // abaixo, com os MESMOS columnSpan (alinhamento
-                        // coluna a coluna). Última coluna (3) fica sem
+                        // coluna a coluna). Última coluna (1) fica sem
                         // rótulo — espaço reservado, sem uso definido ainda.
-                        // 1+3+6+1+2+3+1+1+3+3 = 24.
+                        // Coluna "Imp.%" REMOVIDA da tela (2026-09-03) — o
+                        // Imposto da Referência de Preços continua entrando
+                        // no cálculo (ver `recalcularValoresItemAvulso()`),
+                        // só não tem mais coluna própria; o espaço dela foi
+                        // redistribuído entre Referência/Descrição/Valor
+                        // Unitário/última coluna, ver CLAUDE.md.
+                        // 1+4+7+1+3+3+1+3+1 = 24.
                         Grid::make(24)
                             ->columnSpanFull()
                             ->extraAttributes($gridGap)
@@ -599,22 +605,19 @@ class ProjetoResource extends Resource
                                     ->columnSpan(1),
                                 Text::make(__('comercial::filament/resources/projeto.form.itens.cabecalho-item-avulso.referencia'))
                                     ->weight(FontWeight::Bold)
-                                    ->columnSpan(3),
+                                    ->columnSpan(4),
                                 Text::make(__('comercial::filament/resources/projeto.form.itens.cabecalho-item-avulso.descricao'))
                                     ->weight(FontWeight::Bold)
-                                    ->columnSpan(6),
+                                    ->columnSpan(7),
                                 Text::make(__('comercial::filament/resources/projeto.form.itens.cabecalho-item-avulso.quantidade'))
                                     ->weight(FontWeight::Bold)
                                     ->columnSpan(1),
                                 Text::make(__('comercial::filament/resources/projeto.form.itens.cabecalho-item-avulso.valor-unitario'))
                                     ->weight(FontWeight::Bold)
-                                    ->columnSpan(2),
+                                    ->columnSpan(3),
                                 Text::make(__('comercial::filament/resources/projeto.form.itens.cabecalho-item-avulso.valor-total'))
                                     ->weight(FontWeight::Bold)
                                     ->columnSpan(3),
-                                Text::make(__('comercial::filament/resources/projeto.form.itens.cabecalho-item-avulso.imposto'))
-                                    ->weight(FontWeight::Bold)
-                                    ->columnSpan(1),
                                 Text::make(__('comercial::filament/resources/projeto.form.itens.cabecalho-item-avulso.porcentagem'))
                                     ->weight(FontWeight::Bold)
                                     ->columnSpan(1),
@@ -622,7 +625,7 @@ class ProjetoResource extends Resource
                                     ->weight(FontWeight::Bold)
                                     ->columnSpan(3),
                                 Text::make('') // Sem rótulo — espaço reservado, sem uso definido ainda.
-                                    ->columnSpan(3),
+                                    ->columnSpan(1),
                             ]),
 
                         // Linha de INPUT de Item Avulso — mesmos columnSpan
@@ -655,28 +658,35 @@ class ProjetoResource extends Resource
                                 // reserva a coluna (mesma lógica das colunas
                                 // vazias do cabeçalho).
                                 Text::make('')
-                                    ->columnSpan(3),
+                                    ->columnSpan(4),
 
                                 // Toolbar REMOVIDA (`->toolbarButtons([])`)
                                 // — depois de investigar e descartar o modo
                                 // "bubble menu" (aparece só em foco, ver
                                 // CLAUDE.md), a decisão foi tirar a barra de
-                                // botões de vez e orientar por atalhos de
-                                // teclado (`->helperText()` abaixo). O campo
-                                // continua sendo um RichEditor de verdade —
-                                // todas as extensões (Bold, Italic,
-                                // Underline etc.) seguem carregadas e os
-                                // atalhos funcionam normalmente, só o botão
-                                // visual é que some (`getToolbarButtons()`
-                                // vazio pula o `<div class="fi-fo-rich-
-                                // editor-toolbar">` inteiro no render, ver
-                                // `RichEditor::toEmbeddedHtml()`).
+                                // botões de vez. O campo continua sendo um
+                                // RichEditor de verdade — todas as extensões
+                                // (Bold, Italic, Underline etc.) seguem
+                                // carregadas e os atalhos de teclado
+                                // funcionam normalmente, só o botão visual é
+                                // que some (`getToolbarButtons()` vazio pula
+                                // o `<div class="fi-fo-rich-editor-toolbar">`
+                                // inteiro no render, ver
+                                // `RichEditor::toEmbeddedHtml()`). No lugar
+                                // do texto de ajuda fixo (removido), um
+                                // `->hintIcon()` ao lado do rótulo (mesmo
+                                // escondido via `hiddenLabel()`, o slot
+                                // "after label" continua renderizando — ver
+                                // `field-wrapper.blade.php`) mostra os
+                                // atalhos reais num tooltip ao passar o
+                                // mouse/focar — não ocupa espaço permanente
+                                // na tela como o texto fixo ocupava.
                                 RichEditor::make('novo_item_descricao')
                                     ->hiddenLabel()
                                     ->toolbarButtons([])
-                                    ->helperText(__('comercial::filament/resources/projeto.form.itens.descricao-atalhos'))
+                                    ->hintIcon('heroicon-o-question-mark-circle', tooltip: __('comercial::filament/resources/projeto.form.itens.descricao-atalhos'))
                                     ->dehydrated(false)
-                                    ->columnSpan(6),
+                                    ->columnSpan(7),
 
                                 TextInput::make('novo_item_quantidade')
                                     ->hiddenLabel()
@@ -685,6 +695,7 @@ class ProjetoResource extends Resource
                                     ->minValue(0)
                                     ->live(onBlur: true)
                                     ->dehydrated(false)
+                                    ->extraInputAttributes(['class' => 'fi-input-no-spinner'])
                                     ->afterStateUpdated(fn (Get $get, Set $set) => static::recalcularValoresItemAvulso($get, $set))
                                     ->columnSpan(1),
 
@@ -694,7 +705,7 @@ class ProjetoResource extends Resource
                                     ->prefix('R$')
                                     ->disabled()
                                     ->dehydrated(false)
-                                    ->columnSpan(2),
+                                    ->columnSpan(3),
 
                                 TextInput::make('novo_item_valor_total')
                                     ->hiddenLabel()
@@ -704,31 +715,28 @@ class ProjetoResource extends Resource
                                     ->dehydrated(false)
                                     ->columnSpan(3),
 
-                                // Vem da Referência de Preços ATUALMENTE
-                                // selecionada no Cabeçalho
-                                // (`referencia_preco_id`) — somente leitura,
-                                // o usuário não digita. Preenchido pela
-                                // própria Action "Inserir" (acima, quando
-                                // "Item Avulso" é escolhido), não por
-                                // `->default()` aqui: o campo vive dentro de
-                                // um Grid com `->visible()` condicional, e o
-                                // `fill()` inicial da página não hidrata
-                                // campos que começam escondidos (confirmado
-                                // via `Livewire::test()`). Sem Referência
+                                // Coluna "Imp.%" REMOVIDA da tela (2026-09-03)
+                                // — vira `Hidden` (sem `columnSpan` próprio,
+                                // `Hidden::setUp()` já usa
+                                // `columnSpan(['default' => 'hidden'])`, não
+                                // consome espaço no Grid). Continua vindo da
+                                // Referência de Preços ATUALMENTE selecionada
+                                // no Cabeçalho (`referencia_preco_id`),
+                                // preenchido pela própria Action "Inserir"
+                                // (acima, quando "Item Avulso" é escolhido) —
+                                // não por `->default()` aqui: o campo vive
+                                // dentro de um Grid com `->visible()`
+                                // condicional, e o `fill()` inicial da
+                                // página não hidrata campos que começam
+                                // escondidos (confirmado via
+                                // `Livewire::test()`). Sem Referência
                                 // vinculada fica em branco e é tratado como
                                 // 0% no cálculo (ver
                                 // `recalcularValoresItemAvulso()`) — o aviso
                                 // em vermelho de "sem Referência" já existe
-                                // no próprio campo lá no Cabeçalho, não
-                                // duplicado aqui por falta de espaço nesta
-                                // coluna estreita (columnSpan 1).
-                                TextInput::make('novo_item_imposto')
-                                    ->hiddenLabel()
-                                    ->numeric()
-                                    ->suffix('%')
-                                    ->disabled()
-                                    ->dehydrated(false)
-                                    ->columnSpan(1),
+                                // no próprio campo lá no Cabeçalho.
+                                Hidden::make('novo_item_imposto')
+                                    ->dehydrated(false),
 
                                 TextInput::make('novo_item_porcentagem')
                                     ->hiddenLabel()
@@ -736,6 +744,7 @@ class ProjetoResource extends Resource
                                     ->integer()
                                     ->live(onBlur: true)
                                     ->dehydrated(false)
+                                    ->extraInputAttributes(['class' => 'fi-input-no-spinner'])
                                     ->afterStateUpdated(fn (Get $get, Set $set) => static::recalcularValoresItemAvulso($get, $set))
                                     ->columnSpan(1),
 
@@ -770,7 +779,7 @@ class ProjetoResource extends Resource
                                 ])
                                     ->alignCenter()
                                     ->verticallyAlignEnd()
-                                    ->columnSpan(3),
+                                    ->columnSpan(1),
                             ]),
 
                         // Espaço reservado para a listagem dos itens já

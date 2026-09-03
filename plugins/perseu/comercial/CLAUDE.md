@@ -182,24 +182,30 @@ de salvamento.
   apareciam duplicados; com o override, aparecem uma única vez, na
   posição certa.
 
-### Cabeçalho estilo planilha para "Item Avulso" (2026-09-03, colunas corrigidas 2026-09-03)
+### Cabeçalho estilo planilha para "Item Avulso" (2026-09-03, colunas corrigidas 2026-09-03, Imp.% removido 2026-09-03)
 
 Ao clicar "Inserir" com "Item Avulso" selecionado, em vez da
 notificação placeholder aparece um cabeçalho de colunas — `Grid::make(24)`
-com 10 colunas (`columnSpan`: Item 1, Referência 3, Descrição 6, Qtde.
-1, Valor Unit. 2, Valor Total 3, Imp.% 1, Porc.% 1, Custo Unitário 3,
-última coluna sem rótulo 3 — soma 24), no espaço reservado logo abaixo
-do Select+Botão, dentro da mesma Section "Itens". A inspiração é a aba
-"00" do Excel `260000 Cliente Padrão Proposta 00.xlsm` usado hoje pela
-F.A. Marcenaria. Todos os rótulos aparecem abreviados ("Qtde.", "Valor
-Unit.", "Imp.%", "Porc.%") — **"Porc.%" é a mesma coluna que já passou
-por "Desconto" → "Porcentagem" → "Porc.%"**, não confundir com uma
-coluna nova; a última coluna (3) continua reservada, sem texto — sem
-uso definido ainda (a coluna que ANTES se chamava "Total Custo" foi
-renomeada para "Custo Unitário" em 2026-09-03, ver subseção seguinte —
+com **9 colunas visíveis** (`columnSpan`: Item 1, Referência 4,
+Descrição 7, Qtde. 1, Valor Unit. 3, Valor Total 3, Porc.% 1, Custo
+Unitário 3, última coluna sem rótulo 1 — soma 24), no espaço reservado
+logo abaixo do Select+Botão, dentro da mesma Section "Itens". A
+inspiração é a aba "00" do Excel `260000 Cliente Padrão Proposta
+00.xlsm` usado hoje pela F.A. Marcenaria. Todos os rótulos aparecem
+abreviados ("Qtde.", "Valor Unit.", "Porc.%") — **"Porc.%" é a mesma
+coluna que já passou por "Desconto" → "Porcentagem" → "Porc.%"**, não
+confundir com uma coluna nova; a última coluna (1) continua reservada,
+sem texto — sem uso definido ainda (a coluna que ANTES se chamava
+"Total Custo" foi renomeada para "Custo Unitário" em 2026-09-03 —
 representa o custo unitário do item, não mais um "total"). As outras 6
 origens do dropdown continuam com a notificação placeholder normal; só
 "Item Avulso" tem comportamento próprio até agora.
+
+**Coluna "Imp.%" removida da tela em 2026-09-03** (ver subseção "Imp.%
+removido..." mais abaixo) — a distribuição ATUAL de 9 colunas acima já
+reflete essa remoção; o histórico da distribuição anterior de 10
+colunas (com Imp.% visível) fica só no git blame/HISTORICO-DESENVOLVIMENTO.md,
+não repetido aqui.
 
 - **`Filament\Schemas\Components\Text`, não `Placeholder`** — é só
   rótulo/label de coluna (um `<span>`, sem wrapper de campo de
@@ -235,20 +241,21 @@ origens do dropdown continuam com a notificação placeholder normal; só
 ### Linha de INPUT de "Item Avulso" + botão "Mobilização e Frete" (2026-09-03)
 
 Logo abaixo do cabeçalho de colunas (subseção anterior), um SEGUNDO
-`Grid::make(24)` com os MESMOS `columnSpan` (1,3,6,1,2,3,1,1,3,3) traz
-os campos de verdade — ainda nenhuma persistência (todos
-`dehydrated(false)`, prefixo `novo_item_*`, fora do `$fillable` de
-`Projeto`); a tabela `itens_projeto` (ou nome equivalente) e a ação
-real de confirmar/salvar ficam pra uma próxima etapa.
+`Grid::make(24)` com os MESMOS `columnSpan` (1,4,7,1,3,3,1,3,1 — ver
+"Imp.% removido" mais abaixo pra a distribuição ATUAL) traz os campos
+de verdade — ainda nenhuma persistência (todos `dehydrated(false)`,
+prefixo `novo_item_*`, fora do `$fillable` de `Projeto`); a tabela
+`itens_projeto` (ou nome equivalente) e a ação real de confirmar/
+salvar ficam pra uma próxima etapa.
 
 - **Item** (1): `Placeholder` só-leitura, formato `###`. Ainda não há
   tabela de Itens pra contar registros reais — fixo em `"001"` por
   enquanto (todo Projeto "começa" sem nenhum item confirmado, já que
   confirmar/persistir é tarefa futura). Quando a tabela existir, trocar
   por uma contagem real de itens do Projeto.
-- **Referência** (3): sem campo, só `Text::make('')` reservando a
+- **Referência** (4): sem campo, só `Text::make('')` reservando a
   coluna (Item Avulso não usa essa coluna).
-- **Descrição** (6): `RichEditor::make('novo_item_descricao')` sem
+- **Descrição** (7): `RichEditor::make('novo_item_descricao')` sem
   `->toolbarButtons()` — o conjunto DEFAULT do Filament
   (`RichEditor::getDefaultToolbarButtons()`) já cobre bold/italic/
   underline/strike/sub/superscript/link, h2/h3, alinhamento,
@@ -290,7 +297,7 @@ real de confirmar/salvar ficam pra uma próxima etapa.
   (`->toolbarButtons([])`), sem tentar escondê-la condicionalmente —
   ver subseção seguinte.
 
-### Toolbar do RichEditor de "Item Avulso" removida — atalhos de teclado (2026-09-03)
+### Toolbar do RichEditor de "Item Avulso" removida — atalhos de teclado (2026-09-03, texto fixo trocado por ícone com balão em 2026-09-03)
 
 Em vez do "aparece só em foco" (descartado acima), a decisão foi tirar
 a barra de ferramentas de vez: `RichEditor::make('novo_item_descricao')
@@ -300,8 +307,22 @@ toolbar">` inteiro (`if ((! $isDisabled) && filled($toolbarButtons))`),
 sem afetar nada mais: as extensões TipTap continuam TODAS carregadas
 (`toolbarButtons()` só controla quais BOTÕES aparecem, não quais
 extensões/marcas o editor sabe processar), então os atalhos de teclado
-de cada uma continuam funcionando normalmente. `->helperText(...)`
-abaixo do campo orienta o usuário pros atalhos mais úteis.
+de cada uma continuam funcionando normalmente.
+
+**Orientação ao usuário: ícone com balão, não mais texto fixo.** A
+primeira versão usava `->helperText(...)` (texto sempre visível abaixo
+do campo) — trocado por `->hintIcon('heroicon-o-question-mark-circle',
+tooltip: __(...))`, um ícone ao lado do rótulo que só mostra o balão ao
+passar o mouse/focar. Motivo: o texto fixo ocupava espaço permanente
+na tela mesmo quando o usuário não precisa da informação; o ícone
+resolve isso sem perder a orientação. Funciona mesmo com
+`->hiddenLabel()` no campo — o slot "after label" que carrega o ícone
+(`Filament\Forms\Components\Concerns\HasHint::setUpHint()`) é
+independente do texto do rótulo: `field-wrapper.blade.php` só esconde
+o TEXTO do label (`fi-sr-only`, texto ainda existe pra leitor de tela)
+quando `hiddenLabel()` está ativo, mas o container do label continua
+renderizando se houver qualquer conteúdo em `afterLabel` (nosso caso) —
+confirmado lendo o Blade do componente, não presumido.
 
 **Atalhos confirmados** (lidos direto do bundle compilado
 `vendor/filament/forms/dist/components/rich-editor.js`, procurando
@@ -324,9 +345,10 @@ em `vendor/filament/forms/resources/js/components/rich-editor/extensions.js`
 | `Ctrl+Shift+L/E/R/J` | Alinhar esquerda/centro/direita/justificado |
 | `Ctrl+Z` / `Ctrl+Shift+Z` ou `Ctrl+Y` | Desfazer / refazer |
 
-O helper text mostrado ao usuário só cita os 3 primeiros (Bold/Italic/
-Underline) por brevidade — os demais ficam registrados aqui caso o
-helper text precise crescer no futuro. **Confirmado que NÃO existe**
+O tooltip do ícone só cita os 3 primeiros (Bold/Italic/Underline) por
+brevidade (`hintIconTooltip` só aceita string simples, sem HTML/quebra
+de linha) — os demais ficam registrados aqui caso o tooltip precise
+crescer no futuro. **Confirmado que NÃO existe**
 uma extensão de lista de tarefas carregada (`Mod-Shift-9`/`toggleTaskList`
 aparece no bundle, mas pertence a um "listKit" que não é importado em
 `extensions.js` — só `BulletList`/`ListItem`/`OrderedList` individuais
@@ -353,34 +375,57 @@ verdade.
 - **Qtde.** (1) e **Porc.%** (1): `TextInput` `->numeric()->integer()`,
   `->live(onBlur: true)`, disparam o recálculo (ver fórmula abaixo).
   Porc.% SEM `->minValue()` — aceita negativo de propósito (acréscimo/
-  desconto).
-- **Valor Unitário** (2) e **Valor Total** (3): `TextInput`
+  desconto). **Sem setas de incremento/decremento** (2026-09-03):
+  `->extraInputAttributes(['class' => 'fi-input-no-spinner'])` +
+  `resources/css/filament/admin-input-no-spinner.css` (registrado em
+  `AdminPanelProvider::boot()` via `FilamentAsset::register()`, mesmo
+  mecanismo já usado por `admin-topbar.css`/`admin-select-badge.css`).
+  `->step(null)` sozinho NÃO remove essas setas — são desenhadas pelo
+  próprio motor do navegador via pseudo-elemento
+  (`::-webkit-inner-spin-button` no Chrome/Edge, `-moz-appearance` no
+  Firefox), e pseudo-elemento não é endereçável por
+  `->extraInputAttributes(['style' => ...])` (atributo `style` inline
+  só aceita propriedades do próprio elemento) — por isso precisa de uma
+  folha de estilo de verdade. Escopado à classe
+  `.fi-input-no-spinner` (só nesses 2 campos), não em todo
+  `input[type=number]` do painel, pra não afetar outros campos
+  numéricos do sistema (ex.: os de `ReferenciaPreco`).
+- **Valor Unitário** (3) e **Valor Total** (3): `TextInput`
   `->disabled()` — nunca digitados, só `$set()` pelo recálculo.
   `disabled()` já implica não-dehydratado, mas mantido
   `->dehydrated(false)` explícito por consistência com os outros
   campos `novo_item_*`.
-- **Imp.%** (1): `TextInput` `->disabled()`, valor da Referência de
-  Preços ATUALMENTE selecionada no Cabeçalho (`referencia_preco_id`,
-  não necessariamente a salva no banco — se o usuário troca a
-  Referência antes de clicar "Inserir", vale a escolha atual). **Achado
-  de teste**: NÃO dá pra popular via `->default(fn (?Projeto $record) =>
-  $record?->referenciaPreco?->imposto)` — o campo vive dentro de um
-  Grid com `->visible()` condicional a `origem_item_inserida`, e o
-  `fill()` inicial da página (Create/Edit) não hidrata campos que
-  COMEÇAM escondidos; confirmado via `Livewire::test()` — o campo
-  ficava sempre `null` mesmo com Referência vinculada, mesmo depois do
-  Grid virar visível (visibilidade muda o RENDER, não re-executa
-  `fill()`). Correção: a própria Action "Inserir" (quando
-  `$origem === 'item_avulso'`) faz
+- **Imp.% removido da tela em 2026-09-03** — vira `Hidden::make('novo_item_imposto')`
+  (sem `columnSpan` próprio; `Hidden::setUp()` já usa
+  `columnSpan(['default' => 'hidden'])`, não consome espaço no Grid).
+  O ESPAÇO que a coluna ocupava (columnSpan 1) foi redistribuído:
+  Referência 3→4, Descrição 6→7, Valor Unitário 2→3, última coluna 3→1
+  (ver nova distribuição completa na subseção do cabeçalho, acima).
+  **O valor continua vindo normalmente** da Referência de Preços
+  ATUALMENTE selecionada no Cabeçalho (`referencia_preco_id`, não
+  necessariamente a salva no banco — se o usuário troca a Referência
+  antes de clicar "Inserir", vale a escolha atual) e ENTRA na fórmula
+  do mesmo jeito, só não aparece mais como coluna própria. **Achado de
+  teste** (ainda válido, campo continua populado do mesmo jeito, só
+  mudou de `TextInput` visível pra `Hidden`): NÃO dá pra popular via
+  `->default(fn (?Projeto $record) => $record?->referenciaPreco?->imposto)`
+  — o campo vive dentro de um Grid com `->visible()` condicional a
+  `origem_item_inserida`, e o `fill()` inicial da página (Create/Edit)
+  não hidrata campos que COMEÇAM escondidos; confirmado via
+  `Livewire::test()` — o campo ficava sempre `null` mesmo com
+  Referência vinculada, mesmo depois do Grid virar visível
+  (visibilidade muda o RENDER, não re-executa `fill()`). Correção: a
+  própria Action "Inserir" (quando `$origem === 'item_avulso'`) faz
   `$set('novo_item_imposto', ReferenciaPreco::find($get('referencia_preco_id'))?->imposto)`
   explicitamente — e aproveita pra resetar todos os `novo_item_*` a
   cada clique (linha nova sempre em branco). Sem Referência vinculada,
-  fica em branco (`null`) — SEM aviso duplicado nesta coluna estreita
-  (columnSpan 1); o aviso em vermelho já existe no campo "Referência de
+  fica em branco (`null`) — tratado como 0% no cálculo (ver fórmula
+  abaixo); o aviso em vermelho já existe no campo "Referência de
   Preços" do Cabeçalho.
 - **Custo Unitário** (3): `TextInput` `->numeric()->minValue(0)`
   (só positivo), `->live(onBlur: true)`, dispara o recálculo.
-- **Última coluna** (3): `Actions::make([Action::make('confirmarItemAvulso')
+- **Última coluna** (1, antes 3 — encolhida pra sobrar espaço com a
+  remoção do Imp.%): `Actions::make([Action::make('confirmarItemAvulso')
   ->iconButton()])` — SEM ação real (notificação placeholder própria,
   chaves `notification.confirmar-pendente-*`); a persistência de fato é
   a próxima tarefa.
@@ -407,7 +452,10 @@ matematicamente só dependesse de Custo Unitário (sem precisar de
 Quantidade), essa é a regra pedida: os dois calculados ficam juntos,
 tudo ou nada. Sem Imp.% disponível (Projeto sem Referência de Preços),
 entra como 0% na fórmula — decisão registrada aqui, não bloqueia o
-cálculo.
+cálculo. "Imp.%" na fórmula é só o nome interno do valor (variável
+`$imposto`/campo `novo_item_imposto`) — desde 2026-09-03 não existe
+mais como rótulo de coluna na tela (ver "Imp.% removido da tela"
+acima), só o cálculo por baixo dos panos.
 
 ## Limitações conhecidas
 

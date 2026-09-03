@@ -49,7 +49,6 @@ return [
                 'quantidade'      => 'Qty.',
                 'valor-unitario'  => 'Unit Price',
                 'valor-total'     => 'Total Price',
-                'imposto'         => 'Tax %',
                 'porcentagem'     => 'Perc. %',
                 'custo-unitario'  => 'Unit Cost',
             ],

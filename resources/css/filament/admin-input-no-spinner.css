@@ -1,0 +1,30 @@
+/*
+ * Esconde as setas nativas de incremento/decremento de <input
+ * type="number"> — usado pelos campos "Qtde." e "Porc.%" da linha de
+ * Item Avulso do Projeto (ProjetoResource::form(), Section "Itens").
+ *
+ * `->step(null)` sozinho não remove essas setas — são desenhadas pelo
+ * próprio motor do navegador (pseudo-elementos no WebKit/Blink,
+ * "-moz-appearance" no Firefox), e pseudo-elementos NÃO são
+ * endereçáveis via `->extraInputAttributes(['style' => ...])` (atributo
+ * `style` inline só aceita propriedades no próprio elemento, nunca
+ * seletores de pseudo-elemento) — por isso precisa de uma folha de
+ * estilo real.
+ *
+ * Escopado à classe ".fi-input-no-spinner" (aplicada via
+ * `->extraInputAttributes(['class' => 'fi-input-no-spinner'])` só nos
+ * campos que pedem esse comportamento), não em todo `input[type=number]`
+ * do painel — outros campos numéricos do sistema (ex.: os de
+ * ReferenciaPreco) continuam com o comportamento nativo do navegador,
+ * sem mudança.
+ */
+
+.fi-panel-admin .fi-input-no-spinner::-webkit-outer-spin-button,
+.fi-panel-admin .fi-input-no-spinner::-webkit-inner-spin-button {
+    -webkit-appearance: none !important;
+    margin: 0 !important;
+}
+
+.fi-panel-admin .fi-input-no-spinner {
+    -moz-appearance: textfield !important;
+}

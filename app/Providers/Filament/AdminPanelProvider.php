@@ -37,6 +37,7 @@ class AdminPanelProvider extends PanelProvider
         FilamentAsset::register([
             Css::make('admin-topbar', resource_path('css/filament/admin-topbar.css')),
             Css::make('admin-select-badge', resource_path('css/filament/admin-select-badge.css')),
+            Css::make('admin-input-no-spinner', resource_path('css/filament/admin-input-no-spinner.css')),
         ]);
     }
 

@@ -49,7 +49,6 @@ return [
                 'quantidade'      => 'Qtde.',
                 'valor-unitario'  => 'Valor Unit.',
                 'valor-total'     => 'Valor Total',
-                'imposto'         => 'Imp.%',
                 'porcentagem'     => 'Porc.%',
                 'custo-unitario'  => 'Custo Unitário',
             ],
