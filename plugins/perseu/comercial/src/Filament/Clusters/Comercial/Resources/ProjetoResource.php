@@ -14,6 +14,7 @@ use Filament\Actions\RestoreBulkAction;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Radio;
+use Filament\Forms\Components\RichEditor;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
@@ -504,15 +505,45 @@ class ProjetoResource extends Resource
 
                                             // "Item Avulso" é a única origem com
                                             // comportamento real por enquanto —
-                                            // mostra o cabeçalho de colunas
-                                            // (Grid::make(24) logo abaixo, ainda
-                                            // sem nenhuma linha de dado). As
-                                            // outras 6 origens continuam com a
-                                            // notificação placeholder até
-                                            // ganharem sua própria lógica numa
-                                            // tarefa futura.
+                                            // mostra o cabeçalho de colunas e a
+                                            // linha de input (dois Grid::make(24)
+                                            // logo abaixo). As outras 6 origens
+                                            // continuam com a notificação
+                                            // placeholder até ganharem sua
+                                            // própria lógica numa tarefa futura.
                                             if ($origem === 'item_avulso') {
                                                 $set('origem_item_inserida', $origem);
+
+                                                // Reseta a linha de input a cada
+                                                // clique em "Inserir" (linha nova
+                                                // sempre começa em branco) e busca
+                                                // o Imp.% da Referência de Preços
+                                                // ATUALMENTE selecionada no
+                                                // Cabeçalho (não do registro salvo
+                                                // no banco — se o usuário troca a
+                                                // Referência antes de clicar
+                                                // "Inserir", vale a escolha atual).
+                                                // Não dá pra usar `->default()` no
+                                                // campo `novo_item_imposto`: ele
+                                                // vive dentro de um Grid com
+                                                // `->visible()` condicional, e o
+                                                // `fill()` inicial da página não
+                                                // hidrata campos que começam
+                                                // escondidos — confirmado via
+                                                // `Livewire::test()` (o campo
+                                                // ficava sempre `null` mesmo com
+                                                // Referência vinculada).
+                                                $referenciaPrecoId = $get('referencia_preco_id');
+
+                                                $set('novo_item_imposto', filled($referenciaPrecoId)
+                                                    ? ReferenciaPreco::find($referenciaPrecoId)?->imposto
+                                                    : null);
+                                                $set('novo_item_descricao', null);
+                                                $set('novo_item_quantidade', null);
+                                                $set('novo_item_porcentagem', null);
+                                                $set('novo_item_custo_unitario', null);
+                                                $set('novo_item_valor_unitario', null);
+                                                $set('novo_item_valor_total', null);
 
                                                 return;
                                             }
@@ -527,18 +558,36 @@ class ProjetoResource extends Resource
                                                 ]))
                                                 ->send();
                                         }),
+
+                                    // Sem ação própria ainda — mesmo padrão do
+                                    // botão "Inserir" quando foi criado
+                                    // (notificação placeholder), reaproveitando
+                                    // o mesmo par de traduções
+                                    // pendente-title/pendente-body.
+                                    Action::make('mobilizacaoFrete')
+                                        ->label(__('comercial::filament/resources/projeto.form.itens.mobilizacao-frete'))
+                                        ->color('gray')
+                                        ->action(function (): void {
+                                            Notification::make()
+                                                ->info()
+                                                ->title(__('comercial::filament/resources/projeto.form.itens.notification.pendente-title'))
+                                                ->body(__('comercial::filament/resources/projeto.form.itens.notification.pendente-body', [
+                                                    'origem' => __('comercial::filament/resources/projeto.form.itens.mobilizacao-frete'),
+                                                ]))
+                                                ->send();
+                                        }),
                                 ])
                                     ->verticallyAlignEnd()
-                                    ->columnSpan(2),
+                                    ->columnSpan(6),
                             ]),
 
                         // Cabeçalho de colunas estilo planilha (ver aba "00"
                         // do Excel de referência da F.A. Marcenaria) para a
-                        // origem "Item Avulso" — só os RÓTULOS por enquanto,
-                        // nenhuma linha de dado/campo editável ainda (vem
-                        // numa tarefa futura, junto com a tabela de Itens).
-                        // Última coluna (3) fica sem rótulo — espaço
-                        // reservado, sem uso definido ainda.
+                        // origem "Item Avulso" — só os RÓTULOS; a linha de
+                        // INPUT de verdade é o próximo Grid::make(24) logo
+                        // abaixo, com os MESMOS columnSpan (alinhamento
+                        // coluna a coluna). Última coluna (3) fica sem
+                        // rótulo — espaço reservado, sem uso definido ainda.
                         // 1+3+6+1+2+3+1+1+3+3 = 24.
                         Grid::make(24)
                             ->columnSpanFull()
@@ -569,10 +618,142 @@ class ProjetoResource extends Resource
                                 Text::make(__('comercial::filament/resources/projeto.form.itens.cabecalho-item-avulso.porcentagem'))
                                     ->weight(FontWeight::Bold)
                                     ->columnSpan(1),
-                                Text::make(__('comercial::filament/resources/projeto.form.itens.cabecalho-item-avulso.total-custo'))
+                                Text::make(__('comercial::filament/resources/projeto.form.itens.cabecalho-item-avulso.custo-unitario'))
                                     ->weight(FontWeight::Bold)
                                     ->columnSpan(3),
                                 Text::make('') // Sem rótulo — espaço reservado, sem uso definido ainda.
+                                    ->columnSpan(3),
+                            ]),
+
+                        // Linha de INPUT de Item Avulso — mesmos columnSpan
+                        // do cabeçalho acima, pra alinhar coluna a coluna.
+                        // Nenhum dado é persistido aqui ainda (todos os
+                        // campos `dehydrated(false)`) — é só a interface
+                        // reativa calculando em tempo real; a tabela de
+                        // Itens e a ação de confirmar/salvar de fato ficam
+                        // pra uma tarefa futura (ver botão "confirmar" da
+                        // última coluna, ainda sem ação real).
+                        Grid::make(24)
+                            ->columnSpanFull()
+                            ->extraAttributes($gridGap)
+                            ->visible(fn (Get $get) => $get('origem_item_inserida') === 'item_avulso')
+                            ->schema([
+                                // Numeração automática (###) — ainda não
+                                // existe tabela de Itens pra contar registros
+                                // reais, então por enquanto é sempre "001"
+                                // (todo Projeto "começa" sem nenhum item
+                                // confirmado, já que a ação de confirmar/
+                                // persistir é tarefa futura). Quando a tabela
+                                // existir, trocar por uma contagem real
+                                // (`($record?->itens()->count() ?? 0) + 1`).
+                                Placeholder::make('novo_item_numero_display')
+                                    ->hiddenLabel()
+                                    ->content(fn () => str_pad('1', 3, '0', STR_PAD_LEFT))
+                                    ->columnSpan(1),
+
+                                // Referência: sem campo para Item Avulso, só
+                                // reserva a coluna (mesma lógica das colunas
+                                // vazias do cabeçalho).
+                                Text::make('')
+                                    ->columnSpan(3),
+
+                                RichEditor::make('novo_item_descricao')
+                                    ->hiddenLabel()
+                                    ->dehydrated(false)
+                                    ->columnSpan(6),
+
+                                TextInput::make('novo_item_quantidade')
+                                    ->hiddenLabel()
+                                    ->numeric()
+                                    ->integer()
+                                    ->minValue(0)
+                                    ->live(onBlur: true)
+                                    ->dehydrated(false)
+                                    ->afterStateUpdated(fn (Get $get, Set $set) => static::recalcularValoresItemAvulso($get, $set))
+                                    ->columnSpan(1),
+
+                                TextInput::make('novo_item_valor_unitario')
+                                    ->hiddenLabel()
+                                    ->numeric()
+                                    ->prefix('R$')
+                                    ->disabled()
+                                    ->dehydrated(false)
+                                    ->columnSpan(2),
+
+                                TextInput::make('novo_item_valor_total')
+                                    ->hiddenLabel()
+                                    ->numeric()
+                                    ->prefix('R$')
+                                    ->disabled()
+                                    ->dehydrated(false)
+                                    ->columnSpan(3),
+
+                                // Vem da Referência de Preços ATUALMENTE
+                                // selecionada no Cabeçalho
+                                // (`referencia_preco_id`) — somente leitura,
+                                // o usuário não digita. Preenchido pela
+                                // própria Action "Inserir" (acima, quando
+                                // "Item Avulso" é escolhido), não por
+                                // `->default()` aqui: o campo vive dentro de
+                                // um Grid com `->visible()` condicional, e o
+                                // `fill()` inicial da página não hidrata
+                                // campos que começam escondidos (confirmado
+                                // via `Livewire::test()`). Sem Referência
+                                // vinculada fica em branco e é tratado como
+                                // 0% no cálculo (ver
+                                // `recalcularValoresItemAvulso()`) — o aviso
+                                // em vermelho de "sem Referência" já existe
+                                // no próprio campo lá no Cabeçalho, não
+                                // duplicado aqui por falta de espaço nesta
+                                // coluna estreita (columnSpan 1).
+                                TextInput::make('novo_item_imposto')
+                                    ->hiddenLabel()
+                                    ->numeric()
+                                    ->suffix('%')
+                                    ->disabled()
+                                    ->dehydrated(false)
+                                    ->columnSpan(1),
+
+                                TextInput::make('novo_item_porcentagem')
+                                    ->hiddenLabel()
+                                    ->numeric()
+                                    ->integer()
+                                    ->live(onBlur: true)
+                                    ->dehydrated(false)
+                                    ->afterStateUpdated(fn (Get $get, Set $set) => static::recalcularValoresItemAvulso($get, $set))
+                                    ->columnSpan(1),
+
+                                TextInput::make('novo_item_custo_unitario')
+                                    ->hiddenLabel()
+                                    ->numeric()
+                                    ->minValue(0)
+                                    ->prefix('R$')
+                                    ->live(onBlur: true)
+                                    ->dehydrated(false)
+                                    ->afterStateUpdated(fn (Get $get, Set $set) => static::recalcularValoresItemAvulso($get, $set))
+                                    ->columnSpan(3),
+
+                                // Confirmar inserção/alteração do item — SEM
+                                // ação real ainda, só o elemento visual
+                                // (notificação placeholder ao clicar). A
+                                // persistência de fato é a próxima tarefa,
+                                // junto com a tabela de Itens.
+                                Actions::make([
+                                    Action::make('confirmarItemAvulso')
+                                        ->label(__('comercial::filament/resources/projeto.form.itens.confirmar'))
+                                        ->icon('heroicon-o-check-circle')
+                                        ->iconButton()
+                                        ->color('success')
+                                        ->action(function (): void {
+                                            Notification::make()
+                                                ->info()
+                                                ->title(__('comercial::filament/resources/projeto.form.itens.notification.confirmar-pendente-title'))
+                                                ->body(__('comercial::filament/resources/projeto.form.itens.notification.confirmar-pendente-body'))
+                                                ->send();
+                                        }),
+                                ])
+                                    ->alignCenter()
+                                    ->verticallyAlignEnd()
                                     ->columnSpan(3),
                             ]),
 
@@ -600,6 +781,37 @@ class ProjetoResource extends Resource
             'sketchup_cutlist'  => __('comercial::filament/resources/projeto.form.itens.origens.sketchup-cutlist'),
             'cortcloud'         => __('comercial::filament/resources/projeto.form.itens.origens.cortcloud'),
         ];
+    }
+
+    /**
+     * Valor Unitário = Custo Unitário × (1 + Porc.%/100) × (1 + Imp.%/100)
+     * Valor Total    = Valor Unitário × Quantidade
+     *
+     * Sem Quantidade OU Custo Unitário (vazios/zerados), os dois campos
+     * calculados ficam em branco — não há erro, só nada pra calcular
+     * ainda. Imp.% sem Referência de Preços vinculada ao Projeto entra
+     * como 0% (ver campo `novo_item_imposto` acima).
+     */
+    protected static function recalcularValoresItemAvulso(Get $get, Set $set): void
+    {
+        $quantidade = $get('novo_item_quantidade');
+        $custoUnitario = $get('novo_item_custo_unitario');
+
+        if (blank($quantidade) || ((float) $quantidade <= 0) || blank($custoUnitario) || ((float) $custoUnitario <= 0)) {
+            $set('novo_item_valor_unitario', null);
+            $set('novo_item_valor_total', null);
+
+            return;
+        }
+
+        $porcentagem = (float) ($get('novo_item_porcentagem') ?: 0);
+        $imposto = (float) ($get('novo_item_imposto') ?: 0);
+
+        $valorUnitario = (float) $custoUnitario * (1 + ($porcentagem / 100)) * (1 + ($imposto / 100));
+        $valorTotal = $valorUnitario * (float) $quantidade;
+
+        $set('novo_item_valor_unitario', round($valorUnitario, 2));
+        $set('novo_item_valor_total', round($valorTotal, 2));
     }
 
     protected static function contatoSelecionado(Get $get): ?PessoaFisica

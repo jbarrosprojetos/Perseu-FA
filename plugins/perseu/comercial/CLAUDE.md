@@ -187,18 +187,19 @@ de salvamento.
 Ao clicar "Inserir" com "Item Avulso" selecionado, em vez da
 notificação placeholder aparece um cabeçalho de colunas — `Grid::make(24)`
 com 10 colunas (`columnSpan`: Item 1, Referência 3, Descrição 6, Qtde.
-1, Valor Unit. 2, Valor Total 3, Imp.% 1, Porc.% 1, Total Custo 3,
+1, Valor Unit. 2, Valor Total 3, Imp.% 1, Porc.% 1, Custo Unitário 3,
 última coluna sem rótulo 3 — soma 24), no espaço reservado logo abaixo
-do Select+Botão, dentro da mesma Section "Itens". Ainda SÓ o
-cabeçalho — nenhuma linha de dado, nenhum campo editável; a inspiração
-é a aba "00" do Excel `260000 Cliente Padrão Proposta 00.xlsm` usado
-hoje pela F.A. Marcenaria. Todos os rótulos aparecem abreviados
-("Qtde.", "Valor Unit.", "Imp.%", "Porc.%") — **"Porc.%" é a mesma
-coluna que já passou por "Desconto" → "Porcentagem" → "Porc.%"**, não
-confundir com uma coluna nova; a última coluna (3) continua reservada,
-sem texto — sem uso definido ainda. As outras 6 origens do dropdown
-continuam com a notificação placeholder normal; só "Item Avulso" tem
-comportamento próprio até agora.
+do Select+Botão, dentro da mesma Section "Itens". A inspiração é a aba
+"00" do Excel `260000 Cliente Padrão Proposta 00.xlsm` usado hoje pela
+F.A. Marcenaria. Todos os rótulos aparecem abreviados ("Qtde.", "Valor
+Unit.", "Imp.%", "Porc.%") — **"Porc.%" é a mesma coluna que já passou
+por "Desconto" → "Porcentagem" → "Porc.%"**, não confundir com uma
+coluna nova; a última coluna (3) continua reservada, sem texto — sem
+uso definido ainda (a coluna que ANTES se chamava "Total Custo" foi
+renomeada para "Custo Unitário" em 2026-09-03, ver subseção seguinte —
+representa o custo unitário do item, não mais um "total"). As outras 6
+origens do dropdown continuam com a notificação placeholder normal; só
+"Item Avulso" tem comportamento próprio até agora.
 
 - **`Filament\Schemas\Components\Text`, não `Placeholder`** — é só
   rótulo/label de coluna (um `<span>`, sem wrapper de campo de
@@ -230,6 +231,87 @@ comportamento próprio até agora.
   usar a chamada direta (`$test->instance()->mountAction(...)`); para
   inspecionar o HTML renderizado, usar `$test->call(...)`. Nenhuma das
   duas cobre as duas coisas ao mesmo tempo.
+
+### Linha de INPUT de "Item Avulso" + botão "Mobilização e Frete" (2026-09-03)
+
+Logo abaixo do cabeçalho de colunas (subseção anterior), um SEGUNDO
+`Grid::make(24)` com os MESMOS `columnSpan` (1,3,6,1,2,3,1,1,3,3) traz
+os campos de verdade — ainda nenhuma persistência (todos
+`dehydrated(false)`, prefixo `novo_item_*`, fora do `$fillable` de
+`Projeto`); a tabela `itens_projeto` (ou nome equivalente) e a ação
+real de confirmar/salvar ficam pra uma próxima etapa.
+
+- **Item** (1): `Placeholder` só-leitura, formato `###`. Ainda não há
+  tabela de Itens pra contar registros reais — fixo em `"001"` por
+  enquanto (todo Projeto "começa" sem nenhum item confirmado, já que
+  confirmar/persistir é tarefa futura). Quando a tabela existir, trocar
+  por uma contagem real de itens do Projeto.
+- **Referência** (3): sem campo, só `Text::make('')` reservando a
+  coluna (Item Avulso não usa essa coluna).
+- **Descrição** (6): `RichEditor::make('novo_item_descricao')` sem
+  `->toolbarButtons()` — o conjunto DEFAULT do Filament
+  (`RichEditor::getDefaultToolbarButtons()`) já cobre bold/italic/
+  underline/strike/sub/superscript/link, h2/h3, alinhamento,
+  blockquote/codeBlock/listas, tabela, anexos, undo/redo — não precisa
+  declarar nada pra "todas as ferramentas padrão" pedidas.
+- **Qtde.** (1) e **Porc.%** (1): `TextInput` `->numeric()->integer()`,
+  `->live(onBlur: true)`, disparam o recálculo (ver fórmula abaixo).
+  Porc.% SEM `->minValue()` — aceita negativo de propósito (acréscimo/
+  desconto).
+- **Valor Unitário** (2) e **Valor Total** (3): `TextInput`
+  `->disabled()` — nunca digitados, só `$set()` pelo recálculo.
+  `disabled()` já implica não-dehydratado, mas mantido
+  `->dehydrated(false)` explícito por consistência com os outros
+  campos `novo_item_*`.
+- **Imp.%** (1): `TextInput` `->disabled()`, valor da Referência de
+  Preços ATUALMENTE selecionada no Cabeçalho (`referencia_preco_id`,
+  não necessariamente a salva no banco — se o usuário troca a
+  Referência antes de clicar "Inserir", vale a escolha atual). **Achado
+  de teste**: NÃO dá pra popular via `->default(fn (?Projeto $record) =>
+  $record?->referenciaPreco?->imposto)` — o campo vive dentro de um
+  Grid com `->visible()` condicional a `origem_item_inserida`, e o
+  `fill()` inicial da página (Create/Edit) não hidrata campos que
+  COMEÇAM escondidos; confirmado via `Livewire::test()` — o campo
+  ficava sempre `null` mesmo com Referência vinculada, mesmo depois do
+  Grid virar visível (visibilidade muda o RENDER, não re-executa
+  `fill()`). Correção: a própria Action "Inserir" (quando
+  `$origem === 'item_avulso'`) faz
+  `$set('novo_item_imposto', ReferenciaPreco::find($get('referencia_preco_id'))?->imposto)`
+  explicitamente — e aproveita pra resetar todos os `novo_item_*` a
+  cada clique (linha nova sempre em branco). Sem Referência vinculada,
+  fica em branco (`null`) — SEM aviso duplicado nesta coluna estreita
+  (columnSpan 1); o aviso em vermelho já existe no campo "Referência de
+  Preços" do Cabeçalho.
+- **Custo Unitário** (3): `TextInput` `->numeric()->minValue(0)`
+  (só positivo), `->live(onBlur: true)`, dispara o recálculo.
+- **Última coluna** (3): `Actions::make([Action::make('confirmarItemAvulso')
+  ->iconButton()])` — SEM ação real (notificação placeholder própria,
+  chaves `notification.confirmar-pendente-*`); a persistência de fato é
+  a próxima tarefa.
+- **Botão "Mobilização e Frete"**: ao lado de "Inserir" (mesmo
+  `Actions::make([...])`, `columnSpan` do Grid de 12 colunas aumentado
+  de 2 pra 6 pra caber os dois botões), sem ação própria —
+  reaproveita o MESMO par de traduções `notification.pendente-title`/
+  `pendente-body` do placeholder das 6 origens, passando `'origem' =>
+  'Mobilização e Frete'` como se fosse mais uma origem pendente
+  (evita criar strings novas pra um texto idêntico em espírito).
+
+**Fórmula de cálculo** (`recalcularValoresItemAvulso()`, chamada pelo
+`->afterStateUpdated()` de Qtde./Porc.%/Custo Unitário — os três campos
+usados nela):
+
+```
+Valor Unitário = Custo Unitário × (1 + Porc.%/100) × (1 + Imp.%/100)
+Valor Total    = Valor Unitário × Quantidade
+```
+
+Se Quantidade OU Custo Unitário estiverem vazios/zerados, os DOIS
+campos calculados ficam em branco (`null`) — mesmo que Valor Unitário
+matematicamente só dependesse de Custo Unitário (sem precisar de
+Quantidade), essa é a regra pedida: os dois calculados ficam juntos,
+tudo ou nada. Sem Imp.% disponível (Projeto sem Referência de Preços),
+entra como 0% na fórmula — decisão registrada aqui, não bloqueia o
+cálculo.
 
 ## Limitações conhecidas
 
