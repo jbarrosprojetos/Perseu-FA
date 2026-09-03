@@ -254,6 +254,39 @@ real de confirmar/salvar ficam pra uma próxima etapa.
   underline/strike/sub/superscript/link, h2/h3, alinhamento,
   blockquote/codeBlock/listas, tabela, anexos, undo/redo — não precisa
   declarar nada pra "todas as ferramentas padrão" pedidas.
+  **Investigação (2026-09-03): toolbar "tipo bubble menu" (só em foco,
+  esconde ao perder foco) — NÃO implementada, descartada por conflito
+  de UX, não por dificuldade técnica pura.** O mecanismo existe e é de
+  primeira classe (`RichEditor::floatingToolbars()`, documentado em
+  `vendor/filament/forms/docs/10-rich-editor.md`, "Customizing floating
+  toolbars") — usa `@tiptap/extension-bubble-menu` por baixo
+  (`vendor/filament/forms/resources/js/components/rich-editor.js`,
+  `BubbleMenuPlugin`). Mas o `shouldShow` que decide quando o bubble
+  aparece é HARDCODED no JS do pacote (não configurável via PHP): pra
+  qualquer chave que NÃO seja `'paragraph'` (ex.: `'heading'`,
+  `'table'`) já basta o CURSOR estar dentro do nó
+  (`editor.isFocused && editor.isActive(key)`, sem precisar de seleção)
+  — mas pra `'paragraph'` (o nó onde vive praticamente todo texto
+  digitado normalmente) a condição EXTRA `!editor.state.selection.empty`
+  é exigida, ou seja, o bubble só aparece com TEXTO SELECIONADO, não
+  com o cursor simplesmente posicionado/em foco. Migrar TODAS as
+  ferramentas padrão pra dentro de `floatingToolbars(['paragraph' =>
+  [...]])` (esvaziando a toolbar fixa) trocaria "sempre visível" por
+  "só aparece com seleção" — quebra ferramentas que não fazem sentido
+  como bubble de seleção (undo/redo, anexar arquivo, inserir tabela:
+  ações de documento, não de trecho selecionado) e impede o fluxo
+  comum de "clicar em Negrito ANTES de digitar" (sem seleção prévia,
+  não haveria toolbar visível pra clicar). Um focus/blur "puro" (sem
+  depender de seleção) exigiria (a) sobrescrever a Blade view do
+  componente — inviável hoje porque o `RichEditor` não tem NENHUM
+  arquivo `.blade.php` no pacote pra publicar/copiar, é 100% renderizado
+  via `toEmbeddedHtml()` em PHP (~500 linhas) — ou (b) fazer fork do
+  asset JS compilado (`rich-editor.js`) pra expor um estado `isFocused`
+  reativo e religar `x-show` manualmente no wrapper da toolbar,
+  mantido à mão em todo upgrade do Filament (alto risco de quebrar
+  silenciosamente numa atualização futura). Estimativa: 1-2 dias +
+  manutenção contínua — não vale o custo/risco agora. Toolbar
+  permanece sempre visível, com o conjunto DEFAULT completo.
 - **Qtde.** (1) e **Porc.%** (1): `TextInput` `->numeric()->integer()`,
   `->live(onBlur: true)`, disparam o recálculo (ver fórmula abaixo).
   Porc.% SEM `->minValue()` — aceita negativo de propósito (acréscimo/

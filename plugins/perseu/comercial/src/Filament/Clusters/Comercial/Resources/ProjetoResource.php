@@ -657,6 +657,11 @@ class ProjetoResource extends Resource
                                 Text::make('')
                                     ->columnSpan(3),
 
+                                // Toolbar sempre visível, com TODAS as
+                                // ferramentas padrão (sem ->toolbarButtons()
+                                // restringindo) — investigado e descartado um
+                                // modo "aparece só em foco, some ao perder
+                                // foco" (bubble menu), ver CLAUDE.md.
                                 RichEditor::make('novo_item_descricao')
                                     ->hiddenLabel()
                                     ->dehydrated(false)
