@@ -309,3 +309,24 @@ decisão do usuário que afeta vários de uma vez:
   a TODOS os painéis registrados — sempre guardar com `if
   ($panel->getId() !== 'admin') { return; }` quando a intenção é só o
   painel admin.
+- **`FilamentAsset::register([Css::make(...), ...])` (ex.:
+  `AdminPanelProvider::boot()`) NÃO serve o CSS/JS diretamente do
+  caminho passado em tempo de requisição** — o `<link>`/`<script>`
+  gerado sempre aponta pra uma cópia estática publicada em
+  `public/css/{package}/{id}.css` (`package` default `'app'`), nunca
+  pro `resource_path(...)` original (`Filament\Support\Assets\Css::
+  getHref()`/`getRelativePublicPath()`, confirmado lendo o código-fonte
+  do pacote). Depois de registrar (ou editar) um asset assim, **rodar
+  `ddev artisan filament:assets`** (também roda automaticamente dentro
+  de `filament:upgrade`, que por sua vez roda em `post-autoload-dump` —
+  então um `composer install`/`update` também resolve) — sem isso o
+  arquivo publicado fica ausente/desatualizado e a regra CSS
+  simplesmente não é aplicada, SEM nenhum erro visível (o `<link>`
+  aponta pra um arquivo que não existe ou está com conteúdo antigo).
+  Achado real: `resources/css/filament/admin-input-no-spinner.css`
+  (`perseu/comercial`, esconder setas de `<input type=number>`) foi
+  registrado mas o publish nunca rodou — a regra simplesmente não
+  tinha efeito nenhum, sem nenhum erro no console. Os arquivos
+  publicados em `public/css/app/*.css` SÃO versionados no git (mesmo
+  padrão já usado por `admin-topbar.css`/`admin-select-badge.css`) —
+  sempre commitar o arquivo publicado junto do registro em PHP.
