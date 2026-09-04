@@ -14,4 +14,14 @@ return [
         'title' => 'Projeto atualizado',
         'body'  => 'O projeto foi atualizado com sucesso.',
     ],
+
+    'form-actions' => [
+        'atribuir-processos' => [
+            'label' => 'Atribuir Processos',
+            'notification' => [
+                'title' => 'Ainda não implementado',
+                'body'  => 'A ação de atribuir Processos a este Projeto será implementada numa próxima etapa.',
+            ],
+        ],
+    ],
 ];

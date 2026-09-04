@@ -182,7 +182,39 @@ de salvamento.
   apareciam duplicados; com o override, aparecem uma única vez, na
   posição certa.
 
-### Cabeçalho estilo planilha para "Item Avulso" (2026-09-03, colunas corrigidas 2026-09-03, Imp.% removido 2026-09-03, ícones de ajuda no cabeçalho 2026-09-04)
+### Botão "Atribuir Processos" — só em EditProjeto (2026-09-04)
+
+`EditProjeto::getFormActions()` sobrescreve o método padrão do
+`EditRecord` (`protected function getFormActions(): array`, retorna
+`[$this->getSaveFormAction(), $this->getCancelFormAction()]`) pra
+acrescentar um terceiro botão, `Action::make('atribuirProcessos')`,
+na MESMA linha de Salvar/Cancelar reposicionada (ver "Section 'Itens'
+e reposicionamento de Salvar/Cancelar" acima) — sem ação real ainda,
+só notificação placeholder (mesmo padrão das origens do dropdown de
+Itens ainda não implementadas).
+
+- **Só existe em `EditProjeto`, nunca em `CreateProjeto`** — a forma
+  mais idiomática de condicionar isso não foi um `->visible()` checando
+  a página/registro, e sim simplesmente NÃO sobrescrever
+  `getFormActions()` em `CreateProjeto` (que continua herdando o
+  padrão do `CreateRecord`, só Salvar/Cancelar). Mesmo padrão já usado
+  por `getHeaderActions()` no mesmo arquivo (`DeleteAction` também só
+  existe em Edit, nunca em Create) — motivo: só depois de salvo pelo
+  menos uma vez o Projeto tem Número/Data de Cadastro preenchidos, faz
+  sentido "atribuir Processos" a um Projeto que ainda não existe no
+  banco.
+- **Por que funciona sem tocar em `ProjetoResource::form()`**: quem
+  monta a linha de botões é
+  `$schema->getLivewire()->getFormActionsContentComponent()` (ver
+  subseção anterior) — `getLivewire()` retorna a INSTÂNCIA REAL da
+  página (`CreateProjeto` ou `EditProjeto`, dependendo de qual rota
+  está ativa), e `getFormActionsContentComponent()` (herdado, não
+  sobrescrito) chama `$this->getFormActions()` nessa mesma instância —
+  por polimorfismo normal do PHP, a versão de `EditProjeto` é chamada
+  quando `$this` é um `EditProjeto`, a de `CreateRecord` quando é um
+  `CreateProjeto`. Nenhuma mudança no Resource foi necessária.
+
+### Cabeçalho estilo planilha para "Item Avulso" (2026-09-03, colunas corrigidas 2026-09-03, Imp.% removido 2026-09-03, ícones de ajuda no cabeçalho 2026-09-04, "Custo Unitário" abreviado 2026-09-04)
 
 Ao clicar "Inserir" com "Item Avulso" selecionado, em vez da
 notificação placeholder aparece um cabeçalho de colunas — `Grid::make(24)`
@@ -211,6 +243,15 @@ não repetido aqui.
 proximidade visual do rótulo com "Custo Unitário" ao lado; é a mesma
 coluna interna `porcentagem`/`novo_item_porcentagem`, só mudou o texto
 exibido (pt_BR e en).
+
+**Rótulo "Custo Unitário" abreviado para "Custo Unit." em 2026-09-04**
+(só pt_BR — mesmo padrão já usado em "Valor Unit.") — o texto completo
+quebrava em duas linhas por ser mais longo que a largura de
+`columnSpan(3)` (mesma largura de Valor Unit./Valor Total). O `en`
+("Unit Cost") não precisou de abreviação — já é curto o bastante,
+tamanho equivalente a "Unit Price". O tooltip do ícone de ajuda dessa
+coluna (`custo-unitario-tooltip`) continua com o texto completo "Valor
+de Custo Digitado ou Importado" — só o rótulo visível foi abreviado.
 
 **Ícones de ajuda (2026-09-04, correção de posicionamento):** 4 das
 colunas do cabeçalho (Referência, Descrição, %, Custo Unitário) têm um

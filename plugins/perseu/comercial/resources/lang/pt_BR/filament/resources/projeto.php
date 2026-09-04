@@ -53,7 +53,7 @@ return [
                 'valor-unitario'  => 'Valor Unit.',
                 'valor-total'     => 'Valor Total',
                 'porcentagem'     => '%',
-                'custo-unitario'  => 'Custo Unitário',
+                'custo-unitario'  => 'Custo Unit.',
             ],
         ],
         'descricao'      => 'Nome da Obra',
