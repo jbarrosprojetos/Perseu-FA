@@ -26,6 +26,9 @@ return [
             'mobilizacao-frete'  => 'Mobilização e Frete',
             'confirmar'          => 'Confirmar',
             'descricao-atalhos'  => 'Use atalhos de teclado para formatar o texto, se necessário: Ctrl+B (negrito), Ctrl+I (itálico), Ctrl+U (sublinhado).',
+            'referencia-tooltip'      => 'Código do Produto de Linha Cadastrado',
+            'porcentagem-tooltip'     => 'Porcentagem Acréscimo ou Desconto',
+            'custo-unitario-tooltip'  => 'Valor de Custo Digitado ou Importado',
             'origens'  => [
                 'item-avulso'       => 'Item Avulso',
                 'item-linha'        => 'Item de Linha',
@@ -49,7 +52,7 @@ return [
                 'quantidade'      => 'Qtde.',
                 'valor-unitario'  => 'Valor Unit.',
                 'valor-total'     => 'Valor Total',
-                'porcentagem'     => 'Porc.%',
+                'porcentagem'     => '%',
                 'custo-unitario'  => 'Custo Unitário',
             ],
         ],

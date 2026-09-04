@@ -182,7 +182,7 @@ de salvamento.
   apareciam duplicados; com o override, aparecem uma única vez, na
   posição certa.
 
-### Cabeçalho estilo planilha para "Item Avulso" (2026-09-03, colunas corrigidas 2026-09-03, Imp.% removido 2026-09-03)
+### Cabeçalho estilo planilha para "Item Avulso" (2026-09-03, colunas corrigidas 2026-09-03, Imp.% removido 2026-09-03, ícones de ajuda no cabeçalho 2026-09-04)
 
 Ao clicar "Inserir" com "Item Avulso" selecionado, em vez da
 notificação placeholder aparece um cabeçalho de colunas — `Grid::make(24)`
@@ -206,6 +206,50 @@ removido..." mais abaixo) — a distribuição ATUAL de 9 colunas acima já
 reflete essa remoção; o histórico da distribuição anterior de 10
 colunas (com Imp.% visível) fica só no git blame/HISTORICO-DESENVOLVIMENTO.md,
 não repetido aqui.
+
+**Coluna "Porc.%" renomeada para "%" em 2026-09-04** — reduz a
+proximidade visual do rótulo com "Custo Unitário" ao lado; é a mesma
+coluna interna `porcentagem`/`novo_item_porcentagem`, só mudou o texto
+exibido (pt_BR e en).
+
+**Ícones de ajuda (2026-09-04, correção de posicionamento):** 4 das
+colunas do cabeçalho (Referência, Descrição, %, Custo Unitário) têm um
+ícone "?" com tooltip anexado ao PRÓPRIO `Text` do cabeçalho — via
+`Flex::make([Text::make(...), Icon::make('heroicon-o-question-mark-circle')
+->tooltip(...)])->dense()->verticallyAlignCenter()->columnSpan(N)` —
+não mais a `->hintIcon()` no campo de input da linha de baixo (ver
+subseção seguinte, "Toolbar do RichEditor..."). Motivo: cada campo da
+linha de INPUT tem `->hiddenLabel()`/é um `Text::make('')` vazio (o
+rótulo de verdade só existe na linha de CABEÇALHO, acima); um
+`->hintIcon()` se ancora ao label NATIVO do campo em que é chamado, e
+com esse label oculto/vazio o ícone ficava flutuando sozinho sobre o
+input, sem nenhuma relação visual com o texto do rótulo (achado real
+da primeira tentativa, corrigido nesta data).
+
+- **`Icon`, não `Text::make()->icon()`** — `Filament\Schemas\Components\Text
+  ::toEmbeddedHtml()` só desenha o ícone informado via `->icon()` no
+  modo `->badge()` (pill com fundo/borda, indesejado no cabeçalho
+  estilo planilha); no modo normal (usado por todo o cabeçalho) o
+  ícone é simplesmente ignorado no render — confirmado lendo o
+  código-fonte do componente (`vendor/filament/schemas/src/Components/
+  Text.php`), não presumido. `Filament\Schemas\Components\Icon` é o
+  componente certo — implementa `HasTooltip` e desenha o `x-tooltip`
+  Alpine igual ao `Text`/`hintIcon`.
+- **`Flex`, não `Grid` aninhado** — `Flex` é um `Component` de verdade
+  (herda `CanSpanColumns` de `Filament\Schemas\Components\Component`),
+  então aceita `->columnSpan()` do `Grid(24)` pai igual a qualquer
+  outro componente da linha.
+- **`->dense()` no `Flex`, não um `class` Tailwind arbitrário via
+  `->extraAttributes()`** — o painel admin usa o CSS PRÉ-COMPILADO do
+  Filament (sem build Tailwind próprio escaneando PHP deste plugin,
+  ver "`FilamentAsset::register()`..." no CLAUDE.md da raiz), então um
+  utilitário Tailwind que o Filament não usa em lugar nenhum do seu
+  próprio código-fonte (ex.: `'gap-1'` cru) simplesmente NÃO tem efeito
+  — a classe não existe no CSS publicado. `->dense()` usa `.fi-dense`
+  (gap-3, já compilado — `HasGap::isDense()`, herdado por qualquer
+  Component via `Filament\Schemas\Concerns\HasGap`), gap menor que o
+  `gap-6` default do `Flex` sem quebrar a dependência do CSS já
+  publicado.
 
 - **`Filament\Schemas\Components\Text`, não `Placeholder`** — é só
   rótulo/label de coluna (um `<span>`, sem wrapper de campo de
@@ -297,7 +341,7 @@ salvar ficam pra uma próxima etapa.
   (`->toolbarButtons([])`), sem tentar escondê-la condicionalmente —
   ver subseção seguinte.
 
-### Toolbar do RichEditor de "Item Avulso" removida — atalhos de teclado (2026-09-03, texto fixo trocado por ícone com balão em 2026-09-03)
+### Toolbar do RichEditor de "Item Avulso" removida — atalhos de teclado (2026-09-03, texto fixo trocado por ícone com balão em 2026-09-03, ícone movido pro cabeçalho em 2026-09-04)
 
 Em vez do "aparece só em foco" (descartado acima), a decisão foi tirar
 a barra de ferramentas de vez: `RichEditor::make('novo_item_descricao')
@@ -323,6 +367,19 @@ o TEXTO do label (`fi-sr-only`, texto ainda existe pra leitor de tela)
 quando `hiddenLabel()` está ativo, mas o container do label continua
 renderizando se houver qualquer conteúdo em `afterLabel` (nosso caso) —
 confirmado lendo o Blade do componente, não presumido.
+
+**Achado real (corrigido em 2026-09-04): o `->hintIcon()` acima
+ficava POSICIONADO ERRADO.** O campo (`RichEditor` desta linha de
+INPUT) tem `->hiddenLabel()` — o rótulo "Descrição" de verdade vive
+SÓ na linha de CABEÇALHO acima (`Text::make(...)`, Grid::make(24)
+anterior), não neste campo. `->hintIcon()` se ancora ao label NATIVO
+do componente em que é chamado — com esse label vazio/oculto, o ícone
+ficava flutuando sozinho sobre a linha de input, sem nenhuma relação
+visual com o texto "Descrição" acima. Correção: o `->hintIcon()` foi
+REMOVIDO daqui — o ícone (mesmo tooltip) agora vive no `Text` do
+cabeçalho, junto com outros 3 (Referência, %, Custo Unitário), ver
+detalhes técnicos (`Icon`/`Flex`/`->dense()`) na subseção "Cabeçalho
+estilo planilha para 'Item Avulso'" acima.
 
 **Atalhos confirmados** (lidos direto do bundle compilado
 `vendor/filament/forms/dist/components/rich-editor.js`, procurando
@@ -390,6 +447,21 @@ verdade.
   `.fi-input-no-spinner` (só nesses 2 campos), não em todo
   `input[type=number]` do painel, pra não afetar outros campos
   numéricos do sistema (ex.: os de `ReferenciaPreco`).
+  **Bug real na primeira tentativa (corrigido em 2026-09-03)**: a
+  classe estava correta no HTML (confirmado via `Livewire::test()`,
+  `<input ... class="fi-input-no-spinner fi-input" />`), mas a regra
+  CSS não tinha NENHUM efeito no navegador — causa raiz:
+  `FilamentAsset::register([Css::make(...)])` não serve o arquivo
+  direto de `resource_path(...)`, só gera um `<link>` pra uma cópia
+  publicada em `public/css/app/admin-input-no-spinner.css`
+  (`Filament\Support\Assets\Css::getHref()`), e essa publicação
+  (`ddev artisan filament:assets`) nunca tinha rodado depois do
+  registro — o `<link>` apontava pra um arquivo inexistente, sem
+  nenhum erro visível. Ver "Comandos e fluxo úteis" no CLAUDE.md da
+  raiz pro mecanismo geral (vale pra qualquer asset registrado assim,
+  não só este). Corrigido rodando `filament:assets` e commitando o
+  arquivo publicado (mesmo padrão de `admin-topbar.css`/
+  `admin-select-badge.css`, ambos versionados em `public/css/app/`).
 - **Valor Unitário** (3) e **Valor Total** (3): `TextInput`
   `->disabled()` — nunca digitados, só `$set()` pelo recálculo.
   `disabled()` já implica não-dehydratado, mas mantido
@@ -428,7 +500,15 @@ verdade.
   remoção do Imp.%): `Actions::make([Action::make('confirmarItemAvulso')
   ->iconButton()])` — SEM ação real (notificação placeholder própria,
   chaves `notification.confirmar-pendente-*`); a persistência de fato é
-  a próxima tarefa.
+  a próxima tarefa. `->verticallyAlignStart()` (2026-09-03, antes
+  `->verticallyAlignEnd()` por engano/herança do padrão usado no botão
+  "Inserir") — `.fi-sc-actions` é um `flex flex-col h-full` (`vendor/
+  filament/schemas/resources/css/components/actions.css`), então
+  `verticalAlignment` vira `justify-content` no eixo vertical desse
+  container de altura cheia: `start` = topo, `end` = fim. Alinhar ao
+  TOPO deixa o ícone na mesma altura dos outros campos da linha (Item,
+  Descrição, Qtde. etc., que começam todos no topo por padrão) — sem
+  isso o ícone ficava visivelmente mais baixo que o resto da linha.
 - **Botão "Mobilização e Frete"**: ao lado de "Inserir" (mesmo
   `Actions::make([...])`, `columnSpan` do Grid de 12 colunas aumentado
   de 2 pra 6 pra caber os dois botões), sem ação própria —

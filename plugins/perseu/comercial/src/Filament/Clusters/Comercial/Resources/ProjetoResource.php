@@ -20,13 +20,16 @@ use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Actions;
+use Filament\Schemas\Components\Flex;
 use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Icon;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Text;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\FontWeight;
+use Filament\Support\Enums\IconSize;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
@@ -595,6 +598,37 @@ class ProjetoResource extends Resource
                         // redistribuído entre Referência/Descrição/Valor
                         // Unitário/última coluna, ver CLAUDE.md.
                         // 1+4+7+1+3+3+1+3+1 = 24.
+                        //
+                        // Ícone de ajuda (2026-09-04): 4 colunas (Referência,
+                        // Descrição, %, Custo Unitário) têm um ícone "?" com
+                        // tooltip anexado ao PRÓPRIO `Text` do cabeçalho (via
+                        // `Flex::make([Text::make(...), Icon::make(...)])`),
+                        // não ao campo de input da linha de baixo. Motivo: o
+                        // rótulo de cada coluna vive só aqui (a linha de
+                        // input tem `->hiddenLabel()`/`Text::make('')`), e um
+                        // `->hintIcon()` no campo de input se ancora ao label
+                        // NATIVO desse campo — que está oculto/vazio — então
+                        // o ícone ficava flutuando sozinho sobre o input, sem
+                        // nenhuma relação visual com o texto do rótulo acima
+                        // (achado real, corrigido nesta data). `Icon` (não
+                        // `Text::make()->icon()`) porque `Text::toEmbeddedHtml()`
+                        // só desenha o ícone no modo `->badge()` (pill com
+                        // fundo/borda, indesejado aqui) — no modo normal
+                        // (usado por todo o cabeçalho) o ícone informado via
+                        // `->icon()` é simplesmente ignorado no render,
+                        // confirmado lendo o Blade do componente. `Flex`
+                        // porque é um Component de verdade (aceita
+                        // `->columnSpan()` do Grid pai, via `CanSpanColumns`
+                        // herdado de `Component`) — `->dense()` (gap-3, já
+                        // compilado no CSS do Filament) no lugar do gap-6
+                        // default: um `class` Tailwind arbitrário via
+                        // `->extraAttributes()` (ex. `'gap-1'`) NÃO teria
+                        // efeito — o painel admin usa o CSS pré-compilado do
+                        // Filament (sem build Tailwind próprio escaneando
+                        // este plugin, ver "FilamentAsset::register()" no
+                        // CLAUDE.md da raiz), então só classes que o próprio
+                        // Filament já usa (e por isso já estão no CSS
+                        // publicado) têm efeito.
                         Grid::make(24)
                             ->columnSpanFull()
                             ->extraAttributes($gridGap)
@@ -603,11 +637,27 @@ class ProjetoResource extends Resource
                                 Text::make(__('comercial::filament/resources/projeto.form.itens.cabecalho-item-avulso.item'))
                                     ->weight(FontWeight::Bold)
                                     ->columnSpan(1),
-                                Text::make(__('comercial::filament/resources/projeto.form.itens.cabecalho-item-avulso.referencia'))
-                                    ->weight(FontWeight::Bold)
+                                Flex::make([
+                                    Text::make(__('comercial::filament/resources/projeto.form.itens.cabecalho-item-avulso.referencia'))
+                                        ->weight(FontWeight::Bold),
+                                    Icon::make('heroicon-o-question-mark-circle')
+                                        ->size(IconSize::Small)
+                                        ->color('gray')
+                                        ->tooltip(__('comercial::filament/resources/projeto.form.itens.referencia-tooltip')),
+                                ])
+                                    ->verticallyAlignCenter()
+                                    ->dense()
                                     ->columnSpan(4),
-                                Text::make(__('comercial::filament/resources/projeto.form.itens.cabecalho-item-avulso.descricao'))
-                                    ->weight(FontWeight::Bold)
+                                Flex::make([
+                                    Text::make(__('comercial::filament/resources/projeto.form.itens.cabecalho-item-avulso.descricao'))
+                                        ->weight(FontWeight::Bold),
+                                    Icon::make('heroicon-o-question-mark-circle')
+                                        ->size(IconSize::Small)
+                                        ->color('gray')
+                                        ->tooltip(__('comercial::filament/resources/projeto.form.itens.descricao-atalhos')),
+                                ])
+                                    ->verticallyAlignCenter()
+                                    ->dense()
                                     ->columnSpan(7),
                                 Text::make(__('comercial::filament/resources/projeto.form.itens.cabecalho-item-avulso.quantidade'))
                                     ->weight(FontWeight::Bold)
@@ -618,11 +668,27 @@ class ProjetoResource extends Resource
                                 Text::make(__('comercial::filament/resources/projeto.form.itens.cabecalho-item-avulso.valor-total'))
                                     ->weight(FontWeight::Bold)
                                     ->columnSpan(3),
-                                Text::make(__('comercial::filament/resources/projeto.form.itens.cabecalho-item-avulso.porcentagem'))
-                                    ->weight(FontWeight::Bold)
+                                Flex::make([
+                                    Text::make(__('comercial::filament/resources/projeto.form.itens.cabecalho-item-avulso.porcentagem'))
+                                        ->weight(FontWeight::Bold),
+                                    Icon::make('heroicon-o-question-mark-circle')
+                                        ->size(IconSize::Small)
+                                        ->color('gray')
+                                        ->tooltip(__('comercial::filament/resources/projeto.form.itens.porcentagem-tooltip')),
+                                ])
+                                    ->verticallyAlignCenter()
+                                    ->dense()
                                     ->columnSpan(1),
-                                Text::make(__('comercial::filament/resources/projeto.form.itens.cabecalho-item-avulso.custo-unitario'))
-                                    ->weight(FontWeight::Bold)
+                                Flex::make([
+                                    Text::make(__('comercial::filament/resources/projeto.form.itens.cabecalho-item-avulso.custo-unitario'))
+                                        ->weight(FontWeight::Bold),
+                                    Icon::make('heroicon-o-question-mark-circle')
+                                        ->size(IconSize::Small)
+                                        ->color('gray')
+                                        ->tooltip(__('comercial::filament/resources/projeto.form.itens.custo-unitario-tooltip')),
+                                ])
+                                    ->verticallyAlignCenter()
+                                    ->dense()
                                     ->columnSpan(3),
                                 Text::make('') // Sem rótulo — espaço reservado, sem uso definido ainda.
                                     ->columnSpan(1),
@@ -672,19 +738,17 @@ class ProjetoResource extends Resource
                                 // que some (`getToolbarButtons()` vazio pula
                                 // o `<div class="fi-fo-rich-editor-toolbar">`
                                 // inteiro no render, ver
-                                // `RichEditor::toEmbeddedHtml()`). No lugar
-                                // do texto de ajuda fixo (removido), um
-                                // `->hintIcon()` ao lado do rótulo (mesmo
-                                // escondido via `hiddenLabel()`, o slot
-                                // "after label" continua renderizando — ver
-                                // `field-wrapper.blade.php`) mostra os
-                                // atalhos reais num tooltip ao passar o
-                                // mouse/focar — não ocupa espaço permanente
-                                // na tela como o texto fixo ocupava.
+                                // `RichEditor::toEmbeddedHtml()`). O ícone de
+                                // ajuda com os atalhos (tooltip) NÃO fica mais
+                                // aqui — `->hintIcon()` se ancora ao label
+                                // NATIVO do campo, que este campo não tem
+                                // (`->hiddenLabel()`); o ícone vive no `Text`
+                                // "Descrição" do cabeçalho acima (ver
+                                // Grid::make(24) anterior), ao lado do rótulo
+                                // de verdade.
                                 RichEditor::make('novo_item_descricao')
                                     ->hiddenLabel()
                                     ->toolbarButtons([])
-                                    ->hintIcon('heroicon-o-question-mark-circle', tooltip: __('comercial::filament/resources/projeto.form.itens.descricao-atalhos'))
                                     ->dehydrated(false)
                                     ->columnSpan(7),
 
@@ -778,7 +842,7 @@ class ProjetoResource extends Resource
                                         }),
                                 ])
                                     ->alignCenter()
-                                    ->verticallyAlignEnd()
+                                    ->verticallyAlignStart()
                                     ->columnSpan(1),
                             ]),
 

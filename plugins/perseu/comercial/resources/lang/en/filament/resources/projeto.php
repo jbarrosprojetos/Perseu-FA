@@ -26,6 +26,9 @@ return [
             'mobilizacao-frete' => 'Mobilization and Freight',
             'confirmar'         => 'Confirm',
             'descricao-atalhos' => 'Use keyboard shortcuts to format the text, if needed: Ctrl+B (bold), Ctrl+I (italic), Ctrl+U (underline).',
+            'referencia-tooltip'     => 'Registered Line Product Code',
+            'porcentagem-tooltip'    => 'Markup or Discount Percentage',
+            'custo-unitario-tooltip' => 'Cost Value Entered or Imported',
             'origens'  => [
                 'item-avulso'       => 'Standalone Item',
                 'item-linha'        => 'Line Item',
@@ -49,7 +52,7 @@ return [
                 'quantidade'      => 'Qty.',
                 'valor-unitario'  => 'Unit Price',
                 'valor-total'     => 'Total Price',
-                'porcentagem'     => 'Perc. %',
+                'porcentagem'     => '%',
                 'custo-unitario'  => 'Unit Cost',
             ],
         ],
