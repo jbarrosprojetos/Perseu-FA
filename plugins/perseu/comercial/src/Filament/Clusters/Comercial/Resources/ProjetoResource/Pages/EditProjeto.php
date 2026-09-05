@@ -12,10 +12,13 @@ use Filament\Schemas\Components\Form;
 use Filament\Schemas\Components\Group;
 use Illuminate\Database\Eloquent\Collection;
 use Perseu\Comercial\Filament\Clusters\Comercial\Resources\ProjetoResource;
+use Perseu\Comercial\Filament\Clusters\Comercial\Resources\ProjetoResource\Concerns\HasPromobResultado;
 use Perseu\Comercial\Models\ItemProjeto;
 
 class EditProjeto extends EditRecord
 {
+    use HasPromobResultado;
+
     protected static string $resource = ProjetoResource::class;
 
     /**

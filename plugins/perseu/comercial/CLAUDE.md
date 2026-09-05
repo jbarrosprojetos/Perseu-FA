@@ -145,12 +145,26 @@ usado futuramente pra calcular o valor de Venda do Projeto.
 
 `ProjetoResource::form()` ganhou uma segunda Section, "Itens", irmã de
 "Cabeçalho" — por ora só a interface (`Select` de origem, não
-persistido, `dehydrated(false)`, com 7 opções fixas: Item Avulso, Item
-de Linha, Promob Plus, Promob Start, Sketchup Hellomob, Sketchup
-CutList, CortCloud + botão "Inserir" com notificação placeholder). A
-lógica real de cada origem e a listagem dos itens já inseridos ficam
-para uma etapa futura (depende de uma tabela de Itens que ainda não
-existe).
+persistido, `dehydrated(false)`, com 4 opções fixas: Item Avulso, Item
+de Linha, Promob, SketchUp + botão "Inserir"). A lógica real de cada
+origem e a listagem dos itens já inseridos ficam para uma etapa futura
+(depende de uma tabela de Itens que ainda não existe).
+
+**Lista de origens simplificada de 7 para 4 em 2026-09-05** — as 5
+opções mais específicas (Item de Linha, Promob Plus, Promob Start,
+Sketchup Hellomob, Sketchup CutList, CortCloud) foram substituídas por
+"Item de Linha" (mantida) + duas guarda-chuva, "Promob" e "SketchUp" —
+nenhuma das 5 chegou a ser usada em registro real, então não houve
+dado pra migrar. **Correção no mesmo dia**: a primeira versão desta
+simplificação (7 → 3) removeu "Item de Linha" por engano — deveria ter
+sido mantida junto de "Item Avulso", já que é a origem mais parecida
+com um cadastro central de Produto (ver
+`CONCEITO-OBRA-PROPOSTA-PROJETO.md`, "Itens do Projeto: dois tipos") e
+não deveria ter sido descartada como as outras. Ordem final do Select:
+Item Avulso, Item de Linha, Promob, SketchUp. "Item de Linha" e
+"SketchUp" continuam só placeholder; "Promob" ganhou o modal de
+upload/Checar Total (ver subseção própria abaixo) — serão
+detalhadas/implementadas aos poucos, à medida que for necessário.
 
 Como a Section "Itens" vai ganhar sua própria dinâmica de salvar/
 editar/excluir por item (ações individuais e imediatas, fora do ciclo
@@ -232,9 +246,11 @@ coluna que já passou por "Desconto" → "Porcentagem" → "Porc.%"**, não
 confundir com uma coluna nova; a última coluna (1) continua reservada,
 sem texto — sem uso definido ainda (a coluna que ANTES se chamava
 "Total Custo" foi renomeada para "Custo Unitário" em 2026-09-03 —
-representa o custo unitário do item, não mais um "total"). As outras 6
-origens do dropdown continuam com a notificação placeholder normal; só
-"Item Avulso" tem comportamento próprio até agora.
+representa o custo unitário do item, não mais um "total"). As outras 3
+origens do dropdown (Item de Linha, Promob, SketchUp) continuam com a
+notificação placeholder normal (Promob ganhou depois um modal próprio,
+ver subseção "Fluxo Promob" abaixo); só "Item Avulso" tem este
+cabeçalho/linha de input próprios até agora.
 
 **Coluna "Imp.%" removida da tela em 2026-09-03** (ver subseção "Imp.%
 removido..." mais abaixo) — a distribuição ATUAL de 9 colunas acima já
@@ -562,8 +578,9 @@ verdade.
   `Actions::make([...])`, `columnSpan` do Grid de 12 colunas aumentado
   de 2 pra 6 pra caber os dois botões), sem ação própria —
   reaproveita o MESMO par de traduções `notification.pendente-title`/
-  `pendente-body` do placeholder das 6 origens, passando `'origem' =>
-  'Mobilização e Frete'` como se fosse mais uma origem pendente
+  `pendente-body` do placeholder das origens não implementadas
+  (Promob/SketchUp), passando `'origem' => 'Mobilização e Frete'`
+  como se fosse mais uma origem pendente
   (evita criar strings novas pra um texto idêntico em espírito).
 
 **Fórmula de cálculo** (`recalcularValoresItemAvulso()`, chamada pelo
@@ -606,7 +623,7 @@ completo (incompatível com a renumeração exigida pela exclusão).
 
 - **`origem`**: `Perseu\Comercial\Enums\OrigemItemProjeto` (enum PHP
   nativo `string`, `implements HasLabel`, mesmo padrão de
-  `Perseu\Pessoas\Enums\TipoEndereco`) — os mesmos 7 valores já usados
+  `Perseu\Pessoas\Enums\TipoEndereco`) — os mesmos 3 valores já usados
   como chave em `ProjetoResource::origensItemOptions()` (não duplicar/
   renomear essas strings sem atualizar os dois lugares; o Select em si
   NÃO foi migrado pra usar o enum, continua com o array próprio — risco
@@ -955,6 +972,253 @@ usadas até então neste fluxo), renumeração correta após excluir, e um
 `Livewire::test()` NOVO (segunda instância, simulando reload de
 página) mostrando os itens — e a exclusão — vindos do banco.
 
+### Fluxo Promob: modal de upload + "Checar Total" (2026-09-05)
+
+Selecionar "Promob" + clicar "Inserir" abre um MODAL (em vez da
+notificação placeholder que as outras origens não implementadas ainda
+usam) — upload de um ou mais XMLs exportados pelo Promob e uma rotina
+de conferência ("Checar Total") que soma métricas dos XMLs de item e
+compara contra o XML "000" (total do projeto). **Não cria nenhum
+`ItemProjeto`** — só calcula e mostra o resultado, sem persistir nada;
+fechar/cancelar descarta tudo. **Resultado PRINCIPAL exibido: as 5
+métricas do VBA do usuário** (Peças/m²/Metro Linear/Custo/Misc — ver
+subseção "Rotina 'Checar Total' ajustada..." mais abaixo, que
+substituiu/complementou o comportamento descrito nesta subseção
+original); Custo/Preço com margem (parágrafos originais logo abaixo)
+virou informação COMPLEMENTAR.
+
+- **Mecanismo do modal — mesmo usado por "Adicionar Endereço", só sem
+  o atalho específico de Select**: `Select::make('endereco_id')
+  ->createOptionForm([...])->createOptionUsing(...)` (Grid do
+  Cabeçalho) é só uma CASCA em cima do mecanismo geral de
+  `Filament\Actions\Action` com `->form()`/`->schema()` — por baixo dos
+  panos, todo Action com formulário próprio já abre como modal
+  automaticamente (sem precisar de `->modal()` explícito), e é
+  exatamente isso que `createOptionForm()` monta (uma Action interna
+  ligada ao Select, cujo resultado vira a opção escolhida). Como o
+  upload do Promob não está criando uma opção de relacionamento — só
+  rodando um cálculo, sem retornar nada pro campo — não fazia sentido
+  usar `createOptionForm()`; a Action `inserirItemPromob`
+  (`Actions::make([...])` da Section "Itens", ao lado de `inserirItem`)
+  usa o mecanismo geral diretamente: `Action::make(...)->form([FileUpload,
+  Text])->modalWidth(Width::Small)->modalSubmitActionLabel(...)->action(...)`.
+  `Width::Small` deliberadamente menor que o modal de Endereço (~7
+  campos) — este só tem upload + resultado.
+- **Só um dos dois botões "Inserir" fica visível por vez** —
+  `inserirItem` (Item Avulso/Item de Linha/SketchUp, com a notificação
+  placeholder pras duas últimas) ganhou
+  `->visible(fn (Get $get) => $get('origem_item_selecionada') !== 'promob')`;
+  `inserirItemPromob` tem a condição inversa
+  (`=== 'promob'`). Na tela sempre aparece um único botão "Inserir" na
+  mesma posição — só muda de comportamento conforme a origem
+  selecionada, mesmo efeito visual de um switch, sem precisar de lógica
+  condicional dentro de uma Action só.
+- **Resultado exibido via property no Livewire, não via `$get`/`$set`
+  do formulário** — `HasPromobResultado` (trait em
+  `ProjetoResource/Concerns/`, aplicado a `CreateProjeto` E
+  `EditProjeto`, diferente de `$itensCarregados` que só existe em
+  `EditProjeto`, porque o upload do Promob não depende do Projeto já
+  estar salvo) declara `public ?array $promobResultado = null`. A
+  Action seta `$livewire->promobResultado` dentro de `->action()`, e um
+  `Text::make(fn ($livewire) => ...)` dentro do MESMO `->form([...])`
+  da Action lê essa property pra renderizar o resultado — mesmo padrão
+  já validado por `$itensCarregados` (Get/Set/`$livewire` resolvidos
+  por nome, injeção do Filament). Motivo de não usar `$get`/`$set`
+  aqui: uma Action com `->form()` próprio ganha um Schema/statePath
+  DEDICADO (`mountedActions.{n}.data`, não o `data.*` da página) — para
+  não precisar confirmar empiricamente se `Get`/`Set` injetados dentro
+  do `->action()` de uma Action COM form próprio apontam pro schema da
+  Action ou da página, a property no Livewire contorna a ambiguidade
+  de vez (e seria necessária de qualquer forma pra sobreviver ao reset
+  do form entre uma chamada e outra).
+- **O modal NUNCA fecha sozinho** — `->action()` sempre termina com
+  `$action->halt()` (mesmo mecanismo de "Trava de exclusão/edição" em
+  `ReferenciaPreco`, ver seção correspondente acima), mesmo quando o
+  resultado é sucesso — a tarefa pediu explicitamente que o modal só
+  EXIBE o resultado, sem fechar/persistir; fechar é sempre uma ação
+  manual do usuário (botão "Cancelar", já dado de graça pelo Filament
+  em toda Action com form). `->mountUsing(function (?Schema $schema,
+  $livewire) { $livewire->promobResultado = null; $schema?->fill(); })`
+  reseta o resultado anterior toda vez que o modal é reaberto — precisa
+  chamar `$schema?->fill()` manualmente porque sobrescrever
+  `mountUsing()` substitui o comportamento PADRÃO (que só faz o fill),
+  não o complementa.
+- **`FileUpload::make('arquivos_xml')->multiple()->preserveFilenames()`**
+  — `preserveFilenames()` é OBRIGATÓRIO aqui: o parser identifica XML
+  "000" (total) vs. XML de item pelo NOME do arquivo (ver
+  `PromobChecagemTotal::numeroItemDoArquivo()`), e sem
+  `preserveFilenames()` o Filament troca o nome por um ULID aleatório
+  ao salvar (`BaseFileUpload::getUploadedFileNameForStorageUsing()`,
+  vendor) — perderia a informação necessária. Disco `local`, diretório
+  `promob-uploads-tmp`: os arquivos são só temporários pro cálculo —
+  `ProjetoResource::processarUploadPromob()` lê e IMEDIATAMENTE apaga
+  cada um (`Storage::disk('local')->delete($caminho)`, sucesso ou erro)
+  pra não acumular XML nenhum em `storage/app/promob-uploads-tmp`
+  (confirmado: diretório nem existe mais depois de um teste de ponta a
+  ponta).
+- **Achado real: upload de XML bloqueado pelo gate GLOBAL de upload
+  temporário do Livewire, não pelo `acceptedFileTypes()` do campo** —
+  `acceptedFileTypes(['text/xml', 'application/xml'])` no
+  `FileUpload` NÃO bastou; toda requisição de upload passa PRIMEIRO
+  pelo endpoint genérico `livewire/upload-file`
+  (`config/livewire.php` → `temporary_file_upload.rules`), que valida
+  contra uma whitelist FIXA e GLOBAL (compartilhada por TODO
+  `FileUpload` do sistema, não por campo) — o default do Livewire
+  (imagens, vídeo, áudio, pdf, doc/xls/ppt, txt, csv, zip) não incluía
+  `xml`/`text/xml`/`application/xml` em lugar nenhum, então o upload
+  falhava com 422 ANTES de qualquer validação do Filament rodar.
+  Corrigido acrescentando `xml` ao `mimes:` e `text/xml,application/xml`
+  ao `mimetypes:` dessa config (`config/livewire.php`) — mudança
+  global e aditiva (só amplia o que É ACEITO pelo gate de upload
+  temporário; não afeta nenhum campo existente, já que
+  `acceptedFileTypes()` de cada campo continua restringindo o que
+  aquele campo específico aceita).
+- **`PromobXmlParser`/`PromobChecagemTotal`** (`src/Services/`) — o
+  parser só LÊ os totais já calculados pelo Promob (`TOTALPRICES/
+  MARGINS/ORDER|BUDGET/@VALUE` em `LISTING`/`AMBIENT`/`CATEGORY`, mais
+  `ITEM[@COMPONENT="Y"]` recursivo dentro de `CATEGORY/ITEMS` pra
+  Referência/Descrição/dimensões/Custo/Preço de cada componente) —
+  NUNCA recalcula nada, seguindo a mesma lógica do VBA existente do
+  usuário. `PromobChecagemTotal::checar()` identifica XML "000" vs.
+  item pelos caracteres 10-12 do nome do arquivo (`substr($nome, 9,
+  3)`, com fallback pra primeiro grupo de 3 dígitos consecutivos se a
+  posição não bater — nomes fora do padrão "AAAAAA - NNN
+  descrição.xml"), soma Custo/Preço de todos os itens e compara contra
+  o total do "000" (tolerância R$ 0,01). **Se não bater, o diagnóstico
+  por item compara CATEGORY a CATEGORY** (a mesma `DESCRIPTION`/número
+  em ambos os arquivos), NÃO a CATEGORY do "000" contra o total do
+  DOCUMENTO do item — confirmado nos 3 XMLs de exemplo que a CATEGORY
+  "001" tem o MESMO valor nos dois arquivos (166,6/499,8), enquanto o
+  total do DOCUMENTO do item inteiro (222,6/603,8) é maior, porque
+  também soma outras categorias daquele mesmo item ("Acessórios"/
+  "Hettich"/"Processo de Fabricação", que no "000" aparecem agrupadas à
+  parte, não por item) — comparar categoria com documento inteiro
+  sempre acusaria diferença, mesmo sem problema real. Categorias do
+  "000" sem XML de item correspondente enviado (ex.: essas mesmas
+  "Acessórios"/"Hettich"/"Processo de Fabricação" quando aparecem como
+  CATEGORY própria no "000") são ignoradas no diagnóstico — sem como
+  comparar sem o arquivo.
+- **Confirmado com os 3 XMLs de exemplo reais** (`260000 - 000 total
+  ger.xml`/`001 Superior.xml`/`002 inferior.xml`, salvos em
+  `tests/Fixtures/Promob/` pra teste automatizado) — o total BATE
+  exatamente: Custo R$ 704,40, Preço R$ 2.145,20, validado tanto por
+  teste automatizado (`tests/Feature/PromobChecagemTotalTest.php`,
+  Pest) quanto manualmente pelo navegador.
+- **Teste automatizado cobre parser + "Checar Total" isoladamente**
+  (`PromobChecagemTotalTest.php`) — extração de Custo/Preço do "000" e
+  de um item, conferência batendo exatamente, diagnóstico apontando a
+  categoria certa quando um XML é alterado (teste simula alterar SÓ a
+  CATEGORY, mantendo o total do documento consistente com a mudança —
+  replicar uma mudança real, não um número solto). **Atenção**: os
+  XMLs de exemplo têm quebra de linha `CRLF` (exportação do Promob no
+  Windows) — qualquer `str_replace()` num teste precisa considerar
+  isso (não montar o texto de busca com `"\n"` esperando bater; usar um
+  trecho sem quebra de linha, ou `"\r\n"` explícito).
+- **`ddev artisan test` NÃO deve ser usado sem antes checar
+  `TEST_TOKEN`** — achado real (2026-09-05), ver "Comandos e fluxo
+  úteis" no CLAUDE.md da raiz: rodar a suíte sem essa variável definida
+  roda `migrate:fresh` direto no banco de desenvolvimento
+  compartilhado (não um banco isolado de teste), e foi exatamente o que
+  aconteceu ao validar o teste desta tarefa — o banco de dev precisou
+  ser restaurado de um backup, perdendo dados cadastrados depois dele.
+  **Mesmo definindo `TEST_TOKEN`, o isolamento não funciona neste
+  ambiente hoje** — `ensureWorkerDatabase()` tenta `CREATE DATABASE
+  db_p{token}`, mas o usuário `db` do MariaDB só tem privilégio sobre o
+  banco `db` (`GRANT ALL PRIVILEGES ON db.*`, sem `CREATE` global),
+  então falha com `Access denied` (falha SEGURA — não cai de volta pro
+  banco compartilhado, só erra) — testado e confirmado nesta tarefa.
+  Até alguém decidir conceder esse privilégio ao usuário `db`
+  (mudança de infraestrutura fora do escopo de uma tarefa de feature,
+  não feita sem pedido explícito), validar lógica pura (como este
+  parser) por um script avulso/`tinker` é o único jeito seguro — nunca
+  `artisan test`/`pest` de verdade neste ambiente.
+
+### Rotina "Checar Total" ajustada pras 5 métricas do VBA (2026-09-05)
+
+A primeira versão da rotina "Checar Total" (subseção acima) só
+comparava Custo/Preço (valores COM margem, `TOTALPRICES/MARGINS/
+ORDER|BUDGET/@VALUE`). O usuário já usa uma macro VBA própria
+(`CompararTotalGeral`/`EscreverResumoFixo`/`ColetarComponentes`) que
+compara **5 métricas** por componente (`ITEM[@COMPONENT="Y"]`, "peça"
+de verdade — matéria-prima, não grupo/submontagem) — essa passou a ser
+a comparação PRINCIPAL exibida no modal; Custo/Preço com margem
+(subseção acima) virou informação COMPLEMENTAR, ao final do mesmo
+texto.
+
+**As 5 métricas** (`PromobXmlParser::metricas()`), acumuladas
+percorrendo TODO `AMBIENT`/`CATEGORY`/`ITEMS`/`ITEM` do XML (sem
+agrupar por categoria — aqui só interessa o total geral do arquivo
+inteiro):
+
+| Métrica | Fórmula (por componente `COMPONENT="Y"`, some tudo) |
+|---|---|
+| Tot. Peças | `Σ REPETITION` |
+| Tot. m² | `Σ (REPETITION × QUANTITY)` |
+| Tot. Metro Linear | `Σ ((WIDTH + DEPTH) × 2 × REPETITION / 1000)` (perímetro × repetição, mm → m) |
+| Tot. Custo | `Σ (PRICE/@TOTAL + PRICE/@TOTALCOMPONENTS)` — custo PRÓPRIO do componente |
+| Tot. Misc | `TOTALPRICES/MARGINS/ORDER/@VALUE` da RAIZ (`LISTING`) MENOS Tot. Custo |
+
+- **Achado real de double-counting — por que a árvore NÃO desce além
+  de um `COMPONENT="Y"`**: as 4 primeiras métricas somam por
+  componente andando pela árvore `ITEM > ITEMS > ITEM > ...`, mas a
+  recursão (`acumularMetricasComponentes()`) só continua descendo
+  quando o nó atual é `COMPONENT="N"` (grupo/submontagem, sem
+  contribuição própria) — ao achar um `COMPONENT="Y"`, conta ele e
+  PARA, sem olhar dentro dos filhos dele. Motivo: se um componente de
+  verdade tiver, dentro da própria árvore, outro componente agregado
+  também `COMPONENT="Y"` (ex.: um tampo com uma porta agregada), o
+  `PRICE/@TOTALCOMPONENTS` do PAI já reflete o que está "rolado" desse
+  filho — descer e somar o filho de novo, separadamente, duplicaria o
+  valor. **Nos 3 XMLs de exemplo não existe nenhum caso desses**
+  (confirmado por script Python percorrendo a árvore procurando
+  `COMPONENT="Y"` aninhado dentro de outro `COMPONENT="Y"` — zero
+  ocorrências), então essa regra não muda o resultado numérico destes
+  arquivos especificamente, mas é a implementação CORRETA pra
+  qualquer XML real que tenha esse caso (`CustoProprioItem` do VBA,
+  não a soma "com filhos" que já existia em `extrairComponentes()`,
+  usada só pelo diagnóstico por CATEGORY do Custo/Preço complementar,
+  nunca somada item a item).
+- **Achado real de arredondamento em cascata**: a primeira
+  implementação arredondava `m2`/`mlinear`/`custo`/`misc` já dentro de
+  `PromobXmlParser::metricas()` (por ARQUIVO), e só depois somava os
+  arquivos de item — isso introduzia uma "diferença" de até ~0,01
+  quando comparado ao XML "000" (que calcula o mesmo total de uma vez
+  só, sem essa rolagem de arredondamento por arquivo), MESMO com dados
+  idênticos (confirmado com os 3 XMLs de exemplo: `mlinear` dava
+  80,60 na soma dos parciais vs. 80,61 no "000", uma diferença
+  inteiramente artificial). Corrigido: `metricas()` retorna os valores
+  CRUS (float de precisão total, sem `round()`); `PromobChecagemTotal
+  ::compararMetricas()` soma os valores crus de todos os itens, calcula
+  a diferença (`geral - soma dos crus`) e só arredonda no fim, pra
+  exibição. Regra geral a lembrar: nunca arredondar um valor
+  intermediário que ainda vai ser somado/subtraído com outros — só
+  arredondar no último passo, antes de formatar pra tela.
+- **`PromobChecagemTotal::checar()` NÃO lança mais exceção sem o XML
+  "000"** — comportamento mudado nesta tarefa pra bater com o VBA:
+  antes (subseção acima) lançava `RuntimeException`; agora
+  `compararMetricas()`/`compararCustoPreco()` retornam
+  `tem_geral: false`/`bateu: null` e só a SOMA das métricas parciais
+  (sem diferença calculada, já que não há o que comparar) — o modal
+  mostra um aviso ("Nenhum XML 'Geral' enviado...") em vez de um erro.
+- **Diferença exibida SEM tolerância, valor cru** — diferente da
+  comparação complementar de Custo/Preço (que usa ±R$ 0,01 de
+  tolerância e um "bateu"/"não bateu" booleano), a comparação das 5
+  métricas mostra a DIFERENÇA NUMÉRICA diretamente (`geral MENOS soma
+  das parciais`, métrica a métrica) — mesmo comportamento do VBA, que
+  deixa o usuário interpretar se o valor é zero/aceitável. A cor do
+  resultado no modal (`corResultadoPromob()`) usa zero exato (`!= 0`
+  em cada uma das 5 diferenças) só pra decidir a COR (verde/amarelo),
+  não pra decidir se mostra ou esconde a diferença.
+- **Confirmado com os 3 XMLs de exemplo reais** — as 5 métricas batem
+  EXATAMENTE (diferença zero em todas): Tot. Peças 51, Tot. m² 8,23,
+  Tot. Metro Linear 80,61, Tot. Custo R$ 552,40, Tot. Misc R$ 152,00 —
+  tanto na soma dos 2 XMLs de item quanto no XML "000" isoladamente.
+  Validado por teste automatizado (`PromobChecagemTotalTest.php`,
+  ainda não executado via `artisan test`/Pest nesta tarefa por falta de
+  isolamento de banco seguro, ver achado de `TEST_TOKEN` acima — valores
+  conferidos por script PHP avulso, sem depender do Laravel/Pest) e
+  manualmente pelo navegador.
+
 ## Limitações conhecidas
 
 - Situação de Projeto e Tipo de Projeto usam o padrão `ManageRecords`
@@ -979,12 +1243,21 @@ página) mostrando os itens — e a exclusão — vindos do banco.
   Preços**: o vínculo (`referencia_preco_id`) já existe (ver "Vínculo
   Projeto → Referência de Preços" acima), mas o cálculo em si ainda
   não foi implementado — próximo passo natural depois desta etapa.
-- **Outras 6 origens de Item** (Item de Linha, Promob Plus/Start,
-  Sketchup Hellomob/CutList, CortCloud): continuam só com a notificação
-  placeholder no Select — `itens_projeto` já está preparada pra
-  receber qualquer uma (`origem`/`produto_id`), mas a lógica própria de
-  cada uma (inclusive o cadastro de Produto que `item_linha` vai
-  precisar) ainda não foi desenhada.
+- **Origens "Item de Linha" e "SketchUp"**: continuam só com a
+  notificação placeholder no Select — `itens_projeto` já está
+  preparada pra receber qualquer uma (`origem`/`produto_id`), mas a
+  lógica própria de cada uma ainda não foi desenhada ("Item de Linha"
+  precisa de um cadastro de Produto, que ainda não existe). "Promob"
+  já saiu do placeholder — ganhou modal de upload + rotina "Checar
+  Total" (ver "Fluxo Promob" acima), mas ainda NÃO cria nenhum
+  `ItemProjeto` de verdade (só compara totais) — esse é o próximo passo
+  natural quando o mapeamento Referência/Custo Promob → colunas de
+  `itens_projeto` for desenhado. Lista de origens simplificada de 7
+  para 4 opções em 2026-09-05 (ver "Section 'Itens'..." acima) — as 5
+  opções mais específicas removidas (Promob Plus/Start, Sketchup
+  Hellomob/CutList, CortCloud — "Item de Linha" foi MANTIDA, só as
+  outras 4 substituídas por "Promob"/"SketchUp") podem voltar como
+  sub-opções dentro de "Promob"/"SketchUp" no futuro, se necessário.
 
 ## Ver também (histórico narrado, `HISTORICO-DESENVOLVIMENTO.md`)
 

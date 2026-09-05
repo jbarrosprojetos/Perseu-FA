@@ -9,9 +9,12 @@ use Filament\Schemas\Components\EmbeddedSchema;
 use Filament\Schemas\Components\Form;
 use Filament\Schemas\Components\Group;
 use Perseu\Comercial\Filament\Clusters\Comercial\Resources\ProjetoResource;
+use Perseu\Comercial\Filament\Clusters\Comercial\Resources\ProjetoResource\Concerns\HasPromobResultado;
 
 class CreateProjeto extends CreateRecord
 {
+    use HasPromobResultado;
+
     protected static string $resource = ProjetoResource::class;
 
     protected function getCreatedNotification(): Notification

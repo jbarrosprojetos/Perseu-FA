@@ -307,6 +307,27 @@ decisão do usuário que afeta vários de uma vez:
 
 ## Comandos e fluxo úteis
 
+- **`ddev artisan test`/`pest`/`phpunit` — NUNCA rodar sem antes
+  confirmar `TEST_TOKEN` (achado real, incidente de 2026-09-05,
+  perda de dados do banco de desenvolvimento).** `tests/TestCase.php`
+  chama `TestBootstrapHelper::ensureERPInstalled()`
+  (`plugins/webkul/support/tests/Helpers/TestBootstrapHelper.php`), que
+  roda `Artisan::call('migrate:fresh')` + `erp:install` incondicionalmente.
+  Esse helper TENTA isolar o teste num banco separado
+  (`ensureWorkerDatabase()`), mas isso só ativa quando a env var
+  `TEST_TOKEN` está definida — sem ela (padrão deste ambiente DDEV), o
+  `migrate:fresh` roda DIRETO no banco `db` de `.env`, o MESMO usado
+  pelo `ddev artisan`/navegador em uso normal. Rodar qualquer teste sem
+  essa variável apaga TODOS os Projetos/Itens/Pessoas/etc. cadastrados,
+  deixando só o seed core do `erp:install`. Antes de rodar
+  `artisan test` (ou qualquer variante), sempre `echo $TEST_TOKEN` — se
+  vazio, NÃO rodar contra o banco padrão; para validar lógica pura
+  (parser, calculadora, sem DB/Livewire/Filament) prefira um script
+  avulso (`artisan tinker` ou PHP direto) que nunca instancia
+  `Tests\TestCase`, mesmo que o teste Pest correspondente já exista no
+  repositório para rodar depois com o isolamento correto. Se precisar
+  rodar de verdade, confirme com o usuário antes — é uma ação
+  destrutiva sobre o banco de desenvolvimento real.
 - `ddev artisan optimize:clear` — rodar ao final de qualquer tarefa que
   mexa em rotas, permissões, config ou navegação.
 - `shield:generate --resource=XResource,YResource` — gera permissões

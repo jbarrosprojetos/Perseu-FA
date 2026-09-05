@@ -12,6 +12,7 @@ use Filament\Actions\ForceDeleteAction;
 use Filament\Actions\ForceDeleteBulkAction;
 use Filament\Actions\RestoreAction;
 use Filament\Actions\RestoreBulkAction;
+use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Radio;
@@ -32,12 +33,15 @@ use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\FontWeight;
 use Filament\Support\Enums\IconSize;
+use Filament\Support\Enums\Width;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Perseu\Comercial\Enums\OrigemItemProjeto;
@@ -48,6 +52,7 @@ use Perseu\Comercial\Filament\Clusters\Projetos;
 use Perseu\Comercial\Models\ItemProjeto;
 use Perseu\Comercial\Models\Projeto;
 use Perseu\Comercial\Models\ReferenciaPreco;
+use Perseu\Comercial\Services\PromobChecagemTotal;
 use Perseu\Pessoas\Enums\TipoEndereco;
 use Perseu\Pessoas\Models\Contato;
 use Perseu\Pessoas\Models\Endereco;
@@ -499,9 +504,9 @@ class ProjetoResource extends Resource
                                 // `Hidden`) que guarda qual origem teve seu
                                 // cabeçalho de colunas exibido pelo botão
                                 // "Inserir" — hoje só "Item Avulso" liga essa
-                                // exibição (ver Action abaixo); as outras 6
-                                // origens continuam de fora, com a
-                                // notificação placeholder.
+                                // exibição (ver Action abaixo); as outras 2
+                                // origens (Promob, SketchUp) continuam de
+                                // fora, com a notificação placeholder.
                                 Hidden::make('origem_item_inserida')
                                     ->dehydrated(false),
 
@@ -523,6 +528,16 @@ class ProjetoResource extends Resource
                                 Actions::make([
                                     Action::make('inserirItem')
                                         ->label(__('comercial::filament/resources/projeto.form.itens.inserir'))
+                                        // "Promob" tem seu PRÓPRIO botão
+                                        // "Inserir" logo abaixo
+                                        // (`inserirItemPromob`, com modal de
+                                        // upload) — os dois nunca ficam
+                                        // visíveis ao mesmo tempo, então na
+                                        // tela sempre aparece só UM botão
+                                        // "Inserir" na posição, mudando de
+                                        // comportamento conforme a origem
+                                        // selecionada.
+                                        ->visible(fn (Get $get) => $get('origem_item_selecionada') !== 'promob')
                                         ->action(function (Get $get, Set $set): void {
                                             $origem = $get('origem_item_selecionada');
 
@@ -541,10 +556,12 @@ class ProjetoResource extends Resource
                                             // comportamento real por enquanto —
                                             // mostra o cabeçalho de colunas e a
                                             // linha de input (dois Grid::make(24)
-                                            // logo abaixo). As outras 6 origens
-                                            // continuam com a notificação
-                                            // placeholder até ganharem sua
-                                            // própria lógica numa tarefa futura.
+                                            // logo abaixo). "Item de Linha" e
+                                            // "SketchUp" continuam com a
+                                            // notificação placeholder até
+                                            // ganharem sua própria lógica numa
+                                            // tarefa futura ("Promob" tem seu
+                                            // próprio botão, ver acima).
                                             if ($origem === 'item_avulso') {
                                                 $set('origem_item_inserida', $origem);
 
@@ -600,6 +617,71 @@ class ProjetoResource extends Resource
                                                     'origem' => static::origensItemOptions()[$origem] ?? $origem,
                                                 ]))
                                                 ->send();
+                                        }),
+
+                                    // "Inserir" de "Promob" — só visível quando
+                                    // essa origem está selecionada (ver
+                                    // `inserirItem` acima). Em vez da
+                                    // notificação placeholder, abre um modal
+                                    // de upload dos XMLs exportados pelo
+                                    // Promob e roda a rotina "Checar Total"
+                                    // (ver `processarUploadPromob()` e
+                                    // `PromobChecagemTotal`/`PromobXmlParser`
+                                    // em `Services/`) — MESMO mecanismo
+                                    // técnico usado pelo "+" de "Adicionar
+                                    // Endereço" (`Select::createOptionForm()`
+                                    // logo acima, na Grid do Cabeçalho): por
+                                    // baixo dos panos os dois são uma
+                                    // `Filament\Actions\Action` com `->form()`
+                                    // próprio, que o Filament abre
+                                    // automaticamente como modal
+                                    // (`createOptionForm()` é só um atalho
+                                    // desse mesmo mecanismo, específico pra
+                                    // criar uma opção de Select — não serve
+                                    // aqui porque não estamos criando uma
+                                    // opção de relacionamento, só rodando um
+                                    // cálculo/conferência sem persistir nada).
+                                    // `->mountUsing()` reseta o resultado
+                                    // anterior (`$livewire->promobResultado`,
+                                    // trait `HasPromobResultado`) toda vez que
+                                    // o modal é reaberto. O `->action()`
+                                    // SEMPRE termina com `$action->halt()` —
+                                    // o modal nunca "conclui" sozinho (task
+                                    // pediu explicitamente: só fecha/cancela
+                                    // manualmente, sem persistir nada) — só
+                                    // isso já impede o fechamento automático
+                                    // que o Filament faria numa Action de
+                                    // sucesso normal.
+                                    Action::make('inserirItemPromob')
+                                        ->label(__('comercial::filament/resources/projeto.form.itens.inserir'))
+                                        ->visible(fn (Get $get) => $get('origem_item_selecionada') === 'promob')
+                                        ->modalHeading(__('comercial::filament/resources/projeto.form.itens.promob.modal.heading'))
+                                        ->modalDescription(__('comercial::filament/resources/projeto.form.itens.promob.modal.description'))
+                                        ->modalWidth(Width::Small)
+                                        ->modalSubmitActionLabel(__('comercial::filament/resources/projeto.form.itens.promob.modal.processar'))
+                                        ->mountUsing(function (?Schema $schema, $livewire): void {
+                                            $livewire->promobResultado = null;
+                                            $schema?->fill();
+                                        })
+                                        ->form([
+                                            FileUpload::make('arquivos_xml')
+                                                ->label(__('comercial::filament/resources/projeto.form.itens.promob.modal.upload-label'))
+                                                ->helperText(__('comercial::filament/resources/projeto.form.itens.promob.modal.upload-helper'))
+                                                ->multiple()
+                                                ->preserveFilenames()
+                                                ->acceptedFileTypes(['text/xml', 'application/xml'])
+                                                ->disk('local')
+                                                ->directory('promob-uploads-tmp')
+                                                ->required(),
+
+                                            Text::make(fn ($livewire) => static::renderizarResultadoPromob($livewire->promobResultado))
+                                                ->color(fn ($livewire) => static::corResultadoPromob($livewire->promobResultado))
+                                                ->visible(fn ($livewire) => filled($livewire->promobResultado)),
+                                        ])
+                                        ->action(function (array $data, $livewire, Action $action): void {
+                                            static::processarUploadPromob($data['arquivos_xml'] ?? [], $livewire);
+
+                                            $action->halt();
                                         }),
 
                                     // Sem ação própria ainda — mesmo padrão do
@@ -957,13 +1039,194 @@ class ProjetoResource extends Resource
     protected static function origensItemOptions(): array
     {
         return [
-            'item_avulso'       => __('comercial::filament/resources/projeto.form.itens.origens.item-avulso'),
-            'item_linha'        => __('comercial::filament/resources/projeto.form.itens.origens.item-linha'),
-            'promob_plus'       => __('comercial::filament/resources/projeto.form.itens.origens.promob-plus'),
-            'promob_start'      => __('comercial::filament/resources/projeto.form.itens.origens.promob-start'),
-            'sketchup_hellomob' => __('comercial::filament/resources/projeto.form.itens.origens.sketchup-hellomob'),
-            'sketchup_cutlist'  => __('comercial::filament/resources/projeto.form.itens.origens.sketchup-cutlist'),
-            'cortcloud'         => __('comercial::filament/resources/projeto.form.itens.origens.cortcloud'),
+            'item_avulso' => __('comercial::filament/resources/projeto.form.itens.origens.item-avulso'),
+            'item_linha'  => __('comercial::filament/resources/projeto.form.itens.origens.item-linha'),
+            'promob'      => __('comercial::filament/resources/projeto.form.itens.origens.promob'),
+            'sketchup'    => __('comercial::filament/resources/projeto.form.itens.origens.sketchup'),
+        ];
+    }
+
+    /**
+     * Lê cada arquivo enviado no modal de "Promob" (caminhos já
+     * armazenados pelo `FileUpload::make('arquivos_xml')`, disco
+     * `local`), roda `PromobChecagemTotal::checar()` e guarda o
+     * resultado em `$livewire->promobResultado` (trait
+     * `HasPromobResultado`) — o próprio `Text` do modal (ver Action
+     * `inserirItemPromob`) lê essa property pra exibir o resultado sem
+     * fechar o modal. Os arquivos são temporários (só servem pra este
+     * cálculo) — apagados do disco logo depois de lidos, sucesso ou
+     * erro, pra não acumular XML nenhum em `storage/app/promob-uploads-tmp`.
+     *
+     * Não cria nenhum registro em `itens_projeto` — só calcula e
+     * compara (ver CLAUDE.md, "Fluxo Promob").
+     *
+     * @param  array<int, string>  $caminhosArquivos
+     */
+    protected static function processarUploadPromob(array $caminhosArquivos, $livewire): void
+    {
+        $xmlsPorNomeDeArquivo = [];
+
+        foreach ($caminhosArquivos as $caminho) {
+            $xmlsPorNomeDeArquivo[basename($caminho)] = Storage::disk('local')->get($caminho);
+        }
+
+        foreach ($caminhosArquivos as $caminho) {
+            Storage::disk('local')->delete($caminho);
+        }
+
+        try {
+            $livewire->promobResultado = PromobChecagemTotal::checar($xmlsPorNomeDeArquivo);
+        } catch (\Throwable $e) {
+            $livewire->promobResultado = ['erro' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $resultado
+     */
+    protected static function corResultadoPromob(?array $resultado): ?string
+    {
+        if ($resultado === null) {
+            return null;
+        }
+
+        if (isset($resultado['erro'])) {
+            return 'danger';
+        }
+
+        if (! $resultado['metricas']['tem_geral']) {
+            return 'warning';
+        }
+
+        return static::diferencaMetricasZerada($resultado['metricas']['diferenca']) ? 'success' : 'warning';
+    }
+
+    /**
+     * `!= 0` (não `!==`) de propósito — a diferença de cada métrica é
+     * `int|float` (`Peças` int, as demais float, possivelmente `-0.0`
+     * depois de arredondar uma subtração bem próxima de zero) e o
+     * critério aqui é só "é zero pra fins de exibição", não o tipo.
+     *
+     * @param  array<string, int|float>  $diferenca
+     */
+    private static function diferencaMetricasZerada(array $diferenca): bool
+    {
+        foreach ($diferenca as $valor) {
+            if ($valor != 0) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Monta o texto exibido no modal do Promob depois de "Checar Total"
+     * — `nl2br(e(...))` sobre um texto puro montado linha a linha
+     * (mais simples e mais seguro contra XSS do que ir escapando pedaço
+     * por pedaço com `sprintf`, já que `numero_item`/mensagens de erro
+     * acabam vindo do NOME do arquivo/conteúdo do XML enviado pelo
+     * usuário). Resultado PRINCIPAL: as 5 métricas do VBA (ver
+     * `PromobXmlParser::metricas()`/CLAUDE.md, "Fluxo Promob") —
+     * Custo/Preço com margens (checagem já existente antes desta
+     * tarefa) aparece só como informação COMPLEMENTAR, ao final.
+     *
+     * @param  array<string, mixed>|null  $resultado
+     */
+    protected static function renderizarResultadoPromob(?array $resultado): ?HtmlString
+    {
+        if ($resultado === null) {
+            return null;
+        }
+
+        if (isset($resultado['erro'])) {
+            return new HtmlString(nl2br(e($resultado['erro'])));
+        }
+
+        $metricas = $resultado['metricas'];
+
+        $linhas = [
+            __('comercial::filament/resources/projeto.form.itens.promob.resultado.titulo'),
+        ];
+
+        if ($metricas['tem_geral']) {
+            $linhas[] = __('comercial::filament/resources/projeto.form.itens.promob.resultado.comparacao-cabecalho', [
+                'quantidade' => $metricas['quantidade_parciais'],
+            ]);
+            $linhas[] = '';
+            $linhas = [...$linhas, ...static::linhasMetricas($metricas['diferenca'])];
+        } else {
+            $linhas[] = __('comercial::filament/resources/projeto.form.itens.promob.resultado.sem-geral', [
+                'quantidade' => $metricas['quantidade_parciais'],
+            ]);
+            $linhas[] = '';
+            $linhas = [...$linhas, ...static::linhasMetricas($metricas['parciais'])];
+        }
+
+        // Comparação Custo/Preço (com margens) — complementar, só
+        // calculada quando o XML "000" foi enviado (`bateu` fica
+        // `null` sem ele, ver `PromobChecagemTotal::compararCustoPreco()`).
+        if ($resultado['bateu'] !== null) {
+            $linhas[] = '';
+            $linhas[] = __('comercial::filament/resources/projeto.form.itens.promob.resultado.custo_preco.titulo');
+            $linhas[] = __('comercial::filament/resources/projeto.form.itens.promob.resultado.custo_preco.'.($resultado['bateu'] ? 'bateu' : 'nao-bateu'));
+            $linhas[] = __('comercial::filament/resources/projeto.form.itens.promob.resultado.custo_preco.totais', [
+                'custo' => number_format($resultado['custo_calculado'], 2, ',', '.'),
+                'preco' => number_format($resultado['preco_calculado'], 2, ',', '.'),
+            ]);
+
+            if (! $resultado['bateu']) {
+                $linhas[] = __('comercial::filament/resources/projeto.form.itens.promob.resultado.custo_preco.total-esperado', [
+                    'custo' => number_format($resultado['custo_esperado'], 2, ',', '.'),
+                    'preco' => number_format($resultado['preco_esperado'], 2, ',', '.'),
+                ]);
+
+                if (filled($resultado['diferencas'])) {
+                    foreach ($resultado['diferencas'] as $diferenca) {
+                        $linhas[] = __('comercial::filament/resources/projeto.form.itens.promob.resultado.custo_preco.diferenca-item', [
+                            'item'            => $diferenca['item'],
+                            'custo_esperado'  => number_format($diferenca['custo_esperado'], 2, ',', '.'),
+                            'preco_esperado'  => number_format($diferenca['preco_esperado'], 2, ',', '.'),
+                            'custo_calculado' => number_format($diferenca['custo_calculado'], 2, ',', '.'),
+                            'preco_calculado' => number_format($diferenca['preco_calculado'], 2, ',', '.'),
+                        ]);
+                    }
+                } else {
+                    $linhas[] = __('comercial::filament/resources/projeto.form.itens.promob.resultado.custo_preco.sem-diagnostico');
+                }
+            }
+        }
+
+        return new HtmlString(nl2br(e(implode("\n", $linhas))));
+    }
+
+    /**
+     * Uma linha por métrica, na ordem do VBA: Peças, m², Metro Linear,
+     * Custo, Misc. "Peças" sem casas decimais; as demais com 2 casas —
+     * padrão brasileiro de milhar/decimal em todas (`number_format`
+     * com `,`/`.` invertidos do padrão americano).
+     *
+     * @param  array{pecas: int, m2: float, mlinear: float, custo: float, misc: float}  $metricas
+     * @return array<int, string>
+     */
+    private static function linhasMetricas(array $metricas): array
+    {
+        return [
+            __('comercial::filament/resources/projeto.form.itens.promob.resultado.metrica-pecas', [
+                'valor' => number_format($metricas['pecas'], 0, ',', '.'),
+            ]),
+            __('comercial::filament/resources/projeto.form.itens.promob.resultado.metrica-m2', [
+                'valor' => number_format($metricas['m2'], 2, ',', '.'),
+            ]),
+            __('comercial::filament/resources/projeto.form.itens.promob.resultado.metrica-mlinear', [
+                'valor' => number_format($metricas['mlinear'], 2, ',', '.'),
+            ]),
+            __('comercial::filament/resources/projeto.form.itens.promob.resultado.metrica-custo', [
+                'valor' => number_format($metricas['custo'], 2, ',', '.'),
+            ]),
+            __('comercial::filament/resources/projeto.form.itens.promob.resultado.metrica-misc', [
+                'valor' => number_format($metricas['misc'], 2, ',', '.'),
+            ]),
         ];
     }
 

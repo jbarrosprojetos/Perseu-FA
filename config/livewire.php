@@ -132,8 +132,16 @@ return [
         'disk'          => env('LIVEWIRE_TEMPORARY_FILE_UPLOAD_DISK', 'local'),
         'rules'         => [
             'file',
-            'mimes:jpg,jpeg,png,gif,bmp,svg,webp,pdf,doc,docx,xls,xlsx,ppt,pptx,txt,csv,zip,mp4,mov,avi,wmv,mp3,m4a,wav,mpga,wma',
-            'mimetypes:image/*,video/*,audio/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain,text/csv,application/zip',
+            // `xml` acrescentado pro upload dos XMLs do Promob (ver
+            // `ProjetoResource::form()`, Action "inserirItemPromob" —
+            // plugin `perseu/comercial`) — sem isso, o endpoint GLOBAL
+            // de upload temporário do Livewire (gate que roda ANTES de
+            // qualquer `acceptedFileTypes()` de campo, aplicado a TODO
+            // FileUpload do sistema) rejeitava com 422 antes mesmo de
+            // chegar na Action, já que XML não fazia parte da lista
+            // default do Livewire (achado real, 2026-09-05).
+            'mimes:jpg,jpeg,png,gif,bmp,svg,webp,pdf,doc,docx,xls,xlsx,ppt,pptx,txt,csv,zip,mp4,mov,avi,wmv,mp3,m4a,wav,mpga,wma,xml',
+            'mimetypes:image/*,video/*,audio/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain,text/csv,application/zip,text/xml,application/xml',
         ],
         'directory'     => null,
         'middleware'    => 'auth',
