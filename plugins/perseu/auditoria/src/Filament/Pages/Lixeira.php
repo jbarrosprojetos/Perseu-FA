@@ -19,6 +19,7 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 use Perseu\Auditoria\Support\SubjectTypeCatalog;
@@ -401,6 +402,19 @@ class Lixeira extends Page implements HasTable
     }
 
     /**
+     * `DB::transaction()` — achado real de concorrência (ver
+     * `INVESTIGACAO-TRANSACOES-CONCORRENCIA.md`, risco "Lixeira Central
+     * sem transação"): `$model->restore()`/`forceDelete()` já dispara,
+     * por baixo dos panos, uma cascata (`CascadesRelatedDataOnForceDelete`)
+     * e o log de auditoria (`LogsBusinessActivity`, evento
+     * `forceDeleted`) — sem esta transação envolvendo a chamada,
+     * qualquer falha entre esses passos deixava o registro
+     * parcialmente excluído/restaurado, ou excluído sem o log de
+     * auditoria correspondente. `DB::transaction()` aqui aninha (via
+     * savepoint do Laravel) com a transação já aberta dentro da própria
+     * cascata (ver `CascadesRelatedDataOnForceDelete`), cobrindo
+     * registro + cascata + log de auditoria como uma unidade só.
+     *
      * @param  array<string, mixed>  $record
      */
     protected function restoreRecord(array $record): void
@@ -416,7 +430,7 @@ class Lixeira extends Page implements HasTable
             return;
         }
 
-        $model->restore();
+        DB::transaction(fn () => $model->restore());
 
         Notification::make()
             ->success()
@@ -440,7 +454,7 @@ class Lixeira extends Page implements HasTable
             return;
         }
 
-        $model->forceDelete();
+        DB::transaction(fn () => $model->forceDelete());
 
         Notification::make()
             ->success()
@@ -449,12 +463,22 @@ class Lixeira extends Page implements HasTable
     }
 
     /**
-     * Ação em lote — reaproveita `restoreRecord()`/`forceDeleteRecord()`
-     * linha a linha (mesma checagem de permissão individual: uma
-     * seleção heterogênea pode ter, por exemplo, um Projeto que o usuário
-     * pode restaurar e uma Pessoa Jurídica que não pode — cada uma é
-     * autorizada separadamente, e o resultado final informa quantas
-     * foram puladas por falta de permissão).
+     * Ação em lote — reaproveita a mesma lógica linha a linha (mesma
+     * checagem de permissão individual: uma seleção heterogênea pode
+     * ter, por exemplo, um Projeto que o usuário pode restaurar e uma
+     * Pessoa Jurídica que não pode — cada uma é autorizada
+     * separadamente, e o resultado final informa quantas foram puladas
+     * por falta de permissão).
+     *
+     * **Cada REGISTRO é atômico** (`DB::transaction()` por linha, mesmo
+     * motivo de `restoreRecord()`/`forceDeleteRecord()`), mas o LOTE
+     * continua permitindo sucesso parcial ENTRE registros diferentes —
+     * decisão deliberada, preserva o comportamento já existente e
+     * intencional desta ação (uma seleção heterogênea já reporta quantos
+     * foram pulados por permissão; envolver o lote inteiro numa única
+     * transação desfaria os registros já processados com sucesso só
+     * porque um item posterior da mesma seleção falhou, o que seria pior
+     * pra quem já viu a notificação de sucesso daqueles registros).
      *
      * @param  Collection<int, array<string, mixed>>  $records
      */
@@ -473,7 +497,7 @@ class Lixeira extends Page implements HasTable
                 continue;
             }
 
-            $restore ? $model->restore() : $model->forceDelete();
+            DB::transaction(fn () => $restore ? $model->restore() : $model->forceDelete());
             $sucesso++;
         }
 

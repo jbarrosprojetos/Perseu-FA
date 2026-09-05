@@ -5,6 +5,7 @@ namespace Perseu\Comercial\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Perseu\Auditoria\Traits\LogsBusinessActivity;
 use Perseu\Comercial\Services\GeradorNumeroProjeto;
@@ -71,6 +72,11 @@ class Projeto extends Model
     public function situacoes(): BelongsToMany
     {
         return $this->belongsToMany(SituacaoProjeto::class, 'projeto_situacao');
+    }
+
+    public function itens(): HasMany
+    {
+        return $this->hasMany(ItemProjeto::class);
     }
 
     protected static function boot(): void

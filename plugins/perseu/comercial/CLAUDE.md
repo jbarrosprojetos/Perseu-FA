@@ -11,8 +11,11 @@ da F.A. Marcenaria (marcenaria industrial).
 
 ## Estado atual (Models e navegação)
 
-- **Models**: `Projeto`, `TipoProjeto`, `SituacaoProjeto`,
+- **Models**: `Projeto`, `ItemProjeto`, `TipoProjeto`, `SituacaoProjeto`,
   `ReferenciaPreco` (`plugins/perseu/comercial/src/Models/`).
+  `ItemProjeto` é o único SEM Resource/navegação própria — vive só
+  dentro do form de `ProjetoResource` (Section "Itens", ver "Tabela
+  `itens_projeto`..." mais abaixo).
 - **Clusters de navegação**: `Projetos` (agrupa `ProjetoResource`,
   `TipoProjetoResource`, `SituacaoProjetoResource`, slug
   `comercial/projetos` etc.) e `Referencias` (agrupa
@@ -578,6 +581,248 @@ cálculo. "Imp.%" na fórmula é só o nome interno do valor (variável
 mais como rótulo de coluna na tela (ver "Imp.% removido da tela"
 acima), só o cálculo por baixo dos panos.
 
+### Tabela `itens_projeto` + persistência real de Item Avulso (2026-09-04)
+
+Até aqui a linha de Item Avulso só CALCULAVA em tempo real, sem gravar
+nada (`novo_item_*`, todos `dehydrated(false)`). Esta tarefa criou a
+tabela real e o fluxo completo de inserir/editar.
+
+**Model/migration** — `Perseu\Comercial\Models\ItemProjeto`, tabela
+`itens_projeto` (migration `2026_09_04_160000_create_itens_projeto_table`,
+**precisou ser adicionada manualmente ao array `->hasMigrations([...])`
+de `ComercialServiceProvider`** — o próprio arquivo já tem um comentário
+alertando sobre isso desde uma tarefa anterior, `loadMigrationsFrom()`
+NUNCA descobre migrations sozinho nesse pacote). `LogsBusinessActivity`,
+mesma convenção de qualquer Model de cadastro de negócio (ver CLAUDE.md
+da raiz) — `Projeto::itens(): HasMany` / `ItemProjeto::projeto(): BelongsTo`.
+**SEM `SoftDeletes`** — divergência deliberada da convenção padrão, ver
+"Exclusão de item + renumeração contígua" mais abaixo pro motivo
+completo (incompatível com a renumeração exigida pela exclusão).
+
+- **`origem`**: `Perseu\Comercial\Enums\OrigemItemProjeto` (enum PHP
+  nativo `string`, `implements HasLabel`, mesmo padrão de
+  `Perseu\Pessoas\Enums\TipoEndereco`) — os mesmos 7 valores já usados
+  como chave em `ProjetoResource::origensItemOptions()` (não duplicar/
+  renomear essas strings sem atualizar os dois lugares; o Select em si
+  NÃO foi migrado pra usar o enum, continua com o array próprio — risco
+  desnecessário de mexer em código já funcionando só por "elegância").
+- **`produto_id`/`situacao_item_id`**: colunas `unsignedBigInteger`
+  NULLABLE, **sem FK de verdade** — confirmado por grep que os
+  cadastros de Produto e Situação de Item ainda não existem em NENHUM
+  plugin. Adicionar `->constrained()` numa migration nova quando esses
+  cadastros forem criados. Nenhuma UI usa esses dois campos ainda
+  (Item Avulso não tem Produto vinculado, por definição — ver
+  `CONCEITO-OBRA-PROPOSTA-PROJETO.md`, "Itens do Projeto: dois tipos").
+- **`numero_item`**: string(3), único por `projeto_id`
+  (`unique(['projeto_id', 'numero_item'])`), gerado em
+  `ItemProjeto::boot()` (`creating`) — maior `numero_item` já usado
+  NAQUELE Projeto (`MAX(...)`) + 1, começando em `001`. Diferente de
+  `numero_projeto` (`Projeto`), números AQUI SÃO reaproveitados —
+  excluir um item renumera os seguintes pra fechar o buraco (ver
+  "Exclusão de item + renumeração contígua" abaixo), por isso o `MAX()`
+  não pode (nem precisa) considerar excluídos — `ItemProjeto` não usa
+  `SoftDeletes`. **Sem tabela de sequência própria** (diferente de
+  `numero_projeto`/`GeradorNumeroProjeto`) — a tarefa pediu
+  explicitamente "maior número já usado + 1", um `MAX()` simples já
+  atende; concorrência coberta só parcialmente, ver
+  `confirmarItemAvulso()` abaixo.
+- **SEM Resource/Policy própria** — divergência deliberada do passo 4-6
+  da "Convenção para Model novo de cadastro de negócio" (CLAUDE.md da
+  raiz): `ItemProjeto` não tem navegação/CRUD Filament independente,
+  vive 100% dentro do form de `ProjetoResource` (a mesma UI de sempre,
+  Section "Itens"). Acesso é gated pela `ProjetoPolicy::update` já
+  existente (só chega nessa UI quem já tem permissão de editar o
+  Projeto) — sem Policy/permissões Shield próprias por enquanto. Se um
+  dia `ItemProjeto` ganhar uma tela própria (ex.: listagem
+  administrativa fora do contexto de um Projeto), reconsiderar.
+- **`SubjectTypeCatalog` registrado, `TrashCatalog` NÃO** — `ItemProjeto`
+  aparece na Central de Auditoria (rótulo "Item de Projeto", busca por
+  `descricao`/`numero_item`, referência `"{numero_item} — {descrição
+  truncada}"`) porque QUALQUER Model com `LogsBusinessActivity` já é
+  auditado; sem entrada em `TrashCatalog::models()` porque a exclusão é
+  DEFINITIVA (sem `SoftDeletes`, ver "Exclusão de item + renumeração
+  contígua" abaixo) — não existe Lixeira possível pra ele. Ver
+  `plugins/perseu/auditoria/CLAUDE.md`.
+
+**Fluxo de INSERÇÃO** (`ProjetoResource::confirmarItemAvulso()`,
+chamado pelo ícone ✓ da última coluna):
+
+1. Sem `$record` (página de CRIAÇÃO do Projeto, ainda não salva) —
+   bloqueia com notificação "salve o Projeto primeiro", mesmo critério
+   já usado pelo botão "Atribuir Processos" (só existe depois de salvo).
+2. Validação MANUAL — Descrição (texto puro não-vazio, `strip_tags()`),
+   Quantidade > 0, Custo Unitário > 0 — via `ValidationException
+   ::withMessages(['data.novo_item_quantidade' => ...])`, **não**
+   `->required()` nos campos do Schema. Motivo: os campos `novo_item_*`
+   são compartilhados por TODA a Section "Itens", inclusive quando
+   nenhum item está sendo inserido; `->required()` no Schema faria o
+   Salvar/Cancelar do CABEÇALHO (formulário diferente, ver "Section
+   'Itens' e reposicionamento de Salvar/Cancelar" acima) exigir esses
+   campos também sempre que a linha estivesse visível, mesmo sem clicar
+   em confirmar — efeito colateral indesejado. `ValidationException
+   ::withMessages()` é o MESMO mecanismo usado por
+   `Filament\Auth\Pages\Login::throwFailureValidationException()`
+   (vendor) — confirmado lendo o código-fonte, não presumido — e
+   funciona idêntico dentro de uma Action sem `->schema()` própria:
+   propaga pelo pipeline normal de chamada do Livewire e aparece como
+   erro inline no campo certo, com `'data.'` de prefixo (`statePath('data')`
+   de `CreateRecord`/`EditRecord`).
+3. Sem erros: `$record->itens()->create([...])` dentro de
+   `DB::transaction()` com `lockForUpdate()` nas linhas já existentes
+   daquele `projeto_id` — trava concorrência de dois cliques rápidos NO
+   MESMO Projeto enquanto o `MAX()+1` do `numero_item` é calculado.
+   **Sem proteção no PRIMEIRO item de um Projeto** (nada pra travar
+   ainda) — risco aceito, não é um fluxo multi-usuário simultâneo real
+   (um usuário editando um Projeto de cada vez).
+4. `resetarLinhaItemAvulso()` — fecha a linha de input
+   (`origem_item_inserida`/`item_em_edicao_id` = `null`, todos os
+   `novo_item_*` limpos). **NÃO reseta `origem_item_selecionada`** de
+   propósito — o Select continua em "Item Avulso", já que inserir outro
+   item da mesma origem em seguida é o caso comum.
+
+### Imposto obsoleto ao gravar — corrigido (2026-09-05)
+
+Achado real de concorrência (ver `INVESTIGACAO-TRANSACOES-CONCORRENCIA.md`,
+risco R1): `novo_item_imposto` (lido uma vez ao abrir a linha — ver
+"Imp.% removido da tela" acima) ficava em CACHE no estado do Livewire
+por todo o tempo que o usuário levava preenchendo/revendo o item. Se
+outra sessão mudasse o `imposto` da Referência de Preços nesse
+meio-tempo, o valor gravado usava o Imp.% ANTIGO, sem ninguém perceber
+— um bug de corretude de dado financeiro, silencioso.
+
+**Correção**: `confirmarItemAvulso()` não usa mais `novo_item_imposto`
+pra gravar — dentro da MESMA `DB::transaction()` da gravação, busca o
+`imposto` FRESCO com `ReferenciaPreco::where('id', $referenciaPrecoId)
+->lockForUpdate()->value('imposto')` e recalcula
+`valor_unitario`/`valor_total` com esse valor. `lockForUpdate()` na
+Referência de Preços fecha a janela de corrida por completo (não só
+reduz) entre o clique em "Confirmar" e o commit. O resultado é gravado
+em `itens_projeto.imposto_aplicado` (`decimal(5,2)`, nullable) — cópia/
+snapshot do Imp.% efetivamente usado, NÃO um FK vivo — preserva o
+histórico do cálculo mesmo que a Referência de Preços mude depois
+(também útil pra explicar/auditar um valor calculado meses depois).
+`novo_item_imposto` continua existindo e sendo usado — mas só pra
+PRÉVIA em tela (`recalcularValoresItemAvulso()`, a cada tecla), que
+pode ficar obsoleta sem problema (é só exibição); a gravação de
+verdade sempre relê o banco. `Perseu\Comercial\...\ProjetoResource
+::calcularValoresItemAvulso()` foi extraído como função PURA (sem
+`Get`/`Set`) justamente pra essa separação: a prévia e a gravação usam
+a MESMA fórmula, só com fontes diferentes de Imp.% (cache vs. fresco).
+`itemAvulsoMudou()` também passou a comparar `imposto_aplicado`.
+
+**Fluxo de EDIÇÃO**: ícone de edição (`heroicon-o-pencil-square`) em
+cada linha da listagem chama `abrirEdicaoItemAvulso()` — seta
+`item_em_edicao_id` + `origem_item_inserida = 'item_avulso'` (reaproveita
+a MESMA linha de input/visibilidade da inserção, só muda o que
+`confirmarItemAvulso()` faz internamente: `create` vs. `update`) e
+preenche `novo_item_*` com os dados atuais do item, **recalculando
+Valor Unitário/Total a partir do Imposto ATUAL da Referência de Preços
+do Cabeçalho** (não o Imp.% usado quando o item foi originalmente
+criado — a tarefa pediu explicitamente "recalculados normalmente" ao
+entrar em edição; se a Referência não mudou, bate exatamente com o
+valor já salvo). Ao confirmar, `itemAvulsoMudou()` compara os valores
+atuais (normalizados — `round(...,2)` nos decimais, `(int)` na
+quantidade, `trim()` na descrição) contra os já gravados; **sem
+diferença nenhuma, NÃO chama `update()`** (nem grava log de auditoria
+"updated" vazio) — só fecha a linha de volta pra modo exibição.
+
+**Só um item em edição por vez** — decisão mais simples entre as
+sugeridas na tarefa: `item_em_edicao_id` é um único campo (não uma
+lista); abrir a edição de outro item simplesmente SOBRESCREVE esse
+valor (e os `novo_item_*`), descartando silenciosamente qualquer edição
+não confirmada do item anterior. Clicar "Inserir" de novo (pra um item
+NOVO) também cancela qualquer edição em andamento
+(`item_em_edicao_id = null` dentro da própria Action `inserirItem`).
+
+**Listagem dos itens já inseridos** — `Group::make()->schema(fn (Get
+$get, ?Projeto $record) => [...])`, uma `Grid::make(24)` por item
+(`linhaExibicaoItem()`), MESMA distribuição de `columnSpan` do
+cabeçalho/input (1,4,7,1,3,3,1,3,1), com `Text` somente-leitura + um
+`ActionGroup` (Editar/Excluir) na última coluna. O item ATUALMENTE em
+edição é OMITIDO da listagem (`->reject()`) — seus dados já aparecem na
+linha de input logo acima; mostrar as duas ao mesmo tempo duplicaria a
+linha. Mostra TODOS os itens do Projeto (`$record->itens()->orderBy(...)`),
+não só os de origem Item Avulso — única origem com persistência real
+até agora, mas a área é a mesma pras 7 (task pediu explicitamente).
+Descrição aparece em TEXTO PURO (`Str::stripTags()`) na listagem — o
+dado gravado é HTML (RichEditor), mas exibir a formatação de verdade
+ali exigiria um componente `Html`/`View` em vez de `Text`, com risco de
+quebrar a altura/alinhamento de uma grid pensada pra uma linha só; a
+formatação completa continua disponível ao entrar em modo edição.
+
+### Exclusão de item + renumeração contígua (2026-09-04)
+
+Cada linha da listagem tem um `ActionGroup` (ícone de reticências,
+`heroicon-m-ellipsis-vertical`) com Editar e Excluir — **não dois
+`iconButton()` lado a lado**: a última coluna é `columnSpan(1)`, a
+mesma largura estreita de "Item"/"Qtde."/"%" (calibrada pra caber só
+UM ícone), e alargar essa coluna só pra caber dois ícones quebraria o
+alinhamento com cabeçalho/linha de input (que só precisam de uma
+ação). `ActionGroup` resolve sem mexer no grid — um único gatilho,
+dropdown com as duas opções.
+
+- **`Excluir` é `DeleteAction::make(...)->record($item)`** — reaproveita
+  o MESMO mecanismo/visual de qualquer outra exclusão do sistema
+  (ícone de lixeira, cor "danger", `->requiresConfirmation()` já ligado
+  por padrão em `setUp()`, ver `table()` deste Resource pro mesmo
+  padrão). `->record($item)` é OBRIGATÓRIO: sem ele a Action resolveria
+  o record do CONTAINER (o `Projeto`, não o `ItemProjeto`), já que essa
+  linha não vive dentro de uma Table de verdade. `->action()`
+  substitui o `$record->delete()` padrão do `DeleteAction` pela
+  exclusão + renumeração de verdade (`excluirItemAvulso()`) — a
+  notificação de sucesso embutida do `DeleteAction` não dispara mais
+  (não é chamada por esse `->action()` customizado); `excluirItemAvulso()`
+  manda a própria.
+- **Exclusão DEFINITIVA, sem `SoftDeletes`** — decisão deliberada,
+  registrada com a rationale completa no Model (`ItemProjeto`): a
+  renumeração exige que o número excluído fique DE VERDADE livre pro
+  índice único `(projeto_id, numero_item)` da migration; uma linha
+  soft-deleted continuaria ocupando esse slot, bloqueando o item
+  seguinte de virar esse mesmo número. `LogsBusinessActivity` continua
+  funcionando sem `SoftDeletes` (o evento `deleted` padrão do Spatie já
+  cobre a exclusão de verdade; só o listener extra de `forceDeleted` é
+  que não se registra, e não faz falta aqui). Consistente com o próprio
+  enunciado da tarefa: Item de Projeto é "um detalhe operacional, não
+  um cadastro central auditado como Obra/Pessoa".
+- **`excluirItemAvulso()`**: `DB::transaction()` — exclui o item, depois
+  busca (`lockForUpdate()`) todos os itens do MESMO Projeto com
+  `numero_item` MAIOR que o excluído, em ORDEM CRESCENTE, e decrementa
+  cada um em 1. A ordem crescente é essencial: o item logo depois do
+  excluído libera o número dele ANTES do próximo item da lista
+  precisar desse mesmo número — sem essa ordem, dois itens poderiam
+  colidir temporariamente no mesmo `numero_item` e violar o índice
+  único no meio do laço. Tudo dentro de uma única transação — se a
+  renumeração de um item falhasse no meio, sem transação o Projeto
+  ficaria com um buraco permanente na sequência.
+- **Achado real: `update()` NÃO renumerava, `forceFill()` sim.**
+  `numero_item` fica de propósito FORA do `$fillable` de `ItemProjeto`
+  (só `ItemProjeto::boot()` deve escrevê-lo) — `update(['numero_item'
+  => ...])` respeita mass assignment e IGNORA SILENCIOSAMENTE qualquer
+  chave fora do `$fillable`, SEM erro nenhum. A primeira versão deste
+  método usava `update()`: a query encontrava os itens certos, o
+  código "renumerava" sem nenhuma exceção, mas o valor no banco não
+  mudava — só descoberto isolando o método via Reflection (fora do
+  Filament) e imprimindo o SQL/resultado passo a passo, já que o
+  sintoma (nenhum erro, só o resultado errado) não apontava a causa
+  sozinho. `forceFill(['numero_item' => ...])->save()` ignora o guard
+  de propósito — a única exceção deliberada que este método precisa.
+
+**Achado de teste importante** (ver também CLAUDE.md da raiz,
+"Filament — mecanismos que valem lembrar"): validar este fluxo via
+`Livewire::test()` rodado em `artisan tinker` SÓ funcionou depois de
+trocar TODO `->fillForm([...])` por `->set('data.campo', $valor)` —
+`fillForm()` é um no-op silencioso fora de um `TestCase` real
+(`app()->runningUnitTests()` falso). Com `->set()`, o fluxo completo
+foi validado de ponta a ponta: bloqueio de inserção incompleta (zero
+registros no banco), numeração `001`/`002` sequencial, edição com
+mudança persistindo, edição SEM mudança confirmada via `updated_at`
+inalterado, exclusão com confirmação obrigatória (`mountAction` sozinho
+NÃO executa uma Action com `->requiresConfirmation()` — precisa de um
+`callMountedAction()` separado, diferente das Actions sem confirmação
+usadas até então neste fluxo), renumeração correta após excluir, e um
+`Livewire::test()` NOVO (segunda instância, simulando reload de
+página) mostrando os itens — e a exclusão — vindos do banco.
+
 ## Limitações conhecidas
 
 - Situação de Projeto e Tipo de Projeto usam o padrão `ManageRecords`
@@ -602,6 +847,12 @@ acima), só o cálculo por baixo dos panos.
   Preços**: o vínculo (`referencia_preco_id`) já existe (ver "Vínculo
   Projeto → Referência de Preços" acima), mas o cálculo em si ainda
   não foi implementado — próximo passo natural depois desta etapa.
+- **Outras 6 origens de Item** (Item de Linha, Promob Plus/Start,
+  Sketchup Hellomob/CutList, CortCloud): continuam só com a notificação
+  placeholder no Select — `itens_projeto` já está preparada pra
+  receber qualquer uma (`origem`/`produto_id`), mas a lógica própria de
+  cada uma (inclusive o cadastro de Produto que `item_linha` vai
+  precisar) ainda não foi desenhada.
 
 ## Ver também (histórico narrado, `HISTORICO-DESENVOLVIMENTO.md`)
 

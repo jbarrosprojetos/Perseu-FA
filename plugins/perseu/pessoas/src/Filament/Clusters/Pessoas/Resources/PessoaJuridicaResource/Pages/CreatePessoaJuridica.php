@@ -4,6 +4,7 @@ namespace Perseu\Pessoas\Filament\Clusters\Pessoas\Resources\PessoaJuridicaResou
 
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\CreateRecord;
+use Illuminate\Support\Facades\DB;
 use Perseu\Pessoas\Enums\TipoEndereco;
 use Perseu\Pessoas\Filament\Clusters\Pessoas\Resources\PessoaJuridicaResource;
 use Perseu\Pessoas\Models\Endereco;
@@ -60,17 +61,25 @@ class CreatePessoaJuridica extends CreateRecord
             return;
         }
 
-        $endereco = Endereco::create($campos);
+        // `DB::transaction()` — achado real de concorrência (ver
+        // INVESTIGACAO-TRANSACOES-CONCORRENCIA.md, risco "Endereço criado
+        // sem tag"): mesmo motivo do `createOptionUsing()` de
+        // `ProjetoResource` — sem isso, uma falha entre o attach e a
+        // criação da tag deixa o Endereço vinculado à Pessoa Jurídica mas
+        // sem NENHUMA tag, sem erro visível.
+        DB::transaction(function () use ($campos): void {
+            $endereco = Endereco::create($campos);
 
-        $this->record->enderecos()->attach($endereco->id, [
-            'principal' => true,
-        ]);
+            $this->record->enderecos()->attach($endereco->id, [
+                'principal' => true,
+            ]);
 
-        // Tag única e deliberada ("Comercial", o endereço registrado na
-        // Receita Federal) — NÃO todas as tags marcadas por padrão, regra
-        // que vale só para o CheckboxList do formulário manual (ver
-        // CLAUDE.md, "Tipo de Endereço como tag"); aqui é preenchimento
-        // automático sem interação do usuário.
-        $endereco->tipos()->create(['tipo' => TipoEndereco::Comercial->value]);
+            // Tag única e deliberada ("Comercial", o endereço registrado na
+            // Receita Federal) — NÃO todas as tags marcadas por padrão, regra
+            // que vale só para o CheckboxList do formulário manual (ver
+            // CLAUDE.md, "Tipo de Endereço como tag"); aqui é preenchimento
+            // automático sem interação do usuário.
+            $endereco->tipos()->create(['tipo' => TipoEndereco::Comercial->value]);
+        });
     }
 }

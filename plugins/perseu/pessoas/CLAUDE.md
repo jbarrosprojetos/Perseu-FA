@@ -103,7 +103,12 @@ era uma coluna `unsignedTinyInteger` de valor único nos PIVOTS
   (`'data' => $this->getData()`, `'record' => $this->getRecord()`) —
   não é uma gambiarra, é a forma documentada de customizar esse ponto.
   `syncTipos()` é `delete()` + `createMany()` (substitui o conjunto
-  inteiro, mais simples que fazer diff attach/detach).
+  inteiro, mais simples que fazer diff attach/detach). **Envolto em
+  `DB::transaction()` desde 2026-09-05** (achado real de concorrência,
+  ver `INVESTIGACAO-TRANSACOES-CONCORRENCIA.md`) — sem isso, uma falha
+  entre o `delete()` e o `createMany()` deixava o Endereço SEM NENHUMA
+  tag; `sync()` nativo do Eloquent não se aplica (`tipos()` é `HasMany`,
+  não `BelongsToMany`).
 - **Tabela**: `TextColumn::make('tipos')->badge()` com
   `->getStateUsing()` lendo `$record->tipos->pluck('tipo')->map(fn ($t) => $t->getLabel())`
   — `->badge()` em cima de estado array renderiza um badge por item

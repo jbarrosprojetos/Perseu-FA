@@ -18,6 +18,7 @@ return [
     // próprios rótulos).
     'subject_types' => [
         'projeto'          => 'Projeto',
+        'item-projeto'     => 'Item de Projeto',
         'tipo-projeto'     => 'Tipo de Projeto',
         'situacao-projeto' => 'Situação de Projeto',
         'referencia-preco' => 'Preço',

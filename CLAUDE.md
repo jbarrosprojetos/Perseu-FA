@@ -278,6 +278,32 @@ decisão do usuário que afeta vários de uma vez:
   Action montada, escrever direto no path
   `mountedActions.0.data.{campo}` é mais confiável que encadear
   `fillForm()`/`setTableActionData()`.
+- **`Livewire::test(...)->fillForm([...])` é um NO-OP TOTAL quando
+  rodado via `artisan tinker`** (achado real, 2026-09-04, plugin
+  `perseu/comercial` — ItemProjeto/Item Avulso) — não preenche
+  NADA, silenciosamente, sem erro. Causa raiz confirmada lendo o
+  código-fonte: `Filament\Forms\Testing\TestsForms::fillForm()` delega
+  pra `InteractsWithSchemas::fillFormDataForTesting()`, que começa com
+  `if (! app()->runningUnitTests()) { return; }` — e
+  `app()->runningUnitTests()` só é `true` dentro de um `TestCase` real
+  do PHPUnit/Pest (setado pelo próprio framework de teste), NUNCA
+  dentro de `artisan tinker`. Sintoma característico: `$get('data.
+  campo')` volta `null`/vazio logo depois de um `fillForm(['campo' =>
+  'valor'])`, e pior — se HOUVE uma Action montada e desmontada antes
+  (`mountAction`/`unmountAction`) no mesmo teste, o PRÓPRIO
+  `fillForm()` pode até reportar sucesso mas os campos preenchidos por
+  `$set()` em Actions anteriores (ex.: um `Hidden` de controle) somem
+  igual, porque nada de fato foi escrito. **Correção**: usar
+  `$test->set('data.campo', $valor)` (método NATIVO do Livewire
+  `Testable`, sem esse guard — vai pelo pipeline de update de verdade,
+  dispara `afterStateUpdated()` normalmente) em vez de `fillForm()`,
+  SEMPRE que o teste rodar via `tinker` e não via `TestCase` real. Pra
+  um `RichEditor`, `$test->set('data.campo', '<p>HTML</p>')` funciona
+  igual — o `StateCast` do componente converte pro JSON interno do
+  TipTap corretamente pelo pipeline normal de update (confirmado por
+  teste real, não presumido). Só escrever um `TestCase`/Pest de
+  verdade (`ddev artisan test`) resolve `fillForm()` também, se algum
+  dia for preciso testar o preenchimento em si (não só o resultado).
 
 ## Comandos e fluxo úteis
 

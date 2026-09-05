@@ -16,6 +16,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
 use Perseu\Pessoas\Enums\TipoEndereco;
 use Perseu\Pessoas\Models\Endereco;
 use Perseu\Pessoas\Support\ViaCepLookup;
@@ -182,19 +183,33 @@ trait HasEnderecoRelationManagerSchema
      * ainda, `delete()` não encontra nada) e Edit (troca o conjunto
      * antigo pelo novo).
      *
+     * `DB::transaction()` — achado real de concorrência (ver
+     * INVESTIGACAO-TRANSACOES-CONCORRENCIA.md, risco "syncTipos() apaga
+     * tags antes de criar"): sem isso, uma falha entre o `delete()` e o
+     * `createMany()` deixava o Endereço SEM NENHUMA tag — pior que o
+     * `ProjetoResource`/`CreatePessoaJuridica` acima (lá o Endereço pelo
+     * menos nasce sem tag; aqui um Endereço que JÁ tinha tags, inclusive
+     * "Obra" já em uso por um Projeto, podia perdê-las de vez). `tipos()`
+     * é `HasMany` (não `BelongsToMany`), então o `sync()` nativo do
+     * Eloquent (que é atômico numa única operação, mas só existe pra
+     * relações Many-to-Many com pivot) não se aplica aqui — `DB::transaction()`
+     * é a forma correta de tornar o par delete+createMany atômico.
+     *
      * @param  array<int, int|string>  $tipos
      */
     protected static function syncTipos(Endereco $endereco, array $tipos): void
     {
-        $endereco->tipos()->delete();
+        DB::transaction(function () use ($endereco, $tipos): void {
+            $endereco->tipos()->delete();
 
-        $endereco->tipos()->createMany(
-            collect($tipos)
-                ->filter(fn ($tipo) => filled($tipo))
-                ->unique()
-                ->map(fn ($tipo) => ['tipo' => (int) $tipo])
-                ->values()
-                ->all()
-        );
+            $endereco->tipos()->createMany(
+                collect($tipos)
+                    ->filter(fn ($tipo) => filled($tipo))
+                    ->unique()
+                    ->map(fn ($tipo) => ['tipo' => (int) $tipo])
+                    ->values()
+                    ->all()
+            );
+        });
     }
 }

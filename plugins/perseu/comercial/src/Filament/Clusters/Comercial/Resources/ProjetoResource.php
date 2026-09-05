@@ -3,6 +3,7 @@
 namespace Perseu\Comercial\Filament\Clusters\Comercial\Resources;
 
 use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
@@ -22,6 +23,7 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Components\Actions;
 use Filament\Schemas\Components\Flex;
 use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Group;
 use Filament\Schemas\Components\Icon;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Text;
@@ -35,10 +37,15 @@ use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
+use Perseu\Comercial\Enums\OrigemItemProjeto;
 use Perseu\Comercial\Filament\Clusters\Comercial\Resources\ProjetoResource\Pages\CreateProjeto;
 use Perseu\Comercial\Filament\Clusters\Comercial\Resources\ProjetoResource\Pages\EditProjeto;
 use Perseu\Comercial\Filament\Clusters\Comercial\Resources\ProjetoResource\Pages\ListProjetos;
 use Perseu\Comercial\Filament\Clusters\Projetos;
+use Perseu\Comercial\Models\ItemProjeto;
 use Perseu\Comercial\Models\Projeto;
 use Perseu\Comercial\Models\ReferenciaPreco;
 use Perseu\Pessoas\Enums\TipoEndereco;
@@ -375,35 +382,44 @@ class ProjetoResource extends Resource
                                             ->maxLength(2),
                                     ])
                                     ->createOptionUsing(function (array $data, Get $get): int {
-                                        $endereco = Endereco::create($data);
+                                        // `DB::transaction()` — achado real de concorrência (ver
+                                        // INVESTIGACAO-TRANSACOES-CONCORRENCIA.md, risco "Endereço
+                                        // criado sem tag"): sem isso, uma falha entre o attach e o
+                                        // create da tag deixava um Endereço vinculado à Pessoa mas
+                                        // SEM a tag "Obra" — como `enderecoObraOptionsFor()` filtra
+                                        // por essa tag, o Endereço simplesmente "sumia" das opções,
+                                        // sem erro nenhum pro usuário perceber a causa.
+                                        return DB::transaction(function () use ($data, $get): int {
+                                            $endereco = Endereco::create($data);
 
-                                        $pessoaFisicaId = $get('pessoa_fisica_id');
-                                        $pessoaJuridicaId = $get('pessoa_juridica_id');
+                                            $pessoaFisicaId = $get('pessoa_fisica_id');
+                                            $pessoaJuridicaId = $get('pessoa_juridica_id');
 
-                                        // O endereço só serve pra algo aqui se ficar vinculado ao
-                                        // contratante selecionado — senão desaparece da lista de
-                                        // opções assim que o formulário recalcular. "Obra" (a tag
-                                        // do enum TipoEndereco, sem relação com o nome deste
-                                        // cadastro — ver CLAUDE.md de perseu/pessoas, "Tipo de
-                                        // Endereço como tag") é a mais coerente com o contexto
-                                        // (endereço da obra/canteiro em execução). Tag única e
-                                        // deliberada aqui, NÃO todas marcadas por padrão — essa
-                                        // regra vale só para o CheckboxList do formulário manual
-                                        // de Endereços; este é preenchimento automático sem
-                                        // interação do usuário.
-                                        if (filled($pessoaFisicaId)) {
-                                            PessoaFisica::find($pessoaFisicaId)?->enderecos()->attach($endereco->id, [
-                                                'principal' => false,
-                                            ]);
-                                        } elseif (filled($pessoaJuridicaId)) {
-                                            PessoaJuridica::find($pessoaJuridicaId)?->enderecos()->attach($endereco->id, [
-                                                'principal' => false,
-                                            ]);
-                                        }
+                                            // O endereço só serve pra algo aqui se ficar vinculado ao
+                                            // contratante selecionado — senão desaparece da lista de
+                                            // opções assim que o formulário recalcular. "Obra" (a tag
+                                            // do enum TipoEndereco, sem relação com o nome deste
+                                            // cadastro — ver CLAUDE.md de perseu/pessoas, "Tipo de
+                                            // Endereço como tag") é a mais coerente com o contexto
+                                            // (endereço da obra/canteiro em execução). Tag única e
+                                            // deliberada aqui, NÃO todas marcadas por padrão — essa
+                                            // regra vale só para o CheckboxList do formulário manual
+                                            // de Endereços; este é preenchimento automático sem
+                                            // interação do usuário.
+                                            if (filled($pessoaFisicaId)) {
+                                                PessoaFisica::find($pessoaFisicaId)?->enderecos()->attach($endereco->id, [
+                                                    'principal' => false,
+                                                ]);
+                                            } elseif (filled($pessoaJuridicaId)) {
+                                                PessoaJuridica::find($pessoaJuridicaId)?->enderecos()->attach($endereco->id, [
+                                                    'principal' => false,
+                                                ]);
+                                            }
 
-                                        $endereco->tipos()->create(['tipo' => TipoEndereco::Obra->value]);
+                                            $endereco->tipos()->create(['tipo' => TipoEndereco::Obra->value]);
 
-                                        return $endereco->id;
+                                            return $endereco->id;
+                                        });
                                     }),
 
                                 Select::make('referencia_preco_id')
@@ -489,6 +505,21 @@ class ProjetoResource extends Resource
                                 Hidden::make('origem_item_inserida')
                                     ->dehydrated(false),
 
+                                // Campo de controle que guarda o ID do
+                                // ItemProjeto atualmente em edição (ver
+                                // `abrirEdicaoItemAvulso()`) — `null`
+                                // quando a linha de input está inserindo
+                                // um item NOVO (não editando um já
+                                // existente). Só um item por vez: abrir a
+                                // edição de outro item simplesmente
+                                // sobrescreve este valor (e os campos
+                                // `novo_item_*`), fechando a edição
+                                // anterior sem persistir nada dela — a
+                                // opção mais simples entre as sugeridas na
+                                // tarefa, ver CLAUDE.md.
+                                Hidden::make('item_em_edicao_id')
+                                    ->dehydrated(false),
+
                                 Actions::make([
                                     Action::make('inserirItem')
                                         ->label(__('comercial::filament/resources/projeto.form.itens.inserir'))
@@ -516,6 +547,15 @@ class ProjetoResource extends Resource
                                             // própria lógica numa tarefa futura.
                                             if ($origem === 'item_avulso') {
                                                 $set('origem_item_inserida', $origem);
+
+                                                // Cancela qualquer edição em
+                                                // andamento (ver
+                                                // `item_em_edicao_id` acima) —
+                                                // clicar "Inserir" de novo
+                                                // sempre começa uma linha NOVA
+                                                // em branco, mesmo que outro
+                                                // item estivesse sendo editado.
+                                                $set('item_em_edicao_id', null);
 
                                                 // Reseta a linha de input a cada
                                                 // clique em "Inserir" (linha nova
@@ -707,17 +747,33 @@ class ProjetoResource extends Resource
                             ->extraAttributes($gridGap)
                             ->visible(fn (Get $get) => $get('origem_item_inserida') === 'item_avulso')
                             ->schema([
-                                // Numeração automática (###) — ainda não
-                                // existe tabela de Itens pra contar registros
-                                // reais, então por enquanto é sempre "001"
-                                // (todo Projeto "começa" sem nenhum item
-                                // confirmado, já que a ação de confirmar/
-                                // persistir é tarefa futura). Quando a tabela
-                                // existir, trocar por uma contagem real
-                                // (`($record?->itens()->count() ?? 0) + 1`).
+                                // Numeração automática (###) — em MODO
+                                // EDIÇÃO (`item_em_edicao_id` preenchido)
+                                // mostra o número REAL já gravado daquele
+                                // item; em modo inserção (linha nova) mostra
+                                // uma PRÉVIA do próximo número, mesma conta
+                                // usada de verdade por `ItemProjeto::boot()`
+                                // (`creating`) — `MAX(...) + 1` — pra nunca
+                                // divergir do número que será gravado ao
+                                // confirmar. Sem `withTrashed()` — `ItemProjeto`
+                                // não usa `SoftDeletes` (ver Model/CLAUDE.md).
                                 Placeholder::make('novo_item_numero_display')
                                     ->hiddenLabel()
-                                    ->content(fn () => str_pad('1', 3, '0', STR_PAD_LEFT))
+                                    ->content(function (Get $get, ?Projeto $record): string {
+                                        $itemEmEdicaoId = $get('item_em_edicao_id');
+
+                                        if (filled($itemEmEdicaoId)) {
+                                            $numero = $record?->itens()->find($itemEmEdicaoId)?->numero_item;
+
+                                            if (filled($numero)) {
+                                                return $numero;
+                                            }
+                                        }
+
+                                        $ultimoNumero = (int) ($record?->itens()->max('numero_item') ?? 0);
+
+                                        return str_pad((string) ($ultimoNumero + 1), 3, '0', STR_PAD_LEFT);
+                                    })
                                     ->columnSpan(1),
 
                                 // Referência: sem campo para Item Avulso, só
@@ -822,33 +878,55 @@ class ProjetoResource extends Resource
                                     ->afterStateUpdated(fn (Get $get, Set $set) => static::recalcularValoresItemAvulso($get, $set))
                                     ->columnSpan(3),
 
-                                // Confirmar inserção/alteração do item — SEM
-                                // ação real ainda, só o elemento visual
-                                // (notificação placeholder ao clicar). A
-                                // persistência de fato é a próxima tarefa,
-                                // junto com a tabela de Itens.
+                                // Confirmar inserção/alteração do item —
+                                // grava de fato em `itens_projeto` (ver
+                                // `confirmarItemAvulso()`). Mesmo ícone em
+                                // modo inserção E em modo edição (task
+                                // pediu explicitamente o MESMO ícone de
+                                // confirmação nos dois casos) — só o
+                                // resultado interno muda (`create` vs.
+                                // `update`, ver `item_em_edicao_id`).
                                 Actions::make([
                                     Action::make('confirmarItemAvulso')
                                         ->label(__('comercial::filament/resources/projeto.form.itens.confirmar'))
                                         ->icon('heroicon-o-check-circle')
                                         ->iconButton()
                                         ->color('success')
-                                        ->action(function (): void {
-                                            Notification::make()
-                                                ->info()
-                                                ->title(__('comercial::filament/resources/projeto.form.itens.notification.confirmar-pendente-title'))
-                                                ->body(__('comercial::filament/resources/projeto.form.itens.notification.confirmar-pendente-body'))
-                                                ->send();
-                                        }),
+                                        ->action(fn (Get $get, Set $set, ?Projeto $record) => static::confirmarItemAvulso($get, $set, $record)),
                                 ])
                                     ->alignCenter()
                                     ->verticallyAlignStart()
                                     ->columnSpan(1),
                             ]),
 
-                        // Espaço reservado para a listagem dos itens já
-                        // inseridos no Projeto — depende da tabela de Itens
-                        // (ainda não criada) e vem numa próxima etapa.
+                        // Listagem dos itens JÁ inseridos no Projeto — TODOS
+                        // eles, não só os de origem Item Avulso (única
+                        // origem com persistência real até agora, mas a
+                        // área de listagem é a mesma pras 7, ver CLAUDE.md).
+                        // `Group` (não outro `Section`) só pra agrupar as
+                        // linhas dinamicamente geradas sem nenhum wrapper
+                        // visual extra. O item ATUALMENTE em edição
+                        // (`item_em_edicao_id`) é OMITIDO daqui de
+                        // propósito — os dados dele já estão sendo
+                        // mostrados na linha de INPUT acima (ver
+                        // `abrirEdicaoItemAvulso()`); mostrar as duas ao
+                        // mesmo tempo duplicaria a linha na tela.
+                        Group::make()
+                            ->columnSpanFull()
+                            ->schema(function (Get $get, ?Projeto $record): array {
+                                if (! $record) {
+                                    return [];
+                                }
+
+                                $itemEmEdicaoId = $get('item_em_edicao_id');
+
+                                return $record->itens()
+                                    ->orderBy('numero_item')
+                                    ->get()
+                                    ->reject(fn (ItemProjeto $item) => filled($itemEmEdicaoId) && ((string) $item->id === (string) $itemEmEdicaoId))
+                                    ->map(fn (ItemProjeto $item) => static::linhaExibicaoItem($item))
+                                    ->all();
+                            }),
                     ]),
             ]);
     }
@@ -876,6 +954,40 @@ class ProjetoResource extends Resource
      * Valor Unitário = Custo Unitário × (1 + Porc.%/100) × (1 + Imp.%/100)
      * Valor Total    = Valor Unitário × Quantidade
      *
+     * Função PURA (sem `Get`/`Set`, sem tocar em Referência de Preços) —
+     * usada tanto pela prévia reativa em tela (`recalcularValoresItemAvulso()`,
+     * que lê o Imp.% já em cache em `novo_item_imposto`, só pra exibição
+     * enquanto o usuário digita) quanto pela gravação de verdade
+     * (`confirmarItemAvulso()`, que busca o Imp.% FRESCO do banco antes
+     * de chamar esta função — ver essa subseção pro motivo, achado real
+     * de concorrência em `INVESTIGACAO-TRANSACOES-CONCORRENCIA.md`).
+     * Extraída à parte de propósito: sem essa separação, corrigir o
+     * "Imposto obsoleto" exigiria duplicar a fórmula em vez de só trocar
+     * QUAL Imp.% entra nela.
+     *
+     * @return array{valor_unitario: float, valor_total: float}
+     */
+    protected static function calcularValoresItemAvulso(float $custoUnitario, float $quantidade, float $porcentagem, float $imposto): array
+    {
+        $valorUnitario = $custoUnitario * (1 + ($porcentagem / 100)) * (1 + ($imposto / 100));
+        $valorTotal = $valorUnitario * $quantidade;
+
+        return [
+            'valor_unitario' => round($valorUnitario, 2),
+            'valor_total'    => round($valorTotal, 2),
+        ];
+    }
+
+    /**
+     * Recalcula a PRÉVIA em tela a cada tecla em Qtde./Porc.%/Custo
+     * Unitário — usa o Imp.% já em cache (`novo_item_imposto`, carregado
+     * uma vez ao abrir a linha, ver `inserirItem`/`abrirEdicaoItemAvulso()`).
+     * Essa prévia PODE ficar obsoleta se a Referência de Preços mudar
+     * enquanto o usuário digita — sem problema aqui, é só exibição; a
+     * gravação de verdade (`confirmarItemAvulso()`) sempre busca o valor
+     * FRESCO do banco antes de persistir, independente do que esta
+     * prévia mostrou.
+     *
      * Sem Quantidade OU Custo Unitário (vazios/zerados), os dois campos
      * calculados ficam em branco — não há erro, só nada pra calcular
      * ainda. Imp.% sem Referência de Preços vinculada ao Projeto entra
@@ -896,11 +1008,372 @@ class ProjetoResource extends Resource
         $porcentagem = (float) ($get('novo_item_porcentagem') ?: 0);
         $imposto = (float) ($get('novo_item_imposto') ?: 0);
 
-        $valorUnitario = (float) $custoUnitario * (1 + ($porcentagem / 100)) * (1 + ($imposto / 100));
-        $valorTotal = $valorUnitario * (float) $quantidade;
+        $valores = static::calcularValoresItemAvulso((float) $custoUnitario, (float) $quantidade, $porcentagem, $imposto);
 
-        $set('novo_item_valor_unitario', round($valorUnitario, 2));
-        $set('novo_item_valor_total', round($valorTotal, 2));
+        $set('novo_item_valor_unitario', $valores['valor_unitario']);
+        $set('novo_item_valor_total', $valores['valor_total']);
+    }
+
+    /**
+     * Valida e persiste a linha de Item Avulso (`novo_item_*`) — chamada
+     * pelo ícone de confirmação, tanto em modo INSERÇÃO
+     * (`item_em_edicao_id` vazio, cria um `ItemProjeto` novo) quanto em
+     * modo EDIÇÃO (preenchido, `update()` só se algo mudou — ver
+     * `itemAvulsoMudou()`).
+     *
+     * Sem `$record` (página de CRIAÇÃO do Projeto, ainda sem salvar):
+     * bloqueia com notificação — `itens_projeto.projeto_id` exige um
+     * Projeto já existente, mesmo critério já usado pelo botão "Atribuir
+     * Processos" (só em `EditProjeto`, ver CLAUDE.md).
+     *
+     * Validação MANUAL (`ValidationException::withMessages(['data.<campo>'
+     * => ...])`), não `->required()` nos campos do Schema — os campos
+     * `novo_item_*` são compartilhados por TODA a Section "Itens"
+     * (inclusive quando nenhum item está sendo inserido/editado); se
+     * fossem `->required()` no Schema, o botão Salvar/Cancelar do
+     * CABEÇALHO (`getFormActionsContentComponent()`, formulário
+     * DIFERENTE) passaria a exigi-los também sempre que a linha de Item
+     * Avulso estivesse visível, mesmo sem o usuário ter clicado em
+     * confirmar — efeito colateral indesejado. `ValidationException
+     * ::withMessages()` é o mesmo mecanismo usado por
+     * `Filament\Auth\Pages\Login::throwFailureValidationException()`
+     * (vendor) pra anexar erro a um campo específico do formulário sem
+     * depender de regras declaradas no Schema — confirmado lendo o
+     * código-fonte, não presumido. `'data.'` é o prefixo porque
+     * `EditRecord`/`CreateRecord` usam `->statePath('data')`
+     * (`defaultForm()`, vendor).
+     *
+     * **Imposto obsoleto — corrigido em 2026-09-05** (achado real de
+     * concorrência, ver `INVESTIGACAO-TRANSACOES-CONCORRENCIA.md`):
+     * `novo_item_imposto` (lido uma vez ao abrir a linha, ver
+     * `inserirItem`/`abrirEdicaoItemAvulso()`) fica em CACHE no estado do
+     * componente Livewire por todo o tempo que o usuário leva
+     * preenchendo/revendo o item — se outra sessão mudar o `imposto` da
+     * Referência de Preços nesse meio-tempo, o valor gravado usaria o
+     * Imp.% ANTIGO, sem ninguém perceber. Este método NÃO usa
+     * `novo_item_imposto` pra gravar — busca o `imposto` FRESCO do banco
+     * (`ReferenciaPreco::lockForUpdate()`) NO MOMENTO exato do clique em
+     * "Confirmar", dentro da MESMA `DB::transaction()` da gravação, e
+     * `lockForUpdate()` na Referência de Preços trava qualquer alteração
+     * concorrente dela até esta transação terminar — fecha de vez a
+     * janela de corrida (não só reduz), pelo menos entre o clique e o
+     * commit. `imposto_aplicado` grava esse valor no próprio
+     * `ItemProjeto`, preservando o histórico do cálculo mesmo que a
+     * Referência de Preços mude depois.
+     */
+    protected static function confirmarItemAvulso(Get $get, Set $set, ?Projeto $record): void
+    {
+        if (! $record) {
+            Notification::make()
+                ->warning()
+                ->title(__('comercial::filament/resources/projeto.form.itens.notification.projeto-nao-salvo-title'))
+                ->body(__('comercial::filament/resources/projeto.form.itens.notification.projeto-nao-salvo-body'))
+                ->send();
+
+            return;
+        }
+
+        $descricao = (string) $get('novo_item_descricao');
+        $quantidade = $get('novo_item_quantidade');
+        $custoUnitario = $get('novo_item_custo_unitario');
+
+        $erros = [];
+
+        if (blank(trim(strip_tags($descricao)))) {
+            $erros['data.novo_item_descricao'] = __('comercial::filament/resources/projeto.form.itens.validacao.descricao-obrigatoria');
+        }
+
+        if (blank($quantidade) || ((float) $quantidade <= 0)) {
+            $erros['data.novo_item_quantidade'] = __('comercial::filament/resources/projeto.form.itens.validacao.quantidade-obrigatoria');
+        }
+
+        if (blank($custoUnitario) || ((float) $custoUnitario <= 0)) {
+            $erros['data.novo_item_custo_unitario'] = __('comercial::filament/resources/projeto.form.itens.validacao.custo-unitario-obrigatorio');
+        }
+
+        if ($erros) {
+            throw ValidationException::withMessages($erros);
+        }
+
+        $porcentagem = (float) ($get('novo_item_porcentagem') ?: 0);
+        $referenciaPrecoId = $get('referencia_preco_id');
+        $itemEmEdicaoId = $get('item_em_edicao_id');
+
+        DB::transaction(function () use ($record, $descricao, $quantidade, $custoUnitario, $porcentagem, $referenciaPrecoId, $itemEmEdicaoId): void {
+            $impostoAplicado = filled($referenciaPrecoId)
+                ? (float) (ReferenciaPreco::where('id', $referenciaPrecoId)->lockForUpdate()->value('imposto') ?? 0)
+                : 0.0;
+
+            $valores = static::calcularValoresItemAvulso((float) $custoUnitario, (float) $quantidade, $porcentagem, $impostoAplicado);
+
+            $dados = [
+                'origem'           => OrigemItemProjeto::ItemAvulso,
+                'descricao'        => $descricao,
+                'quantidade'       => (int) $quantidade,
+                'porcentagem'      => $porcentagem,
+                'custo_unitario'   => (float) $custoUnitario,
+                'imposto_aplicado' => $impostoAplicado,
+                'valor_unitario'   => $valores['valor_unitario'],
+                'valor_total'      => $valores['valor_total'],
+            ];
+
+            if (filled($itemEmEdicaoId)) {
+                $item = $record->itens()->lockForUpdate()->find($itemEmEdicaoId);
+
+                if ($item && static::itemAvulsoMudou($item, $dados)) {
+                    $item->update($dados);
+                }
+            } else {
+                // `lockForUpdate()` trava as linhas JÁ existentes deste
+                // Projeto contra outra inserção concorrente (2 cliques
+                // rápidos) enquanto `ItemProjeto::boot()` calcula o próximo
+                // `numero_item` (`MAX() + 1`) — sem tabela de sequência
+                // própria (diferente de `numero_projeto`/
+                // `GeradorNumeroProjeto`), suficiente pro uso real de "um
+                // usuário editando um Projeto por vez" (ver CLAUDE.md). Sem
+                // proteção no primeiro item de um Projeto (nada pra travar
+                // ainda) — risco aceito, ver
+                // INVESTIGACAO-TRANSACOES-CONCORRENCIA.md.
+                $record->itens()->lockForUpdate()->get();
+                $record->itens()->create($dados);
+            }
+        });
+
+        static::resetarLinhaItemAvulso($set);
+
+        Notification::make()
+            ->success()
+            ->title(__('comercial::filament/resources/projeto.form.itens.notification.item-avulso-confirmado'))
+            ->send();
+    }
+
+    /**
+     * Compara os valores atuais do formulário com os já gravados no
+     * registro — usada só em modo EDIÇÃO, pra não disparar nenhum
+     * `update()` (nem log de auditoria "updated" vazio) quando o usuário
+     * abre a edição e confirma sem mudar nada. Comparação por VALOR
+     * normalizado (`round(...,2)` nos decimais, `(int)` na quantidade,
+     * `trim()` na descrição) — não por igualdade estrita de string, já
+     * que `$dados` vem de `$get()` (tipos soltos de input) e o Model
+     * devolve os campos já com cast (`decimal:2`/`integer`).
+     *
+     * @param  array<string, mixed>  $dados
+     */
+    protected static function itemAvulsoMudou(ItemProjeto $item, array $dados): bool
+    {
+        if (trim((string) $item->descricao) !== trim((string) $dados['descricao'])) {
+            return true;
+        }
+
+        if ((int) $item->quantidade !== (int) $dados['quantidade']) {
+            return true;
+        }
+
+        foreach (['porcentagem', 'custo_unitario', 'valor_unitario', 'valor_total', 'imposto_aplicado'] as $campo) {
+            if (round((float) $item->{$campo}, 2) !== round((float) $dados[$campo], 2)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Fecha a linha de Item Avulso e volta ao estado inicial da Section
+     * "Itens" — chamada ao final de `confirmarItemAvulso()`. NÃO reseta
+     * `origem_item_selecionada` de propósito (o Select continua com
+     * "Item Avulso" escolhido) — depois de confirmar um item é comum
+     * querer inserir outro da MESMA origem em seguida; resetar o Select
+     * exigiria escolher a origem de novo a cada item.
+     */
+    protected static function resetarLinhaItemAvulso(Set $set): void
+    {
+        $set('origem_item_inserida', null);
+        $set('item_em_edicao_id', null);
+        $set('novo_item_imposto', null);
+        $set('novo_item_descricao', null);
+        $set('novo_item_quantidade', null);
+        $set('novo_item_porcentagem', null);
+        $set('novo_item_custo_unitario', null);
+        $set('novo_item_valor_unitario', null);
+        $set('novo_item_valor_total', null);
+    }
+
+    /**
+     * Preenche a linha de INPUT com os dados de um item JÁ existente e
+     * liga o modo EDIÇÃO (`item_em_edicao_id`) — chamada pelo ícone de
+     * edição de uma linha da listagem (`linhaExibicaoItem()`). Recalcula
+     * Valor Unitário/Valor Total a partir do Imposto ATUAL da Referência
+     * de Preços do Cabeçalho (mesma regra já usada por "Inserir", não o
+     * Imp.% que foi usado quando o item foi originalmente gravado — a
+     * tarefa pediu explicitamente "recalculados normalmente" ao entrar
+     * em edição) — se a Referência não mudou desde a criação do item, o
+     * resultado bate exatamente com o valor já salvo (importante pra
+     * `itemAvulsoMudou()` não acusar mudança sem o usuário ter alterado
+     * nada).
+     */
+    protected static function abrirEdicaoItemAvulso(Get $get, Set $set, ItemProjeto $item): void
+    {
+        $set('origem_item_inserida', OrigemItemProjeto::ItemAvulso->value);
+        $set('item_em_edicao_id', $item->id);
+
+        $referenciaPrecoId = $get('referencia_preco_id');
+
+        $set('novo_item_imposto', filled($referenciaPrecoId)
+            ? ReferenciaPreco::find($referenciaPrecoId)?->imposto
+            : null);
+        $set('novo_item_descricao', $item->descricao);
+        $set('novo_item_quantidade', $item->quantidade);
+        $set('novo_item_porcentagem', $item->porcentagem);
+        $set('novo_item_custo_unitario', $item->custo_unitario);
+
+        static::recalcularValoresItemAvulso($get, $set);
+    }
+
+    /**
+     * Uma linha de EXIBIÇÃO da listagem de itens já inseridos — mesma
+     * distribuição de `columnSpan` do cabeçalho/linha de input (1,4,7,1,
+     * 3,3,1,3,1), só que com `Text` somente-leitura em vez de campos, e
+     * um `ActionGroup` (Editar/Excluir) na última coluna no lugar do
+     * ícone de confirmação. Descrição aparece em TEXTO PURO
+     * (`Str::stripTags()`) — o dado gravado é HTML (RichEditor), mas
+     * exibir a formatação de verdade aqui exigiria um componente
+     * `Html`/`View` em vez de `Text`, com risco de quebrar a altura/
+     * alinhamento da linha (`<p>`, listas etc. dentro de uma grid
+     * pensada pra uma linha só); a formatação completa continua
+     * disponível ao entrar em modo edição (RichEditor de verdade).
+     *
+     * **`ActionGroup` (dropdown), não dois `iconButton()` lado a lado**
+     * — a última coluna é `columnSpan(1)`, a MESMA largura estreita
+     * usada por "Item"/"Qtde."/"%" (calibrada pra caber só UM ícone,
+     * ver "Última coluna" na subseção da linha de input). Editar +
+     * Excluir juntos não caberiam sem alargar essa coluna — o que
+     * quebraria o alinhamento coluna-a-coluna com cabeçalho/linha de
+     * input, que não precisam de duas ações. `ActionGroup` resolve sem
+     * mexer no grid: um único ícone-gatilho (reticências), MESMO
+     * espaço de sempre, abrindo um dropdown com as duas opções.
+     */
+    protected static function linhaExibicaoItem(ItemProjeto $item): Grid
+    {
+        $moeda = fn (mixed $valor): string => 'R$ '.number_format((float) $valor, 2, ',', '.');
+
+        return Grid::make(24)
+            ->key("item-projeto-{$item->id}")
+            ->columnSpanFull()
+            ->extraAttributes(['style' => 'gap: 1rem !important;'])
+            ->schema([
+                Text::make($item->numero_item)
+                    ->columnSpan(1),
+                Text::make('') // Referência — Item Avulso não usa esta coluna.
+                    ->columnSpan(4),
+                Text::make(Str::of((string) $item->descricao)->stripTags()->trim()->toString())
+                    ->columnSpan(7),
+                Text::make((string) $item->quantidade)
+                    ->columnSpan(1),
+                Text::make($moeda($item->valor_unitario))
+                    ->columnSpan(3),
+                Text::make($moeda($item->valor_total))
+                    ->columnSpan(3),
+                Text::make(number_format((float) $item->porcentagem, 2, ',', '.').'%')
+                    ->columnSpan(1),
+                Text::make($moeda($item->custo_unitario))
+                    ->columnSpan(3),
+                Actions::make([
+                    ActionGroup::make([
+                        Action::make("editarItemProjeto{$item->id}")
+                            ->label(__('comercial::filament/resources/projeto.form.itens.editar'))
+                            ->icon('heroicon-o-pencil-square')
+                            ->action(fn (Get $get, Set $set) => static::abrirEdicaoItemAvulso($get, $set, $item)),
+                        // `DeleteAction` só pelo VISUAL padrão (ícone de
+                        // lixeira, cor "danger", `->requiresConfirmation()`
+                        // já ligado por padrão em `setUp()`) — mesmo
+                        // mecanismo de confirmação já usado em qualquer
+                        // outra exclusão do sistema (ver `table()` deste
+                        // Resource). `->record($item)` é OBRIGATÓRIO: sem
+                        // ele a Action cairia no record do CONTAINER (o
+                        // Projeto, não o Item), já que este componente não
+                        // vive dentro de uma Table de verdade.
+                        // `->action()` substitui o `$record->delete()`
+                        // padrão pela exclusão + renumeração de verdade
+                        // (`excluirItemAvulso()`) — a notificação de
+                        // sucesso embutida do `DeleteAction` não dispara
+                        // mais (não é chamada por esse `->action()`
+                        // customizado); `excluirItemAvulso()` manda a
+                        // própria.
+                        DeleteAction::make("excluirItemProjeto{$item->id}")
+                            ->label(__('comercial::filament/resources/projeto.form.itens.excluir'))
+                            ->record($item)
+                            ->modalHeading(__('comercial::filament/resources/projeto.form.itens.excluir-confirmacao.heading', ['numero' => $item->numero_item]))
+                            ->modalDescription(__('comercial::filament/resources/projeto.form.itens.excluir-confirmacao.description'))
+                            ->action(fn () => static::excluirItemAvulso($item)),
+                    ])
+                        ->icon('heroicon-m-ellipsis-vertical')
+                        ->color('gray'),
+                ])
+                    ->alignCenter()
+                    ->verticallyAlignStart()
+                    ->columnSpan(1),
+            ]);
+    }
+
+    /**
+     * Exclui um Item de Projeto e RENUMERA os itens seguintes daquele
+     * mesmo Projeto pra fechar o buraco na sequência (`numero_item`
+     * contíguo, sem pulos) — ex.: excluir `002` de `001`/`002`/`003`
+     * faz o antigo `003` virar `002`. Exclusão DEFINITIVA (sem
+     * `SoftDeletes`, ver `ItemProjeto`) — a renumeração exige que o
+     * número excluído fique de verdade livre pro índice único
+     * `(projeto_id, numero_item)` da migration.
+     *
+     * `DB::transaction()` + `lockForUpdate()` nos itens seguintes: a
+     * combinação exclusão+renumeração precisa ser atômica (nunca deixar
+     * números duplicados/pulados se algo falhar no meio) — se a
+     * renumeração de um item seguinte falhasse depois do `delete()`
+     * já ter rodado, sem transação o Projeto ficaria com um buraco
+     * permanente na numeração. Renumera em ORDEM CRESCENTE de
+     * `numero_item` de propósito: ao processar o item seguinte ao
+     * excluído primeiro, o número dele já fica LIVRE antes do próximo
+     * item da lista precisar dele — sem essa ordem, dois itens
+     * poderiam colidir temporariamente no mesmo `numero_item` e violar
+     * o índice único no meio do laço.
+     *
+     * **`forceFill()`, não `update()`** — achado real (2026-09-04):
+     * `numero_item` fica DE PROPÓSITO fora do `$fillable` de
+     * `ItemProjeto` (só `ItemProjeto::boot()` deve escrever nele) —
+     * `update(['numero_item' => ...])` respeita mass assignment e
+     * IGNORA SILENCIOSAMENTE qualquer chave fora do `$fillable`, sem
+     * erro nenhum. A primeira versão usava `update()` aqui: o `SELECT`
+     * encontrava os itens certos, o código "renumerava" sem exceção
+     * nenhuma, mas o `numero_item` no banco não mudava — só descoberto
+     * rodando o método isolado (fora do Filament) e imprimindo o SQL/
+     * resultado passo a passo. `forceFill()` escreve o atributo
+     * ignorando o guard, exatamente a exceção deliberada que este
+     * método (e só ele) precisa.
+     */
+    protected static function excluirItemAvulso(ItemProjeto $item): void
+    {
+        DB::transaction(function () use ($item): void {
+            $projetoId = $item->projeto_id;
+            $numeroExcluido = $item->numero_item;
+
+            $item->delete();
+
+            ItemProjeto::where('projeto_id', $projetoId)
+                ->where('numero_item', '>', $numeroExcluido)
+                ->orderBy('numero_item')
+                ->lockForUpdate()
+                ->get()
+                ->each(function (ItemProjeto $itemPosterior): void {
+                    $novoNumero = str_pad((string) (((int) $itemPosterior->numero_item) - 1), 3, '0', STR_PAD_LEFT);
+
+                    $itemPosterior->forceFill(['numero_item' => $novoNumero])->save();
+                });
+        });
+
+        Notification::make()
+            ->success()
+            ->title(__('comercial::filament/resources/projeto.form.itens.notification.item-excluido'))
+            ->send();
     }
 
     protected static function contatoSelecionado(Get $get): ?PessoaFisica

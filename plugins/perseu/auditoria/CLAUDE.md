@@ -36,10 +36,14 @@ para Model novo de cadastro de negócio" no `CLAUDE.md` da raiz, passos
   em `Webkul\Support\Filament\Clusters\Settings`). Permissão:
   `view_any_auditoria_auditoria`/`view_auditoria_auditoria`.
 - `Perseu\Auditoria\Support\SubjectTypeCatalog` é o mapeamento único
-  FQCN → rótulo/módulo/referência amigável/escopo de busca para os 9
-  Models hoje auditados (Projeto, TipoProjeto, SituacaoProjeto,
-  ReferenciaPreco — módulo Comercial; PessoaFisica, PessoaJuridica,
-  CategoriaPessoa, Setor, Endereco, Contato — módulo Pessoas). O
+  FQCN → rótulo/módulo/referência amigável/escopo de busca para os 10
+  Models hoje auditados (Projeto, ItemProjeto, TipoProjeto,
+  SituacaoProjeto, ReferenciaPreco — módulo Comercial; PessoaFisica,
+  PessoaJuridica, CategoriaPessoa, Setor, Endereco, Contato — módulo
+  Pessoas). `ItemProjeto` (2026-09-04) é o único desses SEM Resource/
+  Lixeira de UI própria — vive só dentro do form de `ProjetoResource`
+  (ver `plugins/perseu/comercial/CLAUDE.md`), por isso não entra em
+  `TrashCatalog::models()` (nenhuma UI de exclusão ainda). O
   projeto não define `Relation::morphMap()`, então
   `activity_log.subject_type` guarda o FQCN completo — **isso importa
   ao renomear um Model auditado: os logs já gravados ficam com o FQCN
@@ -61,13 +65,14 @@ para Model novo de cadastro de negócio" no `CLAUDE.md` da raiz, passos
   | Cadastro | Coluna(s) pesquisada(s) |
   |---|---|
   | Projeto | `descricao`, `numero_projeto` |
+  | Item de Projeto | `descricao`, `numero_item` |
   | Tipo de Projeto, Situação de Projeto, Categoria de Pessoa, Setor | `descricao` |
   | Pessoa Física | `nome` |
   | Pessoa Jurídica | `razao_social`, `nome_fantasia`, `cnpj` |
   | Endereço | `logradouro`, `bairro`, `municipio` |
   | Contato | `cargo` |
 
-  A busca por texto SÓ cobre esses 9 Models — não busca nome de
+  A busca por texto SÓ cobre esses 10 Models — não busca nome de
   usuário (existe filtro dedicado "Usuário", coluna `causer_id`) nem
   nome da empresa dona do sistema (Branding/`Company`, que não é um
   Model auditado — ver `plugins/webkul/support/CLAUDE.md`).
@@ -106,7 +111,15 @@ para Model novo de cadastro de negócio" no `CLAUDE.md` da raiz, passos
   que já dispara a cascata de `CascadesRelatedDataOnForceDelete`
   (`perseu/pessoas`) automaticamente. Sem Resource/Policy própria —
   cada linha verifica a Policy do Model real (`Gate::allows('restore'|
-  'forceDelete', $modelReal)`).
+  'forceDelete', $modelReal)`). **Cada chamada envolta em
+  `DB::transaction()` desde 2026-09-05** (achado real de concorrência,
+  ver `INVESTIGACAO-TRANSACOES-CONCORRENCIA.md`) — sem isso, uma falha
+  no meio (ex.: a cascata de Endereço/Contato, ou o próprio log de
+  auditoria do evento `forceDeleted`) deixava o registro parcialmente
+  excluído/restaurado. Em `bulkAct()` (ação em lote), CADA REGISTRO é
+  transacional individualmente — o lote inteiro continua permitindo
+  sucesso parcial entre registros diferentes (comportamento já existente
+  e intencional, preservado).
 
   A Lixeira Central foi desenhada assim (e não como uma `VIEW` de
   banco fazendo `UNION ALL`) de propósito, pra evitar uma dependência

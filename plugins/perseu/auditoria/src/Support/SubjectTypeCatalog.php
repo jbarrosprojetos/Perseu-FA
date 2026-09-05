@@ -5,6 +5,7 @@ namespace Perseu\Auditoria\Support;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
+use Perseu\Comercial\Models\ItemProjeto;
 use Perseu\Comercial\Models\Projeto;
 use Perseu\Comercial\Models\ReferenciaPreco;
 use Perseu\Comercial\Models\SituacaoProjeto;
@@ -44,6 +45,7 @@ class SubjectTypeCatalog
     {
         return [
             Projeto::class          => 'projeto',
+            ItemProjeto::class      => 'item-projeto',
             TipoProjeto::class      => 'tipo-projeto',
             SituacaoProjeto::class  => 'situacao-projeto',
             ReferenciaPreco::class => 'referencia-preco',
@@ -63,6 +65,7 @@ class SubjectTypeCatalog
     {
         return [
             Projeto::class          => self::MODULO_COMERCIAL,
+            ItemProjeto::class      => self::MODULO_COMERCIAL,
             TipoProjeto::class      => self::MODULO_COMERCIAL,
             SituacaoProjeto::class  => self::MODULO_COMERCIAL,
             ReferenciaPreco::class => self::MODULO_COMERCIAL,
@@ -147,6 +150,9 @@ class SubjectTypeCatalog
             Projeto::class => trim(
                 ($subject->numero_projeto ? "{$subject->numero_projeto} — " : '') . $subject->descricao
             ),
+            ItemProjeto::class => trim(
+                "{$subject->numero_item} — " . Str::of((string) $subject->descricao)->stripTags()->trim()->limit(60)
+            ),
             TipoProjeto::class, SituacaoProjeto::class, ReferenciaPreco::class, CategoriaPessoa::class, Setor::class => $subject->descricao,
             PessoaFisica::class => $subject->nome,
             PessoaJuridica::class => $subject->razao_social,
@@ -187,6 +193,9 @@ class SubjectTypeCatalog
                     Projeto::class => $subQuery->where(fn ($q) => $q
                         ->where('descricao', 'like', "%{$termo}%")
                         ->orWhere('numero_projeto', 'like', "%{$termo}%")),
+                    ItemProjeto::class => $subQuery->where(fn ($q) => $q
+                        ->where('descricao', 'like', "%{$termo}%")
+                        ->orWhere('numero_item', 'like', "%{$termo}%")),
                     TipoProjeto::class, SituacaoProjeto::class, ReferenciaPreco::class, CategoriaPessoa::class, Setor::class => $subQuery
                         ->where('descricao', 'like', "%{$termo}%"),
                     PessoaFisica::class => $subQuery->where('nome', 'like', "%{$termo}%"),

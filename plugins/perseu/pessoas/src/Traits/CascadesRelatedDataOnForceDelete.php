@@ -2,6 +2,7 @@
 
 namespace Perseu\Pessoas\Traits;
 
+use Illuminate\Support\Facades\DB;
 use Perseu\Pessoas\Models\Endereco;
 
 /**
@@ -31,22 +32,53 @@ use Perseu\Pessoas\Models\Endereco;
  */
 trait CascadesRelatedDataOnForceDelete
 {
+    /**
+     * `DB::transaction()` — achado real de concorrência (ver
+     * `INVESTIGACAO-TRANSACOES-CONCORRENCIA.md`, risco "Cascata de
+     * exclusão de Pessoa sem transação"): sem isso, uma interrupção
+     * (timeout, worker reciclado, exception) entre `contatos()->delete()`
+     * e `enderecos()->detach()` deixava os Contatos já apagados mas o
+     * vínculo Pessoa↔Endereço intacto; uma interrupção dentro do `foreach`
+     * deixava parte dos Endereços excluídos e parte não — nos dois casos,
+     * dado órfão numa operação que já é definitiva (`forceDelete`, sem
+     * lixeira pra recuperar). Envolvendo tudo numa transação, qualquer
+     * falha no meio desfaz a cascata inteira (tudo ou nada).
+     *
+     * **Nota de escopo**: esta transação cobre só a CASCATA (Contatos +
+     * Endereços), não a exclusão da própria Pessoa em si — essa roda
+     * DEPOIS, fora daqui, como parte do fluxo nativo do Eloquent
+     * (`Model::forceDelete()` só chama `$this->delete()` depois que este
+     * listener de `forceDeleting` retorna). Na prática isso já cobre o
+     * cenário relatado (interrupção NO MEIO da cascata): se a cascata
+     * falhar, a exception propaga e `forceDelete()` nunca chega a excluir
+     * a Pessoa. O único caso residual não coberto por esta transação — a
+     * cascata terminar com sucesso e a exclusão da PRÓPRIA Pessoa falhar
+     * logo em seguida — exigiria embrulhar a chamada de `forceDelete()`
+     * inteira no CHAMADOR (ex.: `Lixeira::forceDeleteRecord()`, já feito
+     * nesta mesma tarefa — nesse caminho específico as duas transações
+     * aninhadas, via savepoint do Laravel, já cobrem os dois casos
+     * juntos); outros chamadores (`ForceDeleteAction` direto num
+     * Resource) continuam com esse risco residual, bem mais estreito que
+     * o problema original.
+     */
     protected static function bootCascadesRelatedDataOnForceDelete(): void
     {
         static::forceDeleting(function (self $model): void {
-            $model->contatos()->delete();
+            DB::transaction(function () use ($model): void {
+                $model->contatos()->delete();
 
-            $enderecoIds = $model->enderecos()->pluck('enderecos.id');
+                $enderecoIds = $model->enderecos()->pluck('enderecos.id');
 
-            $model->enderecos()->detach();
+                $model->enderecos()->detach();
 
-            foreach ($enderecoIds as $enderecoId) {
-                $endereco = Endereco::find($enderecoId);
+                foreach ($enderecoIds as $enderecoId) {
+                    $endereco = Endereco::find($enderecoId);
 
-                if ($endereco && ! $endereco->pessoasFisicas()->exists() && ! $endereco->pessoasJuridicas()->exists()) {
-                    $endereco->delete();
+                    if ($endereco && ! $endereco->pessoasFisicas()->exists() && ! $endereco->pessoasJuridicas()->exists()) {
+                        $endereco->delete();
+                    }
                 }
-            }
+            });
         });
     }
 }
