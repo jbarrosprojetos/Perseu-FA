@@ -1080,11 +1080,11 @@ virou informação COMPLEMENTAR.
   Referência/Descrição/dimensões/Custo/Preço de cada componente) —
   NUNCA recalcula nada, seguindo a mesma lógica do VBA existente do
   usuário. `PromobChecagemTotal::checar()` identifica XML "000" vs.
-  item pelos caracteres 10-12 do nome do arquivo (`substr($nome, 9,
-  3)`, com fallback pra primeiro grupo de 3 dígitos consecutivos se a
-  posição não bater — nomes fora do padrão "AAAAAA - NNN
-  descrição.xml"), soma Custo/Preço de todos os itens e compara contra
-  o total do "000" (tolerância R$ 0,01). **Se não bater, o diagnóstico
+  item pelo nome do arquivo (**convenção corrigida em 2026-09-05 — ver
+  "Validação do nome do arquivo..." mais abaixo**, a suposição original
+  de "caracteres 10-12"/6 dígitos de projeto ficou obsoleta), soma
+  Custo/Preço de todos os itens e compara contra o total do "000"
+  (tolerância R$ 0,01). **Se não bater, o diagnóstico
   por item compara CATEGORY a CATEGORY** (a mesma `DESCRIPTION`/número
   em ambos os arquivos), NÃO a CATEGORY do "000" contra o total do
   DOCUMENTO do item — confirmado nos 3 XMLs de exemplo que a CATEGORY
@@ -1098,8 +1098,10 @@ virou informação COMPLEMENTAR.
   "Acessórios"/"Hettich"/"Processo de Fabricação" quando aparecem como
   CATEGORY própria no "000") são ignoradas no diagnóstico — sem como
   comparar sem o arquivo.
-- **Confirmado com os 3 XMLs de exemplo reais** (`260000 - 000 total
-  ger.xml`/`001 Superior.xml`/`002 inferior.xml`, salvos em
+- **Confirmado com os 3 XMLs de exemplo reais** (`2630001 - 000 Total
+  Geral.xml`/`001 Superior.xml`/`002 Inferior.xml` — renomeados em
+  2026-09-05 pra seguir a convenção real do nome de arquivo, ver
+  abaixo; conteúdo idêntico ao original `260000 - ...`, salvos em
   `tests/Fixtures/Promob/` pra teste automatizado) — o total BATE
   exatamente: Custo R$ 704,40, Preço R$ 2.145,20, validado tanto por
   teste automatizado (`tests/Feature/PromobChecagemTotalTest.php`,
@@ -1218,6 +1220,140 @@ inteiro):
   isolamento de banco seguro, ver achado de `TEST_TOKEN` acima — valores
   conferidos por script PHP avulso, sem depender do Laravel/Pest) e
   manualmente pelo navegador.
+
+### Validação do nome do arquivo + "Checar Total" condicional + botão "Criar Itens" (2026-09-05)
+
+**Convenção REAL do nome de arquivo, confirmada pelo usuário** (a
+suposição anterior — "chars 10-12", 6 dígitos de projeto — ficou
+obsoleta, os 3 XMLs de exemplo foram RENOMEADOS pra seguir a convenção
+certa): os primeiros **7 dígitos** são o Número do Projeto, seguidos
+de `<espaço>-<espaço>`, seguidos de um código de **3 dígitos** que é o
+Número do Item (`000` = XML do Projeto Geral/consolidado, só
+conferência). O resto do nome (depois do número do item) é descrição
+livre, não validada. Ex.: `2630001 - 001 Superior.xml` → Projeto
+`2630001`, Item `001`. `PromobChecagemTotal::identificarArquivo()`
+(regex `/^(\d{7})\s*-\s*(\d{3})/`, ancorada no início do nome sem
+extensão) substituiu o antigo `numeroItemDoArquivo()` — retorna
+`['numero_projeto' => ..., 'numero_item' => ...]`, lança
+`RuntimeException` (mensagem em português puro, sem `__()` — mesma
+convenção já usada nas exceções desta classe) se o nome não bater com
+o padrão.
+
+**Parte 1 — validação contra o Projeto atual, lote inteiro rejeitado
+se qualquer arquivo for inválido** (`PromobChecagemTotal::
+validarNomesDeArquivos()`, chamado por `ProjetoResource::
+calcularResultadoPromob()` ANTES de rodar `checar()`): compara o
+`numero_projeto` de CADA arquivo contra `$record->numero_projeto` —
+**decisão deliberada: rejeita o LOTE INTEIRO (nenhum cálculo roda) se
+QUALQUER arquivo for de outro Projeto ou tiver nome fora do padrão**,
+em vez de descartar só os arquivos problemáticos e seguir com os
+válidos. Motivo: uma checagem "silenciosamente incompleta" (que
+ignorasse um arquivo errado e comparasse só o resto) apareceria pro
+usuário como um resultado normal/confiável, escondendo exatamente o
+tipo de erro que essa validação existe pra pegar — pior que travar e
+pedir pra corrigir o upload. Todas as mensagens de erro (uma por
+arquivo problemático) são concatenadas e mostradas juntas no mesmo
+resultado do modal (`$livewire->promobResultado = ['erro' => ...]`),
+reaproveitando o mesmo `Text` que já exibe qualquer erro.
+
+**Parte 2 — "Checar Total" começa desabilitado, só libera com um XML
+"000" válido do Projeto atual entre os arquivos** (`PromobChecagemTotal
+::possuiXmlGeralValido()`, só olha NOMES — não abre/lê conteúdo, mais
+barato pra rodar a cada render). Com só o "000" (sem nenhum parcial),
+o resultado mostra os totais do "000" normalmente, "soma das parciais"
+= 0 pra todas as 5 métricas — sem tratamento especial, é só a
+matemática normal do "geral menos zero".
+
+**Parte 3 — botão "Criar Itens"**: mesma condição de habilitação do
+"Checar Total" (precisa do "000" válido — sem ele não há "diferença"
+pra decidir se pede confirmação). Roda a MESMA `calcularResultadoPromob()`
+internamente mesmo sem o usuário ter clicado "Checar Total" antes; se
+QUALQUER uma das 5 métricas de diferença for `!= 0`, pede confirmação
+("Divergência de valores" / "Arquivos com divergência de valores.
+Confirma a criação dos Itens?"); confirmando (ou se já bate tudo, sem
+precisar confirmar), mostra a notificação placeholder já usada por
+outras origens/ações pendentes ("Mobilização e Frete") — **ainda SEM
+criar nenhum `ItemProjeto`**, essa é uma tarefa futura.
+
+**Três achados reais/armadilhas do Filament, todos descobertos
+depurando esta tarefa** (documentados aqui em detalhe porque nenhum é
+óbvio e todos custaram tempo de investigação — valem pra qualquer
+Action futura que precise de múltiplos botões de rodapé interagindo
+com o mesmo formulário):
+
+1. **O botão de "submit" automático do modal (`modalSubmitAction()`)
+   NUNCA passa por `prepareModalAction()`** — só
+   `getExtraModalFooterActions()` chama isso (que faz
+   `schemaContainer($this->getSchemaContainer())`, necessário pra
+   `Get`/`$record` injetados funcionarem dentro da Action). Um
+   `->disabled(fn (Get $get) => ...)` no botão de submit quebra com
+   `Call to a member function makeGetUtility() on null`. Solução:
+   `->modalSubmitAction(false)` (remove o submit automático) e usar
+   `->extraModalFooterActions([...])` pra TODOS os botões do rodapé —
+   nenhum vira "o" submit, mas todos ficam com `Get`/`$record`
+   funcionando.
+2. **`Get $get` dentro de uma Action do rodapé (`extraModalFooterActions`)
+   NÃO aponta pro Schema PRÓPRIO da Action mãe montada** — aponta pro
+   container de onde a Action mãe está DECLARADA (aqui, o `Actions::
+   make([...])` da Section "Itens", ligado ao form da PÁGINA), não pro
+   Schema dedicado que `getMountedActionSchema()` cria com `statePath(
+   "mountedActions.{n}.data")` (onde os CAMPOS do `->form()` da Action
+   mãe de fato vivem). `$get('arquivos_xml')` sempre voltava `null`,
+   mesmo com arquivos selecionados. **E mesmo se apontasse certo, não
+   adiantaria** — ver achado 3. Correção: ler direto de
+   `$livewire->mountedActions[0]['data']['arquivos_xml']` (índice `0`
+   é sempre a Action mãe `inserirItemPromob` enquanto o modal está
+   aberto, mesmo com "Criar Itens" aninhando um índice `1` pra própria
+   confirmação) — ver `ProjetoResource::arquivosXmlPromobAtuais()`.
+3. **Nenhuma Action do rodapé sem `->form()` próprio jamais desidrata
+   o Schema da Action MÃE** — `callMountedAction()` (vendor) só chama
+   `$schema->getState()` (o gatilho de `FileUpload::saveUploadedFiles()`,
+   que move um upload de "temporário no Livewire" pra "arquivo de
+   verdade no disco configurado") quando a Action sendo executada TEM
+   seu próprio Schema (`mountedActionHasSchema()`) — "Checar Total"/
+   "Criar Itens" não têm. Ou seja: mesmo com o `Get` acertado, o valor
+   de `arquivos_xml` NUNCA seria desidratado nesse fluxo — ficaria pra
+   sempre como objeto `Livewire\Features\SupportFileUploads\
+   TemporaryUploadedFile` cru. **Solução (também mais simples que
+   tentar forçar a desidratação)**: não esperar por ela — ler o NOME
+   ORIGINAL (`UploadedFile::getClientOriginalName()`) e o CONTEÚDO
+   (`UploadedFile::get()`) DIRETO do objeto cru, que já funcionam sem
+   nenhum "save". Consequência: o campo `FileUpload::make('arquivos_xml')`
+   não precisa mais de `->disk()`/`->directory()`/`->preserveFilenames()`
+   nem de limpeza manual de diretório temporário — o Livewire cuida do
+   próprio ciclo de vida do upload temporário sozinho.
+4. **`Action::shouldOpenModal()` abre modal se `hasCustomModalHeading()`
+   OU `hasModalDescription()` forem verdadeiros — INDEPENDENTE do
+   resultado de `requiresConfirmation()`** (achado real: com
+   `->modalHeading()`/`->modalDescription()` como STRINGS FIXAS no
+   `criarItensPromob`, o modal de confirmação aparecia SEMPRE, mesmo
+   quando `requiresConfirmation()` calculava `false` porque as 5
+   métricas batiam). Correção: `modalHeading`/`modalDescription`
+   viraram Closures que retornam `null` quando não precisa confirmar
+   (`ProjetoResource::promobPrecisaConfirmarCriacao()`, chamado pelas
+   três — `requiresConfirmation`/`modalHeading`/`modalDescription` —
+   pra manter os três SEMPRE de acordo entre si).
+5. **`$action->halt()` numa Action do rodapé SEM confirmação e SEM
+   forma própria pode "prender" ela mounted e esconder o modal da
+   Action mãe** — achado real: `criarItensPromob->halt()` (quando não
+   precisava de confirmação) fazia o modal INTEIRO desaparecer, mesmo
+   a Action mãe (`inserirItemPromob`) continuando mounted por baixo.
+   `checarTotalPromob` (que TAMBÉM chama `halt()`) nunca teve esse
+   problema — a diferença é que `criarItensPromob` tem
+   `requiresConfirmation`/`modalHeading`/`modalDescription`
+   configurados (mesmo que avaliem pra "sem confirmação" naquele
+   clique). Causa raiz não 100% confirmada (não vale a pena investigar
+   mais fundo pra este caso específico), mas o padrão seguro
+   encontrado foi: **só chamar `$action->halt()` numa Action de
+   rodapé que TAMBÉM tem conteúdo próprio pra mostrar quando parada
+   (form ou confirmação) — pra uma Action "plana", sem NENHUM dos
+   dois, deixe ela terminar normalmente** (sem `halt()`); o modal da
+   Action MÃE continua aberto de qualquer forma, porque terminar uma
+   Action ANINHADA só faz Livewire despopular ELA da pilha
+   (`mountedActions`), voltando a mostrar a mãe — `halt()` só é
+   necessário quando é a PRÓPRIA Action mãe que, ao concluir sem ele,
+   fecharia (comportamento padrão do Filament pra uma Action bem-
+   sucedida).
 
 ## Limitações conhecidas
 

@@ -31,15 +31,25 @@ final class PromobChecagemTotal
     private const TOLERANCIA = 0.01;
 
     /**
-     * Identifica, pelo nome do arquivo, se é o XML "000" (total) ou um
-     * XML de item — convenção já mapeada: caracteres 10-12 do nome (1-
-     * indexado, ou seja `substr($nome, 9, 3)`) trazem o número de 3
-     * dígitos ("000" = total, "001"/"002"/... = item). Se essa posição
-     * não tiver 3 dígitos (nome fora do padrão), cai num fallback que
-     * procura os primeiros 3 dígitos consecutivos em qualquer lugar do
-     * nome.
+     * Convenção REAL do nome de arquivo, confirmada pelo usuário
+     * (2026-09-05): os primeiros 7 dígitos são o Número do Projeto,
+     * seguidos de "<espaço>-<espaço>", seguidos de um código de 3
+     * dígitos que é o Número do Item — `NUMERO_XML_TOTAL` quando esse
+     * código é o XML do Projeto Geral/consolidado (só conferência, não
+     * um item de verdade). O resto do nome (depois do número do item)
+     * é uma descrição livre, não validada. Ex.: "2630001 - 001
+     * Superior.xml" → Projeto "2630001", Item "001". Ver
+     * `identificarArquivo()`.
      */
     private const NUMERO_XML_TOTAL = '000';
+
+    /**
+     * `^(\d{7})\s*-\s*(\d{3})` — 7 dígitos, hífen (com espaços
+     * flexíveis ao redor, tolerando variações de digitação), 3
+     * dígitos, ancorado no INÍCIO do nome (sem extensão). O resto do
+     * nome (descrição livre) não é validado.
+     */
+    private const PADRAO_NOME_ARQUIVO = '/^(\d{7})\s*-\s*(\d{3})/';
 
     /**
      * @param  array<string, string>  $xmlsPorNomeDeArquivo  nome do arquivo (sem diretório) => conteúdo bruto do XML
@@ -67,7 +77,7 @@ final class PromobChecagemTotal
         $metricasItens = [];
 
         foreach ($xmlsPorNomeDeArquivo as $nomeArquivo => $conteudo) {
-            $numeroItem = static::numeroItemDoArquivo($nomeArquivo);
+            $numeroItem = static::identificarArquivo($nomeArquivo)['numero_item'];
             $dados = PromobXmlParser::parse($conteudo);
             $metricas = PromobXmlParser::metricas($conteudo);
 
@@ -274,19 +284,84 @@ final class PromobChecagemTotal
         return null;
     }
 
-    private static function numeroItemDoArquivo(string $nomeArquivo): string
+    /**
+     * @return array{numero_projeto: string, numero_item: string}
+     */
+    public static function identificarArquivo(string $nomeArquivo): array
     {
         $nomeSemExtensao = pathinfo($nomeArquivo, PATHINFO_FILENAME);
-        $miolo = substr($nomeSemExtensao, 9, 3);
 
-        if (preg_match('/^\d{3}$/', $miolo) === 1) {
-            return $miolo;
+        if (preg_match(self::PADRAO_NOME_ARQUIVO, $nomeSemExtensao, $match) !== 1) {
+            throw new \RuntimeException("O nome do arquivo \"{$nomeArquivo}\" não segue o padrão esperado (\"NNNNNNN - NNN descrição.xml\", 7 dígitos do Projeto + 3 dígitos do Item) — não foi possível identificar o Projeto/Item.");
         }
 
-        if (preg_match('/(\d{3})(?!\d)/', $nomeArquivo, $match) === 1) {
-            return $match[1];
+        return [
+            'numero_projeto' => $match[1],
+            'numero_item'    => $match[2],
+        ];
+    }
+
+    /**
+     * Parte 1 do fluxo Promob (2026-09-05): confere se TODOS os
+     * arquivos enviados pertencem ao Projeto que está sendo editado —
+     * lê só o NOME do arquivo, sem abrir/parsear o XML (mais barato, e
+     * suficiente pra essa checagem). Decisão deliberada: rejeita o
+     * LOTE INTEIRO se qualquer arquivo estiver errado (nome fora do
+     * padrão OU de outro Projeto), em vez de descartar só os arquivos
+     * problemáticos e seguir com os válidos — ver CLAUDE.md, "Fluxo
+     * Promob", pela justificativa completa (evita uma checagem
+     * "silenciosamente incompleta", que pareceria confiável sem ser).
+     *
+     * @param  array<int, string>  $nomesDeArquivos
+     * @return array<int, string> mensagens de erro (vazio = todos os arquivos são válidos)
+     */
+    public static function validarNomesDeArquivos(array $nomesDeArquivos, string $numeroProjetoAtual): array
+    {
+        $erros = [];
+
+        foreach ($nomesDeArquivos as $nomeArquivo) {
+            try {
+                $identificacao = static::identificarArquivo($nomeArquivo);
+            } catch (\Throwable $e) {
+                $erros[] = $e->getMessage();
+
+                continue;
+            }
+
+            if ($identificacao['numero_projeto'] !== $numeroProjetoAtual) {
+                $erros[] = "O arquivo \"{$nomeArquivo}\" pertence ao Projeto {$identificacao['numero_projeto']}, mas você está editando o Projeto {$numeroProjetoAtual}.";
+            }
         }
 
-        throw new \RuntimeException("Não foi possível identificar o número do item a partir do nome do arquivo \"{$nomeArquivo}\".");
+        return $erros;
+    }
+
+    /**
+     * Existe, entre os arquivos informados, um XML "000" (Projeto
+     * Geral) que também pertence ao Projeto atual? Usado só pra
+     * decidir se os botões "Checar Total"/"Criar Itens" ficam
+     * habilitados — nomes de arquivo fora do padrão ou de outro
+     * Projeto são simplesmente ignorados aqui (não é o lugar de
+     * mostrar o erro pro usuário; isso é papel de
+     * `validarNomesDeArquivos()`, chamado só quando o botão é
+     * clicado de fato).
+     *
+     * @param  array<int, string>  $nomesDeArquivos
+     */
+    public static function possuiXmlGeralValido(array $nomesDeArquivos, string $numeroProjetoAtual): bool
+    {
+        foreach ($nomesDeArquivos as $nomeArquivo) {
+            try {
+                $identificacao = static::identificarArquivo($nomeArquivo);
+            } catch (\Throwable) {
+                continue;
+            }
+
+            if ($identificacao['numero_projeto'] === $numeroProjetoAtual && $identificacao['numero_item'] === self::NUMERO_XML_TOTAL) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

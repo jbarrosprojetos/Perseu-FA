@@ -57,11 +57,17 @@ return [
             ],
             'promob' => [
                 'modal' => [
-                    'heading'       => 'Promob Check',
-                    'description'   => 'Upload the "000" XML (project total) and each item\'s XML exported by Promob to check whether the totals match.',
-                    'upload-label'  => 'XML Files',
-                    'upload-helper' => 'Select the "000" XML (total) and each item\'s XML, all at once.',
-                    'processar'     => 'Check Total',
+                    'heading'                        => 'Promob Check',
+                    'description'                    => 'Upload the "000" XML (project total) and each item\'s XML exported by Promob to check whether the totals match.',
+                    'upload-label'                   => 'XML Files',
+                    'upload-helper'                  => 'Select the "000" XML (total) and each item\'s XML, all at once.',
+                    'processar'                      => 'Check Total',
+                    'criar-itens'                    => 'Create Items',
+                    'confirmar-criacao-heading'      => 'Value mismatch',
+                    'confirmar-criacao-description'  => 'Files with mismatched values. Confirm the creation of the Items?',
+                ],
+                'erros' => [
+                    'projeto-nao-salvo' => 'The Project needs a number (saved at least once) before you can upload Promob XMLs.',
                 ],
                 'resultado' => [
                     'titulo'                => 'Grand Total Comparison',

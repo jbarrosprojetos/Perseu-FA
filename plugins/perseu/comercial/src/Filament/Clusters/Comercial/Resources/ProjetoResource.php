@@ -40,7 +40,6 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -658,31 +657,148 @@ class ProjetoResource extends Resource
                                         ->modalHeading(__('comercial::filament/resources/projeto.form.itens.promob.modal.heading'))
                                         ->modalDescription(__('comercial::filament/resources/projeto.form.itens.promob.modal.description'))
                                         ->modalWidth(Width::Small)
-                                        ->modalSubmitActionLabel(__('comercial::filament/resources/projeto.form.itens.promob.modal.processar'))
+                                        // SEM botão de submit automático —
+                                        // achado real (2026-09-05): o botão
+                                        // gerado por `modalSubmitAction()`
+                                        // NUNCA passa por `prepareModalAction()`
+                                        // (só `getExtraModalFooterActions()`
+                                        // passa), então `schemaContainer()`
+                                        // fica `null` nele — qualquer `Get`/
+                                        // `$record` injetado num
+                                        // `->disabled()` desse botão quebra
+                                        // com "Call to a member function
+                                        // makeGetUtility() on null". "Checar
+                                        // Total" e "Criar Itens" (abaixo) são
+                                        // os DOIS `extraModalFooterActions`
+                                        // deste modal — nenhum submit padrão.
+                                        ->modalSubmitAction(false)
                                         ->mountUsing(function (?Schema $schema, $livewire): void {
                                             $livewire->promobResultado = null;
                                             $schema?->fill();
                                         })
                                         ->form([
+                                            // SEM `->disk()`/`->directory()`
+                                            // — como nenhum botão deste modal
+                                            // é a Action de "submit"
+                                            // (`->modalSubmitAction(false)`
+                                            // acima), o Schema nunca desidrata
+                                            // e o Filament NUNCA chega a mover
+                                            // o upload pro disco configurado
+                                            // (ver `arquivosXmlPromobAtuais()`
+                                            // pra o porquê disso é
+                                            // intencional, não um bug) — os
+                                            // arquivos ficam só no
+                                            // armazenamento temporário do
+                                            // PRÓPRIO Livewire, que o pacote
+                                            // já limpa sozinho.
                                             FileUpload::make('arquivos_xml')
                                                 ->label(__('comercial::filament/resources/projeto.form.itens.promob.modal.upload-label'))
                                                 ->helperText(__('comercial::filament/resources/projeto.form.itens.promob.modal.upload-helper'))
                                                 ->multiple()
-                                                ->preserveFilenames()
+                                                ->live()
                                                 ->acceptedFileTypes(['text/xml', 'application/xml'])
-                                                ->disk('local')
-                                                ->directory('promob-uploads-tmp')
                                                 ->required(),
 
                                             Text::make(fn ($livewire) => static::renderizarResultadoPromob($livewire->promobResultado))
                                                 ->color(fn ($livewire) => static::corResultadoPromob($livewire->promobResultado))
                                                 ->visible(fn ($livewire) => filled($livewire->promobResultado)),
                                         ])
-                                        ->action(function (array $data, $livewire, Action $action): void {
-                                            static::processarUploadPromob($data['arquivos_xml'] ?? [], $livewire);
+                                        ->extraModalFooterActions([
+                                            // "Checar Total" — começa
+                                            // DESABILITADO (nenhum arquivo
+                                            // ainda) e só libera quando
+                                            // existir, entre os arquivos
+                                            // selecionados, um XML "000"
+                                            // válido (do Projeto atual — ver
+                                            // `promobTemXmlGeralValido()`).
+                                            // Sem ele não há contra o que
+                                            // comparar as 5 métricas; com só
+                                            // o "000" (sem nenhum parcial), o
+                                            // resultado mostra os totais do
+                                            // "000" "sem subtração" de
+                                            // verdade (soma das parciais =
+                                            // 0), já documentado assim no
+                                            // CLAUDE.md. `$action->halt()`
+                                            // pelo mesmo motivo de sempre —
+                                            // o modal nunca fecha sozinho.
+                                            Action::make('checarTotalPromob')
+                                                ->label(__('comercial::filament/resources/projeto.form.itens.promob.modal.processar'))
+                                                ->disabled(fn (?Projeto $record, $livewire) => ! static::promobTemXmlGeralValido(static::arquivosXmlPromobAtuais($livewire), $record))
+                                                ->action(function (?Projeto $record, $livewire, Action $action): void {
+                                                    $livewire->promobResultado = static::calcularResultadoPromob(static::arquivosXmlPromobAtuais($livewire), $record);
 
-                                            $action->halt();
-                                        }),
+                                                    $action->halt();
+                                                }),
+
+                                            // "Criar Itens" — mesma condição
+                                            // de habilitação do "Checar
+                                            // Total" acima (precisa do "000"
+                                            // válido pra ter ALGO pra
+                                            // comparar/decidir se pede
+                                            // confirmação). Roda a MESMA
+                                            // checagem internamente mesmo que
+                                            // o usuário não tenha clicado
+                                            // "Checar Total" antes
+                                            // (`calcularResultadoPromob()`
+                                            // reaproveitado dos dois
+                                            // lugares) — com qualquer uma
+                                            // das 5 métricas de diferença
+                                            // fora de zero, pede confirmação
+                                            // antes de seguir; ainda SEM
+                                            // ação real de criação (só a
+                                            // notificação placeholder já
+                                            // usada pelas outras origens/
+                                            // ações pendentes —
+                                            // "Mobilização e Frete" já
+                                            // reaproveita o mesmo par de
+                                            // traduções).
+                                            Action::make('criarItensPromob')
+                                                ->label(__('comercial::filament/resources/projeto.form.itens.promob.modal.criar-itens'))
+                                                ->color('gray')
+                                                ->disabled(fn (?Projeto $record, $livewire) => ! static::promobTemXmlGeralValido(static::arquivosXmlPromobAtuais($livewire), $record))
+                                                ->requiresConfirmation(fn (?Projeto $record, $livewire) => static::promobPrecisaConfirmarCriacao($livewire, $record))
+                                                // `modalHeading`/`modalDescription` também PRECISAM
+                                                // ser condicionais (não strings fixas) — achado real:
+                                                // `Action::shouldOpenModal()` (vendor) abre o modal
+                                                // se `hasCustomModalHeading()` OU
+                                                // `hasModalDescription()` forem verdadeiros,
+                                                // INDEPENDENTE do resultado de `isConfirmationRequired()`
+                                                // — com heading/description fixos, o modal de
+                                                // confirmação aparecia SEMPRE, mesmo quando
+                                                // `requiresConfirmation()` calculava `false` (sem
+                                                // divergência nenhuma). Retornar `null` quando não
+                                                // precisa confirmar faz `hasCustomModalHeading()`/
+                                                // `hasModalDescription()` voltarem `false`
+                                                // (`filled()` por baixo dos panos), e `shouldOpenModal()`
+                                                // finalmente reflete o resultado real de
+                                                // `requiresConfirmation()`.
+                                                ->modalHeading(fn (?Projeto $record, $livewire) => static::promobPrecisaConfirmarCriacao($livewire, $record)
+                                                    ? __('comercial::filament/resources/projeto.form.itens.promob.modal.confirmar-criacao-heading')
+                                                    : null)
+                                                ->modalDescription(fn (?Projeto $record, $livewire) => static::promobPrecisaConfirmarCriacao($livewire, $record)
+                                                    ? __('comercial::filament/resources/projeto.form.itens.promob.modal.confirmar-criacao-description')
+                                                    : null)
+                                                ->action(function (?Projeto $record, $livewire): void {
+                                                    $resultado = static::calcularResultadoPromob(static::arquivosXmlPromobAtuais($livewire), $record);
+                                                    $livewire->promobResultado = $resultado;
+
+                                                    if (! isset($resultado['erro'])) {
+                                                        Notification::make()
+                                                            ->info()
+                                                            ->title(__('comercial::filament/resources/projeto.form.itens.notification.pendente-title'))
+                                                            ->body(__('comercial::filament/resources/projeto.form.itens.notification.pendente-body', [
+                                                                'origem' => __('comercial::filament/resources/projeto.form.itens.promob.modal.criar-itens'),
+                                                            ]))
+                                                            ->send();
+                                                    }
+                                                }),
+                                        ]),
+                                    // O "Cancelar" nativo do modal continua
+                                    // sendo o único jeito de fechar (nenhuma
+                                    // das duas Actions acima é um submit) —
+                                    // label padrão do Filament, já traduzida
+                                    // pt_BR pelo próprio pacote, sem precisar
+                                    // sobrescrever.
 
                                     // Sem ação própria ainda — mesmo padrão do
                                     // botão "Inserir" quando foi criado
@@ -1049,36 +1165,131 @@ class ProjetoResource extends Resource
     /**
      * Lê cada arquivo enviado no modal de "Promob" (caminhos já
      * armazenados pelo `FileUpload::make('arquivos_xml')`, disco
-     * `local`), roda `PromobChecagemTotal::checar()` e guarda o
-     * resultado em `$livewire->promobResultado` (trait
-     * `HasPromobResultado`) — o próprio `Text` do modal (ver Action
-     * `inserirItemPromob`) lê essa property pra exibir o resultado sem
-     * fechar o modal. Os arquivos são temporários (só servem pra este
-     * cálculo) — apagados do disco logo depois de lidos, sucesso ou
-     * erro, pra não acumular XML nenhum em `storage/app/promob-uploads-tmp`.
+     * `local`), valida se todos pertencem ao PROJETO ATUAL (Parte 1 —
+     * ver `PromobChecagemTotal::validarNomesDeArquivos()`) e, se sim,
+     * roda `PromobChecagemTotal::checar()`. Função PURA (sem
+     * `$livewire`) — devolve o resultado em vez de gravar direto,
+     * porque tanto "Checar Total" quanto "Criar Itens" (Action
+     * `criarItensPromob`, ver abaixo) precisam rodar exatamente essa
+     * mesma checagem.
      *
-     * Não cria nenhum registro em `itens_projeto` — só calcula e
-     * compara (ver CLAUDE.md, "Fluxo Promob").
+     * **Decisão: rejeita o LOTE INTEIRO se qualquer arquivo for
+     * inválido** (de outro Projeto ou nome fora do padrão), em vez de
+     * descartar só os arquivos problemáticos e seguir com os válidos —
+     * ver CLAUDE.md, "Fluxo Promob", pela justificativa completa.
      *
-     * @param  array<int, string>  $caminhosArquivos
+     * Sem `$record`/`numero_projeto` (Projeto ainda não salvo — só
+     * possível em `CreateProjeto`, já que Promob não exige o mesmo
+     * "salve primeiro" de Item Avulso pra ABRIR o modal, só pra
+     * processar de fato, já que precisa de um `numero_projeto` real
+     * pra validar contra), bloqueia com erro — sem como validar contra
+     * um Projeto que não tem número ainda.
+     *
+     * @param  array<int, \Illuminate\Http\UploadedFile>  $arquivos
+     * @return array<string, mixed>
      */
-    protected static function processarUploadPromob(array $caminhosArquivos, $livewire): void
+    protected static function calcularResultadoPromob(array $arquivos, ?Projeto $record): array
     {
-        $xmlsPorNomeDeArquivo = [];
-
-        foreach ($caminhosArquivos as $caminho) {
-            $xmlsPorNomeDeArquivo[basename($caminho)] = Storage::disk('local')->get($caminho);
+        if (! $record || blank($record->numero_projeto)) {
+            return ['erro' => __('comercial::filament/resources/projeto.form.itens.promob.erros.projeto-nao-salvo')];
         }
 
-        foreach ($caminhosArquivos as $caminho) {
-            Storage::disk('local')->delete($caminho);
+        $nomesDeArquivos = array_map(fn ($arquivo) => $arquivo->getClientOriginalName(), $arquivos);
+        $errosValidacao = PromobChecagemTotal::validarNomesDeArquivos($nomesDeArquivos, $record->numero_projeto);
+
+        if (filled($errosValidacao)) {
+            return ['erro' => implode("\n", $errosValidacao)];
+        }
+
+        $xmlsPorNomeDeArquivo = [];
+
+        foreach ($arquivos as $arquivo) {
+            $xmlsPorNomeDeArquivo[$arquivo->getClientOriginalName()] = $arquivo->get();
         }
 
         try {
-            $livewire->promobResultado = PromobChecagemTotal::checar($xmlsPorNomeDeArquivo);
+            return PromobChecagemTotal::checar($xmlsPorNomeDeArquivo);
         } catch (\Throwable $e) {
-            $livewire->promobResultado = ['erro' => $e->getMessage()];
+            return ['erro' => $e->getMessage()];
         }
+    }
+
+    /**
+     * Lê os arquivos ATUALMENTE selecionados no `FileUpload::make(
+     * 'arquivos_xml')` DIRETO de `$livewire->mountedActions` — achado
+     * real (2026-09-05): `Get $get` injetado nas Actions
+     * `checarTotalPromob`/`criarItensPromob`
+     * (`extraModalFooterActions()` de `inserirItemPromob`) resolve pro
+     * schema da PÁGINA (`data.*`), não pro schema PRÓPRIO da Action mãe
+     * montada (`mountedActions.{n}.data.*`, onde `arquivos_xml` de fato
+     * mora) — `$get('arquivos_xml')` sempre voltava `null`, mesmo com
+     * arquivos já enviados. `extraModalFooterActions()` chama
+     * `prepareModalAction()` em cada action extra
+     * (`schemaContainer($this->getSchemaContainer())`), mas o
+     * `getSchemaContainer()` da Action MÃE (`inserirItemPromob`) aponta
+     * pro container de onde ELA está declarada (`Actions::make([...])`
+     * dentro do form da PÁGINA), não pro schema dedicado que
+     * `getMountedActionSchema()` cria com `statePath("mountedActions.
+     * {n}.data")` — os dois nunca ficam conectados um ao outro por
+     * baixo dos panos, apesar da aparência de que deveriam.
+     * `inserirItemPromob` é sempre o índice `0` de `mountedActions`
+     * enquanto este modal estiver aberto (mesmo com "Criar Itens"
+     * aninhando um índice `1` pra própria confirmação) — por isso o
+     * índice fixo abaixo é seguro aqui.
+     *
+     * **Retorna os objetos `UploadedFile` CRUS (Livewire
+     * `TemporaryUploadedFile`), não caminhos de disco** — segundo
+     * achado real: como nenhuma das duas Actions do rodapé
+     * (`checarTotalPromob`/`criarItensPromob`) é a Action de "submit"
+     * do modal (`->modalSubmitAction(false)`, ver `inserirItemPromob`),
+     * o Schema do FORM nunca passa por `getState()`/dehydração — e é
+     * só na dehydração que o Filament move um upload de "temporário no
+     * Livewire" pra "arquivo de verdade no disco configurado"
+     * (`FileUpload::saveUploadedFiles()`). Sem isso, o valor em
+     * `mountedActions.0.data.arquivos_xml` fica pra sempre como
+     * `TemporaryUploadedFile` (nunca vira string de caminho) — então em
+     * vez de esperar por uma dehydração que nunca vai rolar aqui, lemos
+     * o NOME ORIGINAL (`getClientOriginalName()`) e o CONTEÚDO
+     * (`get()`) direto do objeto cru, que já funcionam plenamente sem
+     * precisar de nenhum "save" — não precisamos mais nem configurar
+     * `disk()`/`directory()` no campo, nem limpar nada depois (o
+     * Livewire cuida da própria limpeza do seu diretório de uploads
+     * temporários).
+     *
+     * @return array<int, \Illuminate\Http\UploadedFile>
+     */
+    protected static function arquivosXmlPromobAtuais($livewire): array
+    {
+        $arquivos = data_get($livewire->mountedActions, '0.data.arquivos_xml', []);
+
+        if (! is_array($arquivos)) {
+            return [];
+        }
+
+        return array_values(array_filter(
+            $arquivos,
+            fn ($arquivo) => $arquivo instanceof \Illuminate\Http\UploadedFile,
+        ));
+    }
+
+    /**
+     * Só olha os NOMES dos arquivos atualmente selecionados no upload
+     * (sem ler conteúdo — mais barato, chamado a cada render pra
+     * decidir se "Checar Total"/"Criar Itens" ficam habilitados) — ver
+     * `PromobChecagemTotal::possuiXmlGeralValido()`.
+     *
+     * @param  array<int, \Illuminate\Http\UploadedFile>  $arquivos
+     */
+    protected static function promobTemXmlGeralValido(array $arquivos, ?Projeto $record): bool
+    {
+        if (! $record || blank($record->numero_projeto) || blank($arquivos)) {
+            return false;
+        }
+
+        return PromobChecagemTotal::possuiXmlGeralValido(
+            array_map(fn ($arquivo) => $arquivo->getClientOriginalName(), $arquivos),
+            $record->numero_projeto,
+        );
     }
 
     /**
@@ -1118,6 +1329,23 @@ class ProjetoResource extends Resource
         }
 
         return true;
+    }
+
+    /**
+     * "Criar Itens" só pede confirmação quando existe um XML "000" pra
+     * comparar E pelo menos uma das 5 métricas de diferença é != 0 —
+     * chamado a partir de `requiresConfirmation()`/`modalHeading()`/
+     * `modalDescription()` da Action `criarItensPromob` (as três
+     * PRECISAM concordar entre si, ver comentário ali sobre
+     * `shouldOpenModal()`).
+     */
+    protected static function promobPrecisaConfirmarCriacao($livewire, ?Projeto $record): bool
+    {
+        $resultado = static::calcularResultadoPromob(static::arquivosXmlPromobAtuais($livewire), $record);
+
+        return isset($resultado['metricas'])
+            && $resultado['metricas']['tem_geral']
+            && ! static::diferencaMetricasZerada($resultado['metricas']['diferenca']);
     }
 
     /**

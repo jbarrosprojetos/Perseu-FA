@@ -5,13 +5,70 @@ use Perseu\Comercial\Services\PromobXmlParser;
 
 require_once __DIR__.'/../../../../webkul/support/tests/Helpers/TestBootstrapHelper.php';
 
+const PROJETO_ATUAL = '2630001';
+
 function xmlPromobFixture(string $nome): string
 {
     return file_get_contents(__DIR__.'/../Fixtures/Promob/'.$nome);
 }
 
+it('identifica projeto e item pelo nome do arquivo (7 dígitos + 3 dígitos)', function () {
+    expect(PromobChecagemTotal::identificarArquivo('2630001 - 001 Superior.xml'))
+        ->toBe(['numero_projeto' => '2630001', 'numero_item' => '001'])
+        ->and(PromobChecagemTotal::identificarArquivo('2630001 - 000 Total Geral.xml'))
+        ->toBe(['numero_projeto' => '2630001', 'numero_item' => '000']);
+});
+
+it('lança exceção quando o nome do arquivo não segue o padrão', function () {
+    PromobChecagemTotal::identificarArquivo('arquivo-sem-padrao.xml');
+})->throws(RuntimeException::class, 'não segue o padrão esperado');
+
+it('valida que todos os arquivos pertencem ao Projeto atual', function () {
+    $erros = PromobChecagemTotal::validarNomesDeArquivos([
+        '2630001 - 000 Total Geral.xml',
+        '2630001 - 001 Superior.xml',
+    ], PROJETO_ATUAL);
+
+    expect($erros)->toBeEmpty();
+});
+
+it('aponta erro claro quando um arquivo pertence a outro Projeto', function () {
+    $erros = PromobChecagemTotal::validarNomesDeArquivos([
+        '2630001 - 000 Total Geral.xml',
+        '9999999 - 001 Outro Projeto.xml',
+    ], PROJETO_ATUAL);
+
+    expect($erros)->toHaveCount(1)
+        ->and($erros[0])->toContain('9999999 - 001 Outro Projeto.xml')
+        ->and($erros[0])->toContain('Projeto 9999999')
+        ->and($erros[0])->toContain('Projeto '.PROJETO_ATUAL);
+});
+
+it('aponta erro claro quando o nome do arquivo está fora do padrão', function () {
+    $erros = PromobChecagemTotal::validarNomesDeArquivos([
+        '2630001 - 000 Total Geral.xml',
+        'arquivo-sem-padrao.xml',
+    ], PROJETO_ATUAL);
+
+    expect($erros)->toHaveCount(1)
+        ->and($erros[0])->toContain('arquivo-sem-padrao.xml');
+});
+
+it('detecta se existe um XML "000" válido (do Projeto atual) entre os arquivos', function () {
+    expect(PromobChecagemTotal::possuiXmlGeralValido([
+        '2630001 - 001 Superior.xml',
+    ], PROJETO_ATUAL))->toBeFalse()
+        ->and(PromobChecagemTotal::possuiXmlGeralValido([
+            '2630001 - 000 Total Geral.xml',
+        ], PROJETO_ATUAL))->toBeTrue()
+        ->and(PromobChecagemTotal::possuiXmlGeralValido([
+            '2630001 - 001 Superior.xml',
+            '9999999 - 000 De Outro Projeto.xml',
+        ], PROJETO_ATUAL))->toBeFalse();
+});
+
 it('extrai custo e preço do total e das categorias do XML "000"', function () {
-    $dados = PromobXmlParser::parse(xmlPromobFixture('260000 - 000 total ger.xml'));
+    $dados = PromobXmlParser::parse(xmlPromobFixture('2630001 - 000 Total Geral.xml'));
 
     expect($dados['custo'])->toBe(704.4)
         ->and($dados['preco'])->toBe(2145.2)
@@ -25,7 +82,7 @@ it('extrai custo e preço do total e das categorias do XML "000"', function () {
 });
 
 it('extrai custo e preço do total do XML de um item individual', function () {
-    $dados = PromobXmlParser::parse(xmlPromobFixture('260000 - 001 Superior.xml'));
+    $dados = PromobXmlParser::parse(xmlPromobFixture('2630001 - 001 Superior.xml'));
 
     expect($dados['custo'])->toBe(222.6)
         ->and($dados['preco'])->toBe(603.8);
@@ -43,9 +100,9 @@ it('extrai custo e preço do total do XML de um item individual', function () {
 
 it('confere o total dos 3 XMLs de exemplo e bate exatamente (custo/preço)', function () {
     $resultado = PromobChecagemTotal::checar([
-        '260000 - 000 total ger.xml' => xmlPromobFixture('260000 - 000 total ger.xml'),
-        '260000 - 001 Superior.xml'  => xmlPromobFixture('260000 - 001 Superior.xml'),
-        '260000 - 002 inferior.xml'  => xmlPromobFixture('260000 - 002 inferior.xml'),
+        '2630001 - 000 Total Geral.xml' => xmlPromobFixture('2630001 - 000 Total Geral.xml'),
+        '2630001 - 001 Superior.xml'    => xmlPromobFixture('2630001 - 001 Superior.xml'),
+        '2630001 - 002 Inferior.xml'    => xmlPromobFixture('2630001 - 002 Inferior.xml'),
     ]);
 
     expect($resultado['bateu'])->toBeTrue()
@@ -63,13 +120,13 @@ it('aponta o item com diferença quando um XML de item é alterado (custo/preço
     $xmlItem001Divergente = str_replace(
         '<ORDER VALUE="222.6">',
         '<ORDER VALUE="999.9">',
-        xmlPromobFixture('260000 - 001 Superior.xml'),
+        xmlPromobFixture('2630001 - 001 Superior.xml'),
     );
 
     $resultado = PromobChecagemTotal::checar([
-        '260000 - 000 total ger.xml' => xmlPromobFixture('260000 - 000 total ger.xml'),
-        '260000 - 001 Superior.xml'  => $xmlItem001Divergente,
-        '260000 - 002 inferior.xml'  => xmlPromobFixture('260000 - 002 inferior.xml'),
+        '2630001 - 000 Total Geral.xml' => xmlPromobFixture('2630001 - 000 Total Geral.xml'),
+        '2630001 - 001 Superior.xml'    => $xmlItem001Divergente,
+        '2630001 - 002 Inferior.xml'    => xmlPromobFixture('2630001 - 002 Inferior.xml'),
     ]);
 
     expect($resultado['bateu'])->toBeFalse();
@@ -93,7 +150,7 @@ it('aponta a categoria exata quando a divergência está na própria CATEGORY do
     // consistente no item, não só um número solto. Isso permite ao
     // diagnóstico (nível 2) achar a categoria "001" desalinhada entre
     // este arquivo e o XML "000" (que continua com 166.6).
-    $xmlOriginal = xmlPromobFixture('260000 - 001 Superior.xml');
+    $xmlOriginal = xmlPromobFixture('2630001 - 001 Superior.xml');
     $xmlItem001Divergente = str_replace('166.6', '150.0', str_replace('222.6', '206.0', $xmlOriginal));
 
     // Confere que o replace realmente encontrou e alterou o trecho —
@@ -101,9 +158,9 @@ it('aponta a categoria exata quando a divergência está na própria CATEGORY do
     expect($xmlItem001Divergente)->not->toBe($xmlOriginal);
 
     $resultado = PromobChecagemTotal::checar([
-        '260000 - 000 total ger.xml' => xmlPromobFixture('260000 - 000 total ger.xml'),
-        '260000 - 001 Superior.xml'  => $xmlItem001Divergente,
-        '260000 - 002 inferior.xml'  => xmlPromobFixture('260000 - 002 inferior.xml'),
+        '2630001 - 000 Total Geral.xml' => xmlPromobFixture('2630001 - 000 Total Geral.xml'),
+        '2630001 - 001 Superior.xml'    => $xmlItem001Divergente,
+        '2630001 - 002 Inferior.xml'    => xmlPromobFixture('2630001 - 002 Inferior.xml'),
     ]);
 
     expect($resultado['bateu'])->toBeFalse()
@@ -114,7 +171,7 @@ it('aponta a categoria exata quando a divergência está na própria CATEGORY do
 });
 
 it('calcula as 5 métricas do VBA (Peças/m²/MLinear/Custo/Misc) do XML "000"', function () {
-    $metricas = PromobXmlParser::metricas(xmlPromobFixture('260000 - 000 total ger.xml'));
+    $metricas = PromobXmlParser::metricas(xmlPromobFixture('2630001 - 000 Total Geral.xml'));
 
     expect($metricas['pecas'])->toBe(51)
         ->and(round($metricas['m2'], 2))->toBe(8.23)
@@ -124,8 +181,8 @@ it('calcula as 5 métricas do VBA (Peças/m²/MLinear/Custo/Misc) do XML "000"',
 });
 
 it('calcula as 5 métricas do VBA de um XML de item individual', function () {
-    $metricas001 = PromobXmlParser::metricas(xmlPromobFixture('260000 - 001 Superior.xml'));
-    $metricas002 = PromobXmlParser::metricas(xmlPromobFixture('260000 - 002 inferior.xml'));
+    $metricas001 = PromobXmlParser::metricas(xmlPromobFixture('2630001 - 001 Superior.xml'));
+    $metricas002 = PromobXmlParser::metricas(xmlPromobFixture('2630001 - 002 Inferior.xml'));
 
     expect($metricas001['pecas'])->toBe(12)
         ->and(round($metricas001['custo'], 2))->toBe(166.6)
@@ -135,9 +192,9 @@ it('calcula as 5 métricas do VBA de um XML de item individual', function () {
 
 it('confere as 5 métricas dos 3 XMLs de exemplo e a diferença dá zero em todas', function () {
     $resultado = PromobChecagemTotal::checar([
-        '260000 - 000 total ger.xml' => xmlPromobFixture('260000 - 000 total ger.xml'),
-        '260000 - 001 Superior.xml'  => xmlPromobFixture('260000 - 001 Superior.xml'),
-        '260000 - 002 inferior.xml'  => xmlPromobFixture('260000 - 002 inferior.xml'),
+        '2630001 - 000 Total Geral.xml' => xmlPromobFixture('2630001 - 000 Total Geral.xml'),
+        '2630001 - 001 Superior.xml'    => xmlPromobFixture('2630001 - 001 Superior.xml'),
+        '2630001 - 002 Inferior.xml'    => xmlPromobFixture('2630001 - 002 Inferior.xml'),
     ]);
 
     $metricas = $resultado['metricas'];
@@ -167,8 +224,8 @@ it('confere as 5 métricas dos 3 XMLs de exemplo e a diferença dá zero em toda
 
 it('soma só as métricas parciais, sem calcular diferença, quando o XML "000" não é enviado', function () {
     $resultado = PromobChecagemTotal::checar([
-        '260000 - 001 Superior.xml' => xmlPromobFixture('260000 - 001 Superior.xml'),
-        '260000 - 002 inferior.xml' => xmlPromobFixture('260000 - 002 inferior.xml'),
+        '2630001 - 001 Superior.xml' => xmlPromobFixture('2630001 - 001 Superior.xml'),
+        '2630001 - 002 Inferior.xml' => xmlPromobFixture('2630001 - 002 Inferior.xml'),
     ]);
 
     expect($resultado['metricas']['tem_geral'])->toBeFalse()

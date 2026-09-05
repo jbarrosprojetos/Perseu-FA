@@ -57,11 +57,17 @@ return [
             ],
             'promob' => [
                 'modal' => [
-                    'heading'       => 'Checagem do Promob',
-                    'description'   => 'Envie o XML "000" (total do projeto) e os XMLs de cada item exportados pelo Promob para conferir se os totais batem.',
-                    'upload-label'  => 'Arquivos XML',
-                    'upload-helper' => 'Selecione o XML "000" (total) e os XMLs de cada item, todos de uma vez.',
-                    'processar'     => 'Checar Total',
+                    'heading'                        => 'Checagem do Promob',
+                    'description'                    => 'Envie o XML "000" (total do projeto) e os XMLs de cada item exportados pelo Promob para conferir se os totais batem.',
+                    'upload-label'                   => 'Arquivos XML',
+                    'upload-helper'                  => 'Selecione o XML "000" (total) e os XMLs de cada item, todos de uma vez.',
+                    'processar'                      => 'Checar Total',
+                    'criar-itens'                    => 'Criar Itens',
+                    'confirmar-criacao-heading'      => 'Divergência de valores',
+                    'confirmar-criacao-description'  => 'Arquivos com divergência de valores. Confirma a criação dos Itens?',
+                ],
+                'erros' => [
+                    'projeto-nao-salvo' => 'É preciso que o Projeto já tenha um número (salvo pelo menos uma vez) antes de enviar XMLs do Promob.',
                 ],
                 'resultado' => [
                     'titulo'                => 'Comparação Total Geral',
