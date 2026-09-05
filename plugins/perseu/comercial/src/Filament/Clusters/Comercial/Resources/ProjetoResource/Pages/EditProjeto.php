@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Perseu\Comercial\Filament\Clusters\Comercial\Resources\ProjetoResource;
 use Perseu\Comercial\Filament\Clusters\Comercial\Resources\ProjetoResource\Concerns\HasPromobResultado;
 use Perseu\Comercial\Models\ItemProjeto;
+use Perseu\Comercial\Models\NotaProjeto;
 
 class EditProjeto extends EditRecord
 {
@@ -107,10 +108,19 @@ class EditProjeto extends EditRecord
      * `null` (sem redirecionar) pra elas por padrão; confirmado também
      * por teste (`Livewire::test()->assertRedirect()` falha, como
      * esperado, pra `confirmarItemAvulso` em modo edição).
+     *
+     * `NotaProjeto` (2026-09-05, tarefa "Notas do Projeto") ganhou a
+     * MESMA checagem — `excluirNota{id}` (`ProjetoResource::acaoExcluirNota()`)
+     * usa `DeleteAction::make(...)->record($nota)` pelo mesmo motivo
+     * puramente visual/de confirmação, uma Action ANINHADA dentro do
+     * modal "Notas do Projeto" (nível 2 de `mountedActions`, não o
+     * nível 1 de `ItemProjeto` acima) — sem esta entrada aqui, excluir
+     * uma nota redirecionaria pra `ListProjetos` do mesmo jeito que
+     * excluir um Item redirecionava antes da correção original.
      */
     public function getDefaultActionSuccessRedirectUrl(Action $action): ?string
     {
-        if ($action->getRecord() instanceof ItemProjeto) {
+        if ($action->getRecord() instanceof ItemProjeto || $action->getRecord() instanceof NotaProjeto) {
             return null;
         }
 

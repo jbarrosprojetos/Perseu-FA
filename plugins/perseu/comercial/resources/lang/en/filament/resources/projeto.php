@@ -113,6 +113,38 @@ return [
                 'valor-total-label'      => 'Total Price',
             ],
         ],
+        'notas' => [
+            'acao'            => 'Project Notes',
+            'nova-nota-label' => 'New Note',
+            'adicionar'       => 'Add Note',
+            'editar'          => 'Edit',
+            'excluir'         => 'Delete',
+            'salvar'          => 'Save',
+            'texto-label'     => 'Note',
+            'autor-sistema'   => 'System',
+            'badge-sistema'   => 'System',
+            'modal' => [
+                'heading' => 'Project Notes',
+            ],
+            'modal-editar' => [
+                'heading' => 'Edit note :numero',
+            ],
+            'excluir-confirmacao' => [
+                'heading'     => 'Delete note :numero?',
+                'description' => 'This action cannot be undone.',
+            ],
+            'validacao' => [
+                'texto-obrigatorio' => 'Write the note before saving.',
+            ],
+            'notification' => [
+                'projeto-nao-salvo-title' => 'Save the Project first',
+                'projeto-nao-salvo-body'  => 'The Project data (Header) must be saved before adding notes.',
+                'nota-adicionada'         => 'Note added successfully.',
+                'nota-atualizada'         => 'Note updated successfully.',
+                'nota-excluida'           => 'Note deleted successfully.',
+                'prazo-expirado'          => 'This note can no longer be edited or deleted (the 24-hour window has closed).',
+            ],
+        ],
         'descricao'      => 'Job Name',
         'tipo-projeto'   => 'Project Type',
         'situacoes'      => 'Statuses',

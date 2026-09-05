@@ -79,6 +79,11 @@ class Projeto extends Model
         return $this->hasMany(ItemProjeto::class);
     }
 
+    public function notas(): HasMany
+    {
+        return $this->hasMany(NotaProjeto::class);
+    }
+
     protected static function boot(): void
     {
         parent::boot();

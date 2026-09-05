@@ -19,6 +19,7 @@ return [
     'subject_types' => [
         'projeto'          => 'Projeto',
         'item-projeto'     => 'Item de Projeto',
+        'nota-projeto'     => 'Nota de Projeto',
         'tipo-projeto'     => 'Tipo de Projeto',
         'situacao-projeto' => 'Situação de Projeto',
         'referencia-preco' => 'Preço',

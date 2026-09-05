@@ -25,6 +25,7 @@ use Filament\Schemas\Components\Actions;
 use Filament\Schemas\Components\Flex;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Group;
+use Filament\Schemas\Components\Html;
 use Filament\Schemas\Components\Icon;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Text;
@@ -49,6 +50,7 @@ use Perseu\Comercial\Filament\Clusters\Comercial\Resources\ProjetoResource\Pages
 use Perseu\Comercial\Filament\Clusters\Comercial\Resources\ProjetoResource\Pages\ListProjetos;
 use Perseu\Comercial\Filament\Clusters\Projetos;
 use Perseu\Comercial\Models\ItemProjeto;
+use Perseu\Comercial\Models\NotaProjeto;
 use Perseu\Comercial\Models\Projeto;
 use Perseu\Comercial\Models\ReferenciaPreco;
 use Perseu\Comercial\Services\PromobChecagemTotal;
@@ -160,6 +162,44 @@ class ProjetoResource extends Resource
                 Section::make(__('comercial::filament/resources/projeto.form.sections.cabecalho.title'))
                     ->description(__('comercial::filament/resources/projeto.form.sections.cabecalho.description'))
                     ->columnSpanFull()
+                    // Ícone de "Notas do Projeto" no canto direito do
+                    // título da Section — `Section::headerActions()`
+                    // (não um componente dentro do `schema()`) é o
+                    // mecanismo nativo do Filament pra isso, confirmado
+                    // lendo `vendor/filament/schemas/src/Components/
+                    // Section.php` (`afterHeader()` já monta
+                    // `getHeaderActions()` automaticamente). `->visible()`
+                    // só quando o Projeto já foi salvo pelo menos uma vez
+                    // — mesmo critério já usado por "Atribuir Processos"
+                    // (`EditProjeto::getFormActions()`): sem um
+                    // `projeto_id`, não há onde gravar uma nota ainda.
+                    // Ver CLAUDE.md, "Notas do Projeto", pro mecanismo
+                    // completo (Action aninhada dentro de Action, mesmo
+                    // padrão já usado por editar/excluir de Item Avulso,
+                    // só que um nível mais profundo).
+                    ->headerActions([
+                        Action::make('notasProjeto')
+                            ->label(__('comercial::filament/resources/projeto.form.notas.acao'))
+                            ->icon('heroicon-o-document-text')
+                            ->color('gray')
+                            ->visible(fn (?Projeto $record) => $record !== null)
+                            ->modalHeading(__('comercial::filament/resources/projeto.form.notas.modal.heading'))
+                            ->modalWidth(Width::Large)
+                            // SEM botão de submit automático — este modal
+                            // é só um CONTAINER (lista + formulário de
+                            // nova nota + ações por nota), mesmo papel do
+                            // modal Promob (`inserirItemPromob`); toda
+                            // interação real acontece via as Actions
+                            // internas (`adicionarNota`/`editarNota{id}`/
+                            // `excluirNota{id}`), nunca pelo submit padrão.
+                            ->modalSubmitAction(false)
+                            // Reset SEMPRE ao abrir, nunca ao fechar —
+                            // mesma lição de Item Avulso/Promob: o botão
+                            // "Cancelar" fecha via Alpine puro, sem
+                            // nenhuma requisição ao servidor.
+                            ->mountUsing(fn (?Schema $schema) => $schema?->fill(['nova_nota' => null]))
+                            ->form(fn (?Projeto $record): array => static::camposModalNotasProjeto($record)),
+                    ])
                     ->schema([
                         // Linha 1: numero_projeto/revisao/data_cadastro (1
                         // coluna cada) + descricao "Nome da Obra" (4) +
@@ -1932,6 +1972,305 @@ class ProjetoResource extends Resource
         Notification::make()
             ->success()
             ->title(__('comercial::filament/resources/projeto.form.itens.notification.item-excluido'))
+            ->send();
+    }
+
+    /**
+     * Campos do modal "Notas do Projeto" (ícone no cabeçalho da Section
+     * "Cabeçalho", ver `form()` acima) — lista das notas já existentes
+     * (mais recente primeiro), campo de nova nota e o botão "Adicionar
+     * Nota". Sem `$record` (Projeto ainda não salvo): o ícone nem
+     * aparece (`->visible()` do próprio `notasProjeto`), então este
+     * método só roda de fato com um Projeto já existente — o `?Projeto`
+     * aqui é só pra manter a mesma assinatura defensiva usada em outros
+     * métodos deste Resource.
+     *
+     * @return array<int, \Filament\Schemas\Components\Component>
+     */
+    protected static function camposModalNotasProjeto(?Projeto $record): array
+    {
+        return [
+            // Lista das notas já existentes — lida DIRETO do banco a
+            // cada avaliação do Closure (sem property de cache, ao
+            // contrário de `EditProjeto::$itensCarregados`): este Group
+            // vive dentro do Schema PRÓPRIO da Action `notasProjeto`
+            // (`mountedActions.{n}.data`), construído só quando o modal
+            // é montado (`mountAction()`), não no `mount()` da PÁGINA —
+            // o achado de timing que motivou `$itensCarregados` (Schema
+            // avaliado cedo demais por `fillForm()` durante o `mount()`
+            // da página, antes da property ser hidratada) não se aplica
+            // aqui. Confirmado por precedente já validado: o `Text` do
+            // resultado do Promob (`renderizarResultadoPromob()`) já lê
+            // um valor atualizado a cada nova interação DENTRO do mesmo
+            // modal aberto, prova de que Closures de um Schema de Action
+            // já montada são reavaliadas a cada re-render do Livewire.
+            Group::make()
+                ->schema(fn () => $record
+                    ? $record->notas()
+                        ->orderByDesc('numero_nota')
+                        ->get()
+                        ->map(fn (NotaProjeto $nota) => static::linhaExibicaoNota($nota))
+                        ->all()
+                    : []),
+
+            RichEditor::make('nova_nota')
+                ->label(__('comercial::filament/resources/projeto.form.notas.nova-nota-label'))
+                // SEM `->toolbarButtons()` — mesmo padrão já decidido pra
+                // Descrição do Item Avulso: começa com o conjunto DEFAULT
+                // completo do Filament, só reduzir depois com uso real.
+                ->columnSpanFull(),
+
+            // Action FLAT (sem `->form()` próprio) declarada como IRMÃ do
+            // `RichEditor::make('nova_nota')` acima, dentro do MESMO
+            // array retornado por este método — por isso `Get`/`Set`
+            // injetados no `->action()` dela resolvem pro MESMO Schema
+            // de `nova_nota` (`$action->getSchemaContainer()` aponta pro
+            // container onde a Action está DECLARADA, não pra um Schema
+            // próprio — só existe Schema próprio quando a Action tem
+            // `->form()`). Mesmo mecanismo já usado por `inserirItem`/
+            // `mobilizacaoFrete` lendo `$get('origem_item_selecionada')`,
+            // campo IRMÃO deles na mesma `Actions::make([...])`.
+            Actions::make([
+                Action::make('adicionarNota')
+                    ->label(__('comercial::filament/resources/projeto.form.notas.adicionar'))
+                    ->action(function (Get $get, Set $set, ?Projeto $record): void {
+                        static::adicionarNotaProjeto($get, $set, $record);
+                    }),
+            ]),
+        ];
+    }
+
+    /**
+     * Valida (mínimo: não vazio, reaproveitando `textoPlanoRichEditor()`
+     * já usado pela Descrição de Item Avulso) e persiste uma nova nota
+     * de USUÁRIO (`tipo_sistema = false`, `usuario_id` = autenticado).
+     * `DB::transaction()` + `lockForUpdate()` nas notas já existentes
+     * daquele Projeto — mesma disciplina de concorrência já usada por
+     * `salvarItemAvulso()` pro `numero_item` (ver `NotaProjeto::boot()`
+     * pro `MAX()+1` de `numero_nota`).
+     *
+     * Sem `$record` (Projeto ainda sem salvar — só possível se alguém
+     * forçar a Action por fora da UI, já que o ícone nem aparece nesse
+     * caso): bloqueia com a mesma notificação de "salve primeiro" já
+     * usada por Item Avulso.
+     *
+     * `$set('nova_nota', null)` ao final — reseta o campo pra poder
+     * adicionar outra nota em seguida SEM fechar o modal (o modal só
+     * fecha pelo "Cancelar" nativo, ver `notasProjeto` acima).
+     */
+    protected static function adicionarNotaProjeto(Get $get, Set $set, ?Projeto $record): void
+    {
+        if (! $record) {
+            Notification::make()
+                ->warning()
+                ->title(__('comercial::filament/resources/projeto.form.notas.notification.projeto-nao-salvo-title'))
+                ->body(__('comercial::filament/resources/projeto.form.notas.notification.projeto-nao-salvo-body'))
+                ->send();
+
+            return;
+        }
+
+        $texto = (string) $get('nova_nota');
+
+        if (blank(static::textoPlanoRichEditor($texto))) {
+            Notification::make()
+                ->warning()
+                ->title(__('comercial::filament/resources/projeto.form.notas.validacao.texto-obrigatorio'))
+                ->send();
+
+            return;
+        }
+
+        DB::transaction(function () use ($record, $texto): void {
+            $record->notas()->lockForUpdate()->get();
+
+            $record->notas()->create([
+                'usuario_id'   => auth()->id(),
+                'texto'        => $texto,
+                'tipo_sistema' => false,
+            ]);
+        });
+
+        $set('nova_nota', null);
+
+        Notification::make()
+            ->success()
+            ->title(__('comercial::filament/resources/projeto.form.notas.notification.nota-adicionada'))
+            ->send();
+    }
+
+    /**
+     * Uma linha de EXIBIÇÃO de uma nota já existente, dentro do modal
+     * "Notas do Projeto" — número/autor/data-hora (+ badge "Sistema"
+     * quando `tipo_sistema`) numa linha, o texto (HTML do RichEditor)
+     * renderizado de verdade logo abaixo via `Html::make()` (diferente
+     * da listagem de Item Avulso, que mostra só texto puro — aqui não
+     * há a mesma restrição de altura de uma grid de planilha, então a
+     * formatação completa aparece direto, sem precisar entrar em modo
+     * edição pra ver negrito/listas/etc.). Ícones de editar/excluir só
+     * aparecem quando `podeEditar()`/`podeExcluir()` (ver `NotaProjeto`)
+     * são verdadeiros — nunca para nota de sistema, nunca fora do prazo
+     * de 24h.
+     */
+    protected static function linhaExibicaoNota(NotaProjeto $nota): Group
+    {
+        $podeEditar = $nota->podeEditar();
+        $podeExcluir = $nota->podeExcluir();
+        $autor = $nota->usuario?->name ?? __('comercial::filament/resources/projeto.form.notas.autor-sistema');
+
+        return Group::make()
+            ->key("nota-projeto-{$nota->id}")
+            ->extraAttributes(['style' => 'padding-bottom: .75rem; margin-bottom: .75rem; border-bottom: 1px solid rgba(0,0,0,.08);'])
+            ->schema([
+                Grid::make(12)
+                    ->extraAttributes(['style' => 'gap: 1rem !important;'])
+                    ->schema([
+                        Flex::make(array_values(array_filter([
+                            Text::make('#'.$nota->numero_nota)->weight(FontWeight::Bold),
+                            Text::make($autor),
+                            Text::make($nota->created_at?->format('d/m/Y H:i')),
+                            $nota->tipo_sistema
+                                ? Text::make(__('comercial::filament/resources/projeto.form.notas.badge-sistema'))->badge()->color('gray')
+                                : null,
+                        ])))
+                            ->dense()
+                            ->columnSpan(9),
+
+                        // `ActionGroup` (dropdown), não dois ícones lado a
+                        // lado — mesmo critério já usado em
+                        // `linhaExibicaoItem()`. Vazio (`[]`) quando nem
+                        // editar nem excluir são permitidos — a coluna
+                        // fica sem nenhum ícone, não com um dropdown vazio.
+                        Actions::make(
+                            ($podeEditar || $podeExcluir)
+                                ? [
+                                    ActionGroup::make(array_values(array_filter([
+                                        $podeEditar ? static::acaoEditarNota($nota) : null,
+                                        $podeExcluir ? static::acaoExcluirNota($nota) : null,
+                                    ])))
+                                        ->icon('heroicon-m-ellipsis-vertical')
+                                        ->color('gray'),
+                                ]
+                                : []
+                        )
+                            ->alignEnd()
+                            ->columnSpan(3),
+                    ]),
+
+                Html::make(new HtmlString((string) $nota->texto)),
+            ]);
+    }
+
+    /**
+     * Action de EDITAR uma nota — mesmo padrão técnico de
+     * `editarItemAvulso{id}` (Action aninhada com `->form()` próprio,
+     * `->mountUsing()` preenche com o texto atual), só que aninhada UM
+     * NÍVEL A MAIS: aqui ela vive dentro do Schema da Action
+     * `notasProjeto` (o modal "Notas do Projeto"), não direto no Schema
+     * da página. `$nota` fica fechado no Closure — a mesma nota pra qual
+     * `linhaExibicaoNota()` já está rodando.
+     */
+    protected static function acaoEditarNota(NotaProjeto $nota): Action
+    {
+        return Action::make("editarNota{$nota->id}")
+            ->label(__('comercial::filament/resources/projeto.form.notas.editar'))
+            ->icon('heroicon-o-pencil-square')
+            ->modalHeading(__('comercial::filament/resources/projeto.form.notas.modal-editar.heading', ['numero' => $nota->numero_nota]))
+            ->modalSubmitActionLabel(__('comercial::filament/resources/projeto.form.notas.salvar'))
+            ->mountUsing(fn (?Schema $schema) => $schema?->fill(['texto' => $nota->texto]))
+            ->form([
+                RichEditor::make('texto')
+                    ->label(__('comercial::filament/resources/projeto.form.notas.texto-label'))
+                    ->required()
+                    ->rule(fn () => function (string $attribute, $value, \Closure $fail): void {
+                        if (blank(static::textoPlanoRichEditor($value))) {
+                            $fail(__('comercial::filament/resources/projeto.form.notas.validacao.texto-obrigatorio'));
+                        }
+                    })
+                    ->validationMessages([
+                        'required' => __('comercial::filament/resources/projeto.form.notas.validacao.texto-obrigatorio'),
+                    ])
+                    ->columnSpanFull(),
+            ])
+            ->action(fn (array $data) => static::salvarEdicaoNota($nota, $data));
+    }
+
+    /**
+     * `DeleteAction` só pelo visual/confirmação padrão (mesmo critério
+     * de `excluirItemProjeto{id}`) — `->record($nota)` obrigatório (este
+     * componente não vive dentro de uma Table de verdade).
+     */
+    protected static function acaoExcluirNota(NotaProjeto $nota): DeleteAction
+    {
+        return DeleteAction::make("excluirNota{$nota->id}")
+            ->label(__('comercial::filament/resources/projeto.form.notas.excluir'))
+            ->record($nota)
+            ->modalHeading(__('comercial::filament/resources/projeto.form.notas.excluir-confirmacao.heading', ['numero' => $nota->numero_nota]))
+            ->modalDescription(__('comercial::filament/resources/projeto.form.notas.excluir-confirmacao.description'))
+            ->action(fn () => static::excluirNotaProjeto($nota));
+    }
+
+    /**
+     * Releitura fresca da nota (`NotaProjeto::find()`, não o `$nota`
+     * fechado no Closure) + `podeEditar()` checado de novo aqui — nunca
+     * confiar só em esconder o ícone na tela (ver CLAUDE.md, regra de
+     * 24h): entre a hora em que a listagem foi montada e o clique em
+     * "Salvar" no modal de edição, o prazo pode ter expirado (mesmo que
+     * pouco provável, é o mesmo cuidado já validado por
+     * `salvarItemAvulso()`/Imposto obsoleto — nunca confiar em dado já
+     * lido antes da ação de gravação de fato acontecer).
+     */
+    protected static function salvarEdicaoNota(NotaProjeto $nota, array $data): void
+    {
+        $notaAtual = NotaProjeto::find($nota->id);
+
+        if (! $notaAtual || ! $notaAtual->podeEditar()) {
+            Notification::make()
+                ->danger()
+                ->title(__('comercial::filament/resources/projeto.form.notas.notification.prazo-expirado'))
+                ->send();
+
+            return;
+        }
+
+        $texto = (string) $data['texto'];
+
+        if (trim((string) $notaAtual->texto) !== trim($texto)) {
+            $notaAtual->update(['texto' => $texto]);
+        }
+
+        Notification::make()
+            ->success()
+            ->title(__('comercial::filament/resources/projeto.form.notas.notification.nota-atualizada'))
+            ->send();
+    }
+
+    /**
+     * Exclusão SIMPLES (sem renumeração — ver CLAUDE.md/`NotaProjeto`),
+     * dentro de `DB::transaction()` (pedido explícito da tarefa, mesmo
+     * sendo uma única escrita hoje). Mesma releitura fresca +
+     * `podeExcluir()` de `salvarEdicaoNota()` acima, pelo mesmo motivo.
+     */
+    protected static function excluirNotaProjeto(NotaProjeto $nota): void
+    {
+        $notaAtual = NotaProjeto::find($nota->id);
+
+        if (! $notaAtual || ! $notaAtual->podeExcluir()) {
+            Notification::make()
+                ->danger()
+                ->title(__('comercial::filament/resources/projeto.form.notas.notification.prazo-expirado'))
+                ->send();
+
+            return;
+        }
+
+        DB::transaction(function () use ($notaAtual): void {
+            $notaAtual->delete();
+        });
+
+        Notification::make()
+            ->success()
+            ->title(__('comercial::filament/resources/projeto.form.notas.notification.nota-excluida'))
             ->send();
     }
 

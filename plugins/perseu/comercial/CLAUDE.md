@@ -1528,6 +1528,182 @@ com o mesmo formulário):
    a estratégia CERTA — nunca foi o reset em si que falhava, e sim ler
    a entrada errada depois.
 
+### Notas do Projeto: tabela `notas_projeto`, regra de 24h e Actions aninhadas em modal (2026-09-05)
+
+Histórico de notas/anotações por Projeto — ícone (`heroicon-o-document-text`)
+no canto direito do título da Section "Cabeçalho" (`Section::headerActions()`,
+`->visible()` só com o Projeto já salvo, mesmo critério de "Atribuir
+Processos"), abrindo um modal com a lista de notas + campo de nova nota.
+
+**Model/migration** — `Perseu\Comercial\Models\NotaProjeto`, tabela
+`notas_projeto` (migration `2026_09_05_170000_create_notas_projeto_table`,
+adicionada ao array `->hasMigrations([...])` de `ComercialServiceProvider`,
+mesmo alerta já documentado pra `itens_projeto`). `LogsBusinessActivity`,
+registrada em `SubjectTypeCatalog` (rótulo "Nota de Projeto", busca por
+`texto`/`numero_nota`, referência `"#{numero_nota} — {texto truncado}"`) —
+sem `TrashCatalog` (sem `SoftDeletes`, sem Lixeira própria, mesma
+divergência de `ItemProjeto`). Sem Resource/Policy própria — vive 100%
+dentro do form de `ProjetoResource`, gated pela `ProjetoPolicy::update`
+já existente, mesma decisão de `ItemProjeto` (por isso também ausente de
+`config/filament-shield.php`).
+
+- **`usuario_id`**: FK nullable pra `users`, `nullOnDelete()` (não
+  `cascadeOnDelete()` — perder o usuário autor não deveria apagar o
+  HISTÓRICO da nota). **Decisão registrada**: uma nota de USUÁRIO
+  sempre grava `auth()->id()` no momento da criação (nunca nulo na
+  prática); a coluna é nullable só pra sobreviver a uma exclusão futura
+  do usuário autor e pra uma nota de SISTEMA que não tenha um usuário
+  claro por trás da ação que a gerou. A geração automática de notas de
+  sistema em si (ex.: "Item X foi excluído") é uma tarefa FUTURA — esta
+  tarefa só preparou `tipo_sistema` e a regra de que, se existirem,
+  nunca são editáveis/excluíveis pela tela.
+- **`numero_nota`**: `unsignedInteger`, único por `projeto_id`
+  (`unique(['projeto_id', 'numero_nota'])`), gerado em
+  `NotaProjeto::boot()` (`creating`) com o MESMO critério de
+  `ItemProjeto::numero_item` (`MAX()` daquele Projeto + 1, começando em
+  1) — mas **SEM renumeração ao excluir** (diferente de `ItemProjeto`):
+  excluir a nota `1` de `1`/`2`/`3` deixa `2`/`3` como estão, e a
+  próxima nota criada vira `4` (não reaproveita o `1` livre). Decisão
+  explícita da tarefa: aqui o número é só um identificador sequencial
+  de cada nota ao longo do tempo (não uma lista visível ao
+  cliente/proposta como os itens), então preservar a IDENTIDADE de cada
+  nota já existente importa mais que manter a sequência contígua.
+  Confirmado por teste (ver "Validação" abaixo): excluir a nota `1`
+  mantém `numero_nota` da nota `2` inalterado, e a nota seguinte criada
+  recebe `3` (não `1`).
+- **SEM `SoftDeletes`** — divergência deliberada, mas por um motivo
+  DIFERENTE do de `ItemProjeto` (que precisa do slot numérico
+  realmente livre pra renumeração, que aqui não existe): uma nota de
+  USUÁRIO excluída dentro do prazo de 24h não precisa de Lixeira
+  própria, e uma nota de SISTEMA nunca é excluída pela UI
+  (`tipo_sistema` já garante isso sozinho, sem precisar de
+  `SoftDeletes` como segunda trava).
+
+**Regra de prazo de 24 horas** (`NotaProjeto::podeEditar()`/
+`podeExcluir()`, hoje idênticos — mantidos como dois métodos separados
+porque a tarefa previu que possam divergir no futuro, mesmo sem
+necessidade concreta ainda):
+
+1. Nota de USUÁRIO (`tipo_sistema = false`): editável/excluível pela
+   tela só dentro de 24h a partir de `created_at`
+   (`created_at->addHours(24)->isFuture()`). Depois disso, permanente
+   (somente leitura) — nenhum ícone de editar/excluir aparece.
+2. Nota de SISTEMA (`tipo_sistema = true`): NUNCA editável/excluível
+   pela tela, independente do prazo — só o próprio sistema (código
+   interno futuro) poderia remover, não implementado agora.
+3. **Dupla validação, nunca só esconder o botão**: `linhaExibicaoNota()`
+   usa `podeEditar()`/`podeExcluir()` pra decidir se o `ActionGroup`
+   (editar/excluir) aparece, MAS `salvarEdicaoNota()`/
+   `excluirNotaProjeto()` releem a nota FRESCA do banco
+   (`NotaProjeto::find($nota->id)`, não o `$nota` fechado no Closure da
+   listagem) e checam de novo antes de gravar/excluir — mesmo cuidado
+   já validado por `salvarItemAvulso()`/Imposto obsoleto (nunca confiar
+   em dado lido antes do clique de fato acontecer). Também estruturalmente
+   reforçado: como o `ActionGroup` só é CONSTRUÍDO quando
+   `podeEditar()`/`podeExcluir()` são verdadeiros, uma nota fora do
+   prazo/de sistema nem tem a Action `editarNota{id}`/`excluirNota{id}`
+   REGISTRADA na árvore do Schema — não é só um botão escondido por
+   CSS, a Action simplesmente não existe pra ser encontrada/chamada.
+
+**Conteúdo do modal** (`camposModalNotasProjeto()`): lista das notas
+(`Group::make()->schema(fn () => $record->notas()->orderByDesc('numero_nota')
+->get()->map(...)->all())`, mais recente primeiro, lida DIRETO do banco
+a cada avaliação — sem property de cache como `EditProjeto
+::$itensCarregados`, porque este Group vive dentro do Schema PRÓPRIO da
+Action `notasProjeto` (construído só quando o modal monta via
+`mountAction()`, não no `mount()` da página) — o achado de timing que
+motivou `$itensCarregados` (Schema avaliado cedo demais por
+`fillForm()` durante o `mount()` da página) não se aplica aqui) + campo
+`RichEditor::make('nova_nota')` (toolbar DEFAULT completa, mesmo padrão
+de Item Avulso) + Action FLAT `adicionarNota` (sem `->form()` próprio,
+`Get`/`Set` resolvem pro MESMO Schema de `nova_nota` por serem
+declaradas como IRMÃS no mesmo array, igual a `inserirItem`/
+`mobilizacaoFrete` lendo `origem_item_selecionada`). `notasProjeto`
+usa `->modalSubmitAction(false)` — é só um CONTAINER, toda interação
+real acontece via `adicionarNota`/`editarNota{id}`/`excluirNota{id}`;
+fecha só pelo "Cancelar" nativo.
+
+Cada nota (`linhaExibicaoNota()`): número/autor/data-hora (+ badge
+"Sistema" via `Text::make(...)->badge()` quando `tipo_sistema`) numa
+linha (`Flex` + `Grid(12)`), texto renderizado como HTML DE VERDADE via
+`Filament\Schemas\Components\Html::make(new HtmlString($nota->texto))`
+— diferente da listagem de Item Avulso (texto puro, `Str::stripTags()`)
+porque aqui não há a mesma restrição de altura de uma grid de planilha.
+Editar (`acaoEditarNota()`, Action com `->form()` próprio, mesmo padrão
+de `editarItemAvulso{id}`) e Excluir (`acaoExcluirNota()`, `DeleteAction
+->record($nota)`, confirmação nativa) só aparecem quando permitido —
+`ActionGroup` (dropdown), não dois ícones lado a lado, mesmo critério
+de `linhaExibicaoItem()`.
+
+**Achado real confirmado por teste (2026-09-05): `schemaComponent`
+correto pra montar uma Action ANINHADA dentro de outra Action já
+montada não é o nome do schema onde a Action-PAI foi DECLARADA, e sim
+`"mountedActionSchema{indice}"` (o schema DEDICADO que a Action-pai já
+montada recebeu).** `Filament\Actions\Concerns\InteractsWithActions
+::resolveSchemaComponentAction()` faz `$schema = $this->getSchema($schemaName);
+$schema->getAction($nome, ...)` — ou seja, o `schemaComponent` informado
+tem que apontar pro Schema que CONTÉM a Action procurada como
+descendente, não pro Schema de onde a Action-PAI foi originalmente
+declarada. Pra `editarItemAvulso{id}` (Item Avulso, um nível só —
+declarada direto no Schema `form` da página), `schemaComponent: 'form'`
+funciona porque a Action-pai (a página) e a Action procurada vivem no
+MESMO Schema. Mas `adicionarNota`/`editarNota{id}`/`excluirNota{id}`
+(Notas do Projeto) vivem dentro do `->form()` PRÓPRIO da Action
+`notasProjeto` já montada — um Schema SEPARADO, cacheado por
+`InteractsWithActions::getMountedActionSchema()` sob a chave
+`"mountedActionSchema{$indiceDeAninhamento}"` (não anexado como filho do
+Schema `form` da página) — `schemaComponent: 'form'` NÃO encontra essas
+3 Actions (`ActionNotResolvableException`, silenciosamente engolida por
+`mountAction()`, que só desmonta e retorna `null` sem erro visível).
+Corrigido usando `schemaComponent: 'mountedActionSchema0'` (índice `0`
+= posição de `notasProjeto` na pilha `mountedActions` no momento do
+teste) pra montar as 3 Actions aninhadas — depois de montada,
+`editarNota{id}`/`excluirNota{id}` passam a ser elas mesmas o TOPO da
+pilha (índice 1), e `callMountedAction()` (sem nenhum `context`) já as
+alcança normalmente, sem precisar desse cálculo de novo. **Isso é uma
+particularidade de TESTE (`Livewire::test()->call('mountAction', ...)`
+simulando manualmente o clique)** — no navegador de verdade, o Blade/JS
+do Filament já calcula e embute o `schemaComponent` certo sozinho no
+`wire:click` de qualquer Action aninhada, então nenhuma mudança de
+código foi necessária, só o entendimento de COMO testar esse cenário
+via `Livewire::test()`. Vale para qualquer Action aninhada em modal
+futura, aqui ou em outro plugin: o índice muda conforme a posição na
+pilha de `mountedActions` no momento do teste, não é sempre `0`.
+
+**Validação (2026-09-05)**: sem `Livewire::test()` via `TestCase` real
+(ver "Comandos e fluxo úteis" no CLAUDE.md da raiz sobre `TEST_TOKEN`),
+mas com `Livewire::test()` rodado em `artisan tinker` contra o registro
+de um Projeto real — fluxo completo confirmado ponta a ponta pelo
+PIPELINE de verdade (`->call('mountAction', ...)`/`->call('callMountedAction')`,
+não bypass): abrir o modal; adicionar uma nota vazia bloqueado (nada
+criado); adicionar uma nota de verdade (contador de notas +1, `Get`
+lendo o HTML corretamente, `nova_nota` resetado pro estado vazio do
+RichEditor depois); abrir a edição dessa nota pré-preenchida com o
+texto atual; salvar a edição persiste o novo texto e desmonta de volta
+pro modal pai; excluir a nota remove o registro E não redireciona pra
+`ListProjetos` (fix em `EditProjeto::getDefaultActionSuccessRedirectUrl()`,
+ver abaixo). Separadamente, via Eloquent puro: duas notas sequenciais
+(`1`/`2`); excluir a `1` mantém `2` inalterada; a próxima nota criada
+recebe `3` (sem reaproveitar `1`); uma nota com `created_at` forçado
+pra 25h atrás retorna `podeEditar()`/`podeExcluir()` `false`; uma nota
+`tipo_sistema = true` retorna `false`/`false` mesmo recém-criada; uma
+releitura fresca (`NotaProjeto::find()`) confirma que o bloqueio de
+backend funcionaria mesmo se alguém forçasse a Action depois do prazo.
+**Não testado nesta tarefa**: verificação VISUAL no navegador (sem
+ferramenta de browser disponível nesta sessão) — a validação cobriu o
+comportamento funcional completo via o pipeline real do Livewire, mas
+não a aparência/layout renderizado de fato.
+
+`EditProjeto::getDefaultActionSuccessRedirectUrl()` ganhou a MESMA
+checagem já usada pra `ItemProjeto` (ver "Excluir Item redirecionava
+pra ListProjetos" acima), agora cobrindo `NotaProjeto` também —
+`excluirNota{id}` é um `DeleteAction::make(...)->record($nota)`
+aninhado (nível 2 da pilha, dentro do modal "Notas do Projeto"), e sem
+essa checagem o mesmo bug reapareceria: qualquer `DeleteAction`/
+`ForceDeleteAction` bem-sucedido redireciona pra `ListProjetos` por
+padrão, verificando só a CLASSE da Action, não qual registro ela
+excluiu de fato.
+
 ## Limitações conhecidas
 
 - Situação de Projeto e Tipo de Projeto usam o padrão `ManageRecords`

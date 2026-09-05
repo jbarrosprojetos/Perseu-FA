@@ -113,6 +113,38 @@ return [
                 'valor-total-label'      => 'Valor Total',
             ],
         ],
+        'notas' => [
+            'acao'            => 'Notas do Projeto',
+            'nova-nota-label' => 'Nova Nota',
+            'adicionar'       => 'Adicionar Nota',
+            'editar'          => 'Editar',
+            'excluir'         => 'Excluir',
+            'salvar'          => 'Salvar',
+            'texto-label'     => 'Nota',
+            'autor-sistema'   => 'Sistema',
+            'badge-sistema'   => 'Sistema',
+            'modal' => [
+                'heading' => 'Notas do Projeto',
+            ],
+            'modal-editar' => [
+                'heading' => 'Editar nota :numero',
+            ],
+            'excluir-confirmacao' => [
+                'heading'     => 'Excluir nota :numero?',
+                'description' => 'Esta ação não pode ser desfeita.',
+            ],
+            'validacao' => [
+                'texto-obrigatorio' => 'Escreva o texto da nota antes de salvar.',
+            ],
+            'notification' => [
+                'projeto-nao-salvo-title' => 'Salve o Projeto primeiro',
+                'projeto-nao-salvo-body'  => 'É preciso salvar os dados do Projeto (Cabeçalho) antes de adicionar notas.',
+                'nota-adicionada'         => 'Nota adicionada com sucesso.',
+                'nota-atualizada'         => 'Nota atualizada com sucesso.',
+                'nota-excluida'           => 'Nota excluída com sucesso.',
+                'prazo-expirado'          => 'Esta nota não pode mais ser editada ou excluída (prazo de 24 horas encerrado).',
+            ],
+        ],
         'descricao'      => 'Nome da Obra',
         'tipo-projeto'   => 'Tipo de Projeto',
         'situacoes'      => 'Situações',
