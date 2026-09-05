@@ -875,6 +875,13 @@ class ProjetoResource extends Resource
                                     ->prefix('R$')
                                     ->live(onBlur: true)
                                     ->dehydrated(false)
+                                    // Mesmo asset já usado em Qtde./Porc.%
+                                    // (`resources/css/filament/admin-input-no-spinner.css`,
+                                    // ver CLAUDE.md) — reaproveitado aqui,
+                                    // não duplicado, pra esconder as setas
+                                    // de incremento/decremento também no
+                                    // Custo Unit.
+                                    ->extraInputAttributes(['class' => 'fi-input-no-spinner'])
                                     ->afterStateUpdated(fn (Get $get, Set $set) => static::recalcularValoresItemAvulso($get, $set))
                                     ->columnSpan(3),
 
@@ -892,7 +899,7 @@ class ProjetoResource extends Resource
                                         ->icon('heroicon-o-check-circle')
                                         ->iconButton()
                                         ->color('success')
-                                        ->action(fn (Get $get, Set $set, ?Projeto $record) => static::confirmarItemAvulso($get, $set, $record)),
+                                        ->action(fn (Get $get, Set $set, ?Projeto $record, $livewire) => static::confirmarItemAvulso($get, $set, $record, $livewire)),
                                 ])
                                     ->alignCenter()
                                     ->verticallyAlignStart()
@@ -911,18 +918,28 @@ class ProjetoResource extends Resource
                         // mostrados na linha de INPUT acima (ver
                         // `abrirEdicaoItemAvulso()`); mostrar as duas ao
                         // mesmo tempo duplicaria a linha na tela.
+                        //
+                        // Lê `$livewire->itensCarregados` (hidratado do
+                        // banco no `mount()` de `EditProjeto`, ver essa
+                        // classe) em vez de reconsultar `$record->itens()`
+                        // aqui de novo — achado real (2026-09-05): a
+                        // listagem ficava vazia ao abrir a tela de edição
+                        // com itens já salvos. `$livewire instanceof
+                        // EditProjeto` (não `$record` truthy) é o critério
+                        // certo aqui: só `EditProjeto` declara/hidrata essa
+                        // property (mesmo padrão já usado por "Atribuir
+                        // Processos" — CreateProjeto simplesmente não tem
+                        // a property).
                         Group::make()
                             ->columnSpanFull()
-                            ->schema(function (Get $get, ?Projeto $record): array {
-                                if (! $record) {
+                            ->schema(function (Get $get, $livewire): array {
+                                if (! $livewire instanceof EditProjeto) {
                                     return [];
                                 }
 
                                 $itemEmEdicaoId = $get('item_em_edicao_id');
 
-                                return $record->itens()
-                                    ->orderBy('numero_item')
-                                    ->get()
+                                return $livewire->itensCarregados
                                     ->reject(fn (ItemProjeto $item) => filled($itemEmEdicaoId) && ((string) $item->id === (string) $itemEmEdicaoId))
                                     ->map(fn (ItemProjeto $item) => static::linhaExibicaoItem($item))
                                     ->all();
@@ -1060,8 +1077,15 @@ class ProjetoResource extends Resource
      * commit. `imposto_aplicado` grava esse valor no próprio
      * `ItemProjeto`, preservando o histórico do cálculo mesmo que a
      * Referência de Preços mude depois.
+     *
+     * `$livewire->recarregarItens()` no final (achado real, 2026-09-05,
+     * ver `EditProjeto::itensCarregados`) — a listagem de itens já
+     * inseridos passou a ler uma property hidratada no `mount()` da
+     * página, não mais `$record->itens()` reconsultado a cada render;
+     * sem chamar isso aqui, o item recém-criado/editado só apareceria
+     * na listagem depois de um reload completo da página.
      */
-    protected static function confirmarItemAvulso(Get $get, Set $set, ?Projeto $record): void
+    protected static function confirmarItemAvulso(Get $get, Set $set, ?Projeto $record, $livewire): void
     {
         if (! $record) {
             Notification::make()
@@ -1138,6 +1162,10 @@ class ProjetoResource extends Resource
                 $record->itens()->create($dados);
             }
         });
+
+        if ($livewire instanceof EditProjeto) {
+            $livewire->recarregarItens();
+        }
 
         static::resetarLinhaItemAvulso($set);
 
@@ -1305,7 +1333,7 @@ class ProjetoResource extends Resource
                             ->record($item)
                             ->modalHeading(__('comercial::filament/resources/projeto.form.itens.excluir-confirmacao.heading', ['numero' => $item->numero_item]))
                             ->modalDescription(__('comercial::filament/resources/projeto.form.itens.excluir-confirmacao.description'))
-                            ->action(fn () => static::excluirItemAvulso($item)),
+                            ->action(fn ($livewire) => static::excluirItemAvulso($item, $livewire)),
                     ])
                         ->icon('heroicon-m-ellipsis-vertical')
                         ->color('gray'),
@@ -1349,8 +1377,13 @@ class ProjetoResource extends Resource
      * resultado passo a passo. `forceFill()` escreve o atributo
      * ignorando o guard, exatamente a exceção deliberada que este
      * método (e só ele) precisa.
+     *
+     * `$livewire->recarregarItens()` depois da transação — mesmo motivo
+     * de `confirmarItemAvulso()` (ver `EditProjeto::itensCarregados`):
+     * sem isso, o item excluído e a renumeração dos seguintes só
+     * apareceriam corretos na tela depois de um reload completo.
      */
-    protected static function excluirItemAvulso(ItemProjeto $item): void
+    protected static function excluirItemAvulso(ItemProjeto $item, $livewire): void
     {
         DB::transaction(function () use ($item): void {
             $projetoId = $item->projeto_id;
@@ -1369,6 +1402,10 @@ class ProjetoResource extends Resource
                     $itemPosterior->forceFill(['numero_item' => $novoNumero])->save();
                 });
         });
+
+        if ($livewire instanceof EditProjeto) {
+            $livewire->recarregarItens();
+        }
 
         Notification::make()
             ->success()

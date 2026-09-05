@@ -1,7 +1,8 @@
 /*
  * Esconde as setas nativas de incremento/decremento de <input
- * type="number"> — usado pelos campos "Qtde." e "Porc.%" da linha de
- * Item Avulso do Projeto (ProjetoResource::form(), Section "Itens").
+ * type="number"> — usado pelos campos "Qtde.", "Porc.%" e "Custo
+ * Unit." (adicionado em 2026-09-05) da linha de Item Avulso do
+ * Projeto (ProjetoResource::form(), Section "Itens").
  *
  * `->step(null)` sozinho não remove essas setas — são desenhadas pelo
  * próprio motor do navegador (pseudo-elementos no WebKit/Blink,

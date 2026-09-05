@@ -473,10 +473,13 @@ toolbar (esperado, já que `toolbarButtons()` é puramente de
 renderização, não mexe no processamento de marcas) — mas a
 confirmação visual de que aparece formatado na tela exige navegador de
 verdade.
-- **Qtde.** (1) e **Porc.%** (1): `TextInput` `->numeric()->integer()`,
-  `->live(onBlur: true)`, disparam o recálculo (ver fórmula abaixo).
-  Porc.% SEM `->minValue()` — aceita negativo de propósito (acréscimo/
-  desconto). **Sem setas de incremento/decremento** (2026-09-03):
+- **Qtde.** (1), **Porc.%** (1) e **Custo Unit.** (3, este último desde
+  2026-09-05): `TextInput` `->numeric()->integer()` (Custo Unit. sem
+  `->integer()`, aceita decimal), `->live(onBlur: true)`, disparam o
+  recálculo (ver fórmula abaixo). Porc.% SEM `->minValue()` — aceita
+  negativo de propósito (acréscimo/desconto). **Sem setas de
+  incremento/decremento** (2026-09-03, estendido ao Custo Unit. em
+  2026-09-05 — mesmo asset reaproveitado, não duplicado):
   `->extraInputAttributes(['class' => 'fi-input-no-spinner'])` +
   `resources/css/filament/admin-input-no-spinner.css` (registrado em
   `AdminPanelProvider::boot()` via `FilamentAsset::register()`, mesmo
@@ -488,7 +491,7 @@ verdade.
   `->extraInputAttributes(['style' => ...])` (atributo `style` inline
   só aceita propriedades do próprio elemento) — por isso precisa de uma
   folha de estilo de verdade. Escopado à classe
-  `.fi-input-no-spinner` (só nesses 2 campos), não em todo
+  `.fi-input-no-spinner` (só nesses 3 campos), não em todo
   `input[type=number]` do painel, pra não afetar outros campos
   numéricos do sistema (ex.: os de `ReferenciaPreco`).
   **Bug real na primeira tentativa (corrigido em 2026-09-03)**: a
@@ -539,7 +542,9 @@ verdade.
   abaixo); o aviso em vermelho já existe no campo "Referência de
   Preços" do Cabeçalho.
 - **Custo Unitário** (3): `TextInput` `->numeric()->minValue(0)`
-  (só positivo), `->live(onBlur: true)`, dispara o recálculo.
+  (só positivo), `->live(onBlur: true)`, dispara o recálculo. Sem setas
+  de incremento/decremento desde 2026-09-05 — mesmo `.fi-input-no-spinner`
+  de Qtde./Porc.%, ver acima.
 - **Última coluna** (1, antes 3 — encolhida pra sobrar espaço com a
   remoção do Imp.%): `Actions::make([Action::make('confirmarItemAvulso')
   ->iconButton()])` — SEM ação real (notificação placeholder própria,
@@ -735,20 +740,147 @@ NOVO) também cancela qualquer edição em andamento
 (`item_em_edicao_id = null` dentro da própria Action `inserirItem`).
 
 **Listagem dos itens já inseridos** — `Group::make()->schema(fn (Get
-$get, ?Projeto $record) => [...])`, uma `Grid::make(24)` por item
+$get, $livewire) => [...])`, uma `Grid::make(24)` por item
 (`linhaExibicaoItem()`), MESMA distribuição de `columnSpan` do
 cabeçalho/input (1,4,7,1,3,3,1,3,1), com `Text` somente-leitura + um
 `ActionGroup` (Editar/Excluir) na última coluna. O item ATUALMENTE em
 edição é OMITIDO da listagem (`->reject()`) — seus dados já aparecem na
 linha de input logo acima; mostrar as duas ao mesmo tempo duplicaria a
-linha. Mostra TODOS os itens do Projeto (`$record->itens()->orderBy(...)`),
-não só os de origem Item Avulso — única origem com persistência real
-até agora, mas a área é a mesma pras 7 (task pediu explicitamente).
-Descrição aparece em TEXTO PURO (`Str::stripTags()`) na listagem — o
-dado gravado é HTML (RichEditor), mas exibir a formatação de verdade
-ali exigiria um componente `Html`/`View` em vez de `Text`, com risco de
-quebrar a altura/alinhamento de uma grid pensada pra uma linha só; a
-formatação completa continua disponível ao entrar em modo edição.
+linha. Mostra TODOS os itens do Projeto, não só os de origem Item
+Avulso — única origem com persistência real até agora, mas a área é a
+mesma pras 7 (task pediu explicitamente). Descrição aparece em TEXTO
+PURO (`Str::stripTags()`) na listagem — o dado gravado é HTML
+(RichEditor), mas exibir a formatação de verdade ali exigiria um
+componente `Html`/`View` em vez de `Text`, com risco de quebrar a
+altura/alinhamento de uma grid pensada pra uma linha só; a formatação
+completa continua disponível ao entrar em modo edição.
+
+### Itens não apareciam ao abrir a tela de edição — corrigido (2026-09-05)
+
+Achado real: a listagem acima lia `$record->itens()->orderBy(...)->get()`
+DIRETO no fecho do `Group` (reconsultando o banco a cada avaliação do
+Schema) — em tese sempre atualizado, mas o usuário reportou a área
+"Itens" vazia ao abrir uma tela de edição de verdade com itens já
+salvos. **Correção**: `EditProjeto` ganhou uma property pública
+`Collection $itensCarregados`, hidratada do banco no `mount()`
+(`recarregarItens()`, chamado depois de `parent::mount($record)`) — o
+`Group::schema()` da Section "Itens" passou a ler
+`$livewire->itensCarregados` (injeção por nome `$livewire`, resolve
+pra `$this->getLivewire()` — mesmo mecanismo já documentado pra
+`$get`/`$set`/`$record`) em vez de reconsultar `$record->itens()` a
+cada render. `$livewire instanceof EditProjeto` é o critério de
+visibilidade certo (não `$record` truthy) — só `EditProjeto` declara/
+hidrata essa property (mesmo padrão já usado por "Atribuir Processos":
+`CreateProjeto` simplesmente não tem a property, e a checagem de tipo
+já cobre o caso).
+
+- **`confirmarItemAvulso()`/`excluirItemAvulso()` chamam
+  `$livewire->recarregarItens()`** depois de escrever no banco (dentro
+  da própria `DB::transaction()` já existente) — sem isso, inserir/
+  editar/excluir um item só apareceria atualizado na tela depois de um
+  reload completo (regressão do comportamento já testado antes desta
+  correção). Os dois métodos ganharam `$livewire` como parâmetro a
+  mais (injeção por nome, mesmo mecanismo de `$get`/`$set`/`$record`).
+- **Achado real de INICIALIZAÇÃO**: `public Collection $itensCarregados;`
+  SEM valor padrão disparava "Typed property ... must not be accessed
+  before initialization" — `EditRecord::mount()` (vendor) chama
+  `fillForm()`, que já avalia o Schema INTEIRO (inclusive o `Group`
+  dinâmico da Section "Itens") pra montar a árvore de componentes,
+  ANTES de qualquer código customizado no `mount()` sobrescrito de
+  `EditProjeto` rodar. Corrigido setando
+  `$this->itensCarregados = new Collection()` como a PRIMEIRA linha do
+  `mount()` sobrescrito, ANTES de `parent::mount($record)` —
+  confirmado por teste que essa avaliação PRECOCE (com a Collection
+  ainda vazia) não "congela" o que vai pra tela final: o Schema é
+  reavaliado de novo pro render de verdade, já com
+  `itensCarregados` populado por `recarregarItens()` (chamado DEPOIS
+  de `parent::mount()`, quando `$this->record` já existe).
+- **Causa raiz do bug original permanece não 100% confirmada** — não
+  foi possível reproduzir o "itens vazios" com a implementação anterior
+  (`$record->itens()` direto no fecho) via `Livewire::test()` mesmo
+  simulando exatamente o cenário relatado (itens criados via Eloquent
+  puro, ANTES de qualquer interação Livewire, depois abrindo a página
+  numa instância nova) — sempre carregou corretamente nos testes desta
+  sessão. A hidratação explícita em `mount()` foi implementada mesmo
+  assim, por ser exatamente o que a tarefa pediu e por ser mais
+  robusta/previsível que depender de timing de avaliação de Schema
+  dinâmico (categoria de sutileza real do Filament, confirmada pelo
+  achado de inicialização acima) — se o sintoma original tinha outra
+  causa (cache de view/config desatualizado no ambiente onde foi
+  observado, por exemplo), esta mudança não teria como fazer mal de
+  qualquer forma.
+
+### Excluir Item redirecionava pra ListProjetos — corrigido (2026-09-05)
+
+Achado real: excluir um `ItemProjeto` (ícone de lixeira da Section
+"Itens") redirecionava a tela inteira pra `ListProjetos`, abandonando a
+edição do Projeto atual. **Causa raiz**: `Filament\Resources\Pages\
+Concerns\InteractsWithRecord::getDefaultActionSuccessRedirectUrl()`
+(vendor, herdado por `EditRecord`/`EditProjeto`) redireciona pra
+`$this->getResourceUrl()` **sempre que a Action que acabou de rodar é
+`instanceof DeleteAction` (ou `ForceDeleteAction`) — sem checar qual
+registro ela de fato excluiu**:
+
+```php
+// vendor/filament/filament/src/Resources/Pages/Concerns/InteractsWithRecord.php
+public function getDefaultActionSuccessRedirectUrl(Action $action): ?string
+{
+    return match (true) {
+        $action instanceof DeleteAction, $action instanceof ForceDeleteAction => $this->getResourceUrl(),
+        default => null,
+    };
+}
+```
+
+Isso dispara automaticamente para QUALQUER `DeleteAction` na página —
+não só o botão "Excluir" do cabeçalho (`EditProjeto::getHeaderActions()`,
+onde o redirecionamento faz sentido: o PRÓPRIO Projeto da página foi
+excluído). `DeleteAction::make("excluirItemProjeto{$item->id}")`
+(`linhaExibicaoItem()`) usa essa MESMA classe só pelo visual/
+confirmação padrão (ícone de lixeira, cor "danger", modal de
+confirmação já ligado por padrão) — ela exclui um `ItemProjeto`, não o
+`Projeto`, então nunca deveria redirecionar. Esse mecanismo é chamado
+automaticamente por `InteractsWithActions::callMountedAction()` (linha
+~283, `$action->dispatchSuccessRedirect()`) depois de QUALQUER Action
+terminar com sucesso — não é algo que `DeleteAction`/nossa Action
+precisem chamar explicitamente, o Filament já faz isso por baixo dos
+panos pra toda Action da página.
+
+**Correção**: `EditProjeto` sobrescreve `getDefaultActionSuccessRedirectUrl()`
+verificando o RECORD de fato vinculado à Action (`$action->getRecord()`,
+resolve pro `ItemProjeto` explicitamente passado via `->record($item)`)
+em vez de confiar só na CLASSE da Action:
+
+```php
+public function getDefaultActionSuccessRedirectUrl(Action $action): ?string
+{
+    if ($action->getRecord() instanceof ItemProjeto) {
+        return null;
+    }
+
+    return parent::getDefaultActionSuccessRedirectUrl($action);
+}
+```
+
+Essa checagem cobre automaticamente qualquer Action futura da Section
+"Itens" que algum dia use `DeleteAction`/`ForceDeleteAction` sobre um
+`ItemProjeto`, sem precisar lembrar de `->successRedirectUrl(...)` em
+cada uma individualmente — e não afeta o `DeleteAction::make()` do
+cabeçalho (que exclui o `Projeto` da própria página, `$action->getRecord()`
+não é `instanceof ItemProjeto`, cai no `parent::...()` normal).
+
+**`inserirItem`/`confirmarItemAvulso`/`editarItemProjeto{id}` NÃO
+precisaram de correção** — nenhuma delas é `instanceof DeleteAction`/
+`ForceDeleteAction`, então `parent::getDefaultActionSuccessRedirectUrl()`
+já retornava `null` (sem redirecionar) por padrão pra elas, confirmado
+empiricamente via `Livewire::test()->assertRedirect()` (falha, como
+esperado — nenhuma dessas três dispara redirect, nem antes nem depois
+desta correção). O usuário relatou que "editar e confirmar" também
+redirecionava, mas isso não foi reproduzido em nenhum teste — o fix
+acima cobre o caso concretamente confirmado (excluir) e, por ser uma
+checagem geral por RECORD (não por nome de Action específica), também
+cobriria qualquer variante do problema em edição que viesse a usar
+`DeleteAction`/`ForceDeleteAction` no futuro.
 
 ### Exclusão de item + renumeração contígua (2026-09-04)
 
