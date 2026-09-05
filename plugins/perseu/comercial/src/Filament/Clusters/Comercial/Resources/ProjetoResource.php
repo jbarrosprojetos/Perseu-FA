@@ -718,16 +718,35 @@ class ProjetoResource extends Resource
                                             // "000" "sem subtração" de
                                             // verdade (soma das parciais =
                                             // 0), já documentado assim no
-                                            // CLAUDE.md. `$action->halt()`
-                                            // pelo mesmo motivo de sempre —
-                                            // o modal nunca fecha sozinho.
+                                            // CLAUDE.md. **SEM `$action->halt()`**
+                                            // — achado real (2026-09-06):
+                                            // esta Action não tem `->form()`
+                                            // nem `requiresConfirmation()`
+                                            // (é "chata"/flat), então
+                                            // `halt()` não tem NADA próprio
+                                            // pra manter aberto — só deixa a
+                                            // Action PRESA em
+                                            // `$livewire->mountedActions`
+                                            // pra sempre (nunca desmonta),
+                                            // o que confundia o mecanismo de
+                                            // fechar modal do Filament a
+                                            // ponto de nem "Cancelar" nem Esc
+                                            // conseguirem fechar mais o modal
+                                            // PAI depois de clicar aqui uma
+                                            // vez (ver CLAUDE.md, "Fluxo
+                                            // Promob"). Sem `halt()`, a
+                                            // Action conclui normalmente
+                                            // (unmount), e o modal do PAI
+                                            // (`inserirItemPromob`) continua
+                                            // aberto de qualquer forma —
+                                            // terminar uma Action ANINHADA
+                                            // só remove ELA da pilha, nunca
+                                            // fecha quem a chamou.
                                             Action::make('checarTotalPromob')
                                                 ->label(__('comercial::filament/resources/projeto.form.itens.promob.modal.processar'))
                                                 ->disabled(fn (?Projeto $record, $livewire) => ! static::promobTemXmlGeralValido(static::arquivosXmlPromobAtuais($livewire), $record))
-                                                ->action(function (?Projeto $record, $livewire, Action $action): void {
+                                                ->action(function (?Projeto $record, $livewire): void {
                                                     $livewire->promobResultado = static::calcularResultadoPromob(static::arquivosXmlPromobAtuais($livewire), $record);
-
-                                                    $action->halt();
                                                 }),
 
                                             // "Criar Itens" — mesma condição
@@ -1232,10 +1251,34 @@ class ProjetoResource extends Resource
      * `getMountedActionSchema()` cria com `statePath("mountedActions.
      * {n}.data")` — os dois nunca ficam conectados um ao outro por
      * baixo dos panos, apesar da aparência de que deveriam.
-     * `inserirItemPromob` é sempre o índice `0` de `mountedActions`
-     * enquanto este modal estiver aberto (mesmo com "Criar Itens"
-     * aninhando um índice `1` pra própria confirmação) — por isso o
-     * índice fixo abaixo é seguro aqui.
+     * **NÃO usa um índice fixo (`0`) — achado real (2026-09-06)**: o
+     * botão "Cancelar"/"X" do modal fecha via `Action::close()`, que
+     * troca completamente o mecanismo de clique — `getJsClickHandler()`
+     * (vendor) retorna `null` quando `shouldClose()` é `true`, então
+     * `getLivewireClickHandler()` também fica `null` e NENHUM
+     * `wire:click` é renderizado; o botão vira PURO Alpine
+     * (`x-on:click="close()"`), só escondendo o modal no NAVEGADOR, sem
+     * fazer NENHUMA requisição ao servidor. Ou seja, `unmountAction()`
+     * NUNCA roda ao cancelar — o array `$livewire->mountedActions`
+     * (uma property PÚBLICA do Livewire, persistida entre requisições
+     * no snapshot da página) fica com uma entrada "fantasma" de
+     * `inserirItemPromob` de cada abertura anterior cancelada, todas
+     * empilhadas. Reabrir o modal empurra uma entrada NOVA (`mountAction()`
+     * sempre dá `$this->mountedActions[] = [...]`, sem checar se já
+     * existe uma com o mesmo nome) — ou seja, o índice de
+     * `inserirItemPromob` cresce a cada ciclo abrir→cancelar→reabrir, e
+     * um índice fixo `0` passava a apontar pra uma entrada CADA VEZ
+     * MAIS ANTIGA, nunca a atual (causa raiz dos 3 bugs relatados:
+     * upload/resultado "grudados" entre aberturas, "Checar Total"
+     * habilitado à toa, confirmação de "Criar Itens" não disparando —
+     * todos liam o `arquivos_xml` da sessão ERRADA). Correção: busca a
+     * ÚLTIMA entrada cujo `name` seja `inserirItemPromob` (`array_key_last()`
+     * sobre as chaves filtradas) — sempre a mais recente, mesmo com
+     * `criarItensPromob` aninhando sua própria entrada por cima pra
+     * exibir a confirmação. Resetar em `mountUsing()` continua correto
+     * E suficiente (o pedido original de "resetar só na entrada"): o
+     * problema nunca foi o reset em si, e sim ler a entrada errada
+     * depois.
      *
      * **Retorna os objetos `UploadedFile` CRUS (Livewire
      * `TemporaryUploadedFile`), não caminhos de disco** — segundo
@@ -1260,7 +1303,13 @@ class ProjetoResource extends Resource
      */
     protected static function arquivosXmlPromobAtuais($livewire): array
     {
-        $arquivos = data_get($livewire->mountedActions, '0.data.arquivos_xml', []);
+        $indice = static::indiceMountedActionInserirItemPromob($livewire);
+
+        if ($indice === null) {
+            return [];
+        }
+
+        $arquivos = data_get($livewire->mountedActions, "{$indice}.data.arquivos_xml", []);
 
         if (! is_array($arquivos)) {
             return [];
@@ -1270,6 +1319,25 @@ class ProjetoResource extends Resource
             $arquivos,
             fn ($arquivo) => $arquivo instanceof \Illuminate\Http\UploadedFile,
         ));
+    }
+
+    /**
+     * Índice, em `$livewire->mountedActions`, da entrada MAIS RECENTE
+     * chamada `inserirItemPromob` — ver docblock de
+     * `arquivosXmlPromobAtuais()` pro porquê de não poder ser um
+     * índice fixo. `null` se o modal nunca foi montado nesta sessão
+     * (não deveria acontecer, já que só chamamos isto de dentro de
+     * Actions que só existem quando ele já está montado, mas fica o
+     * `null` por segurança).
+     */
+    private static function indiceMountedActionInserirItemPromob($livewire): ?int
+    {
+        $indices = array_keys(array_filter(
+            $livewire->mountedActions ?? [],
+            fn (array $mounted) => ($mounted['name'] ?? null) === 'inserirItemPromob',
+        ));
+
+        return $indices === [] ? null : max($indices);
     }
 
     /**

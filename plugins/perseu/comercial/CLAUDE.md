@@ -1301,10 +1301,12 @@ com o mesmo formulário):
    mãe de fato vivem). `$get('arquivos_xml')` sempre voltava `null`,
    mesmo com arquivos selecionados. **E mesmo se apontasse certo, não
    adiantaria** — ver achado 3. Correção: ler direto de
-   `$livewire->mountedActions[0]['data']['arquivos_xml']` (índice `0`
-   é sempre a Action mãe `inserirItemPromob` enquanto o modal está
-   aberto, mesmo com "Criar Itens" aninhando um índice `1` pra própria
-   confirmação) — ver `ProjetoResource::arquivosXmlPromobAtuais()`.
+   `$livewire->mountedActions[...]['data']['arquivos_xml']` — **NÃO um
+   índice fixo** (a primeira versão deste achado dizia "índice `0` é
+   sempre a Action mãe", o que é FALSO depois do primeiro cancelamento
+   — ver achado 6 mais abaixo, que corrige isso) — e sim a entrada MAIS
+   RECENTE cujo `name` é `inserirItemPromob`, ver `ProjetoResource::
+   arquivosXmlPromobAtuais()`/`indiceMountedActionInserirItemPromob()`.
 3. **Nenhuma Action do rodapé sem `->form()` próprio jamais desidrata
    o Schema da Action MÃE** — `callMountedAction()` (vendor) só chama
    `$schema->getState()` (o gatilho de `FileUpload::saveUploadedFiles()`,
@@ -1333,27 +1335,54 @@ com o mesmo formulário):
    (`ProjetoResource::promobPrecisaConfirmarCriacao()`, chamado pelas
    três — `requiresConfirmation`/`modalHeading`/`modalDescription` —
    pra manter os três SEMPRE de acordo entre si).
-5. **`$action->halt()` numa Action do rodapé SEM confirmação e SEM
-   forma própria pode "prender" ela mounted e esconder o modal da
-   Action mãe** — achado real: `criarItensPromob->halt()` (quando não
-   precisava de confirmação) fazia o modal INTEIRO desaparecer, mesmo
-   a Action mãe (`inserirItemPromob`) continuando mounted por baixo.
-   `checarTotalPromob` (que TAMBÉM chama `halt()`) nunca teve esse
-   problema — a diferença é que `criarItensPromob` tem
-   `requiresConfirmation`/`modalHeading`/`modalDescription`
-   configurados (mesmo que avaliem pra "sem confirmação" naquele
-   clique). Causa raiz não 100% confirmada (não vale a pena investigar
-   mais fundo pra este caso específico), mas o padrão seguro
-   encontrado foi: **só chamar `$action->halt()` numa Action de
-   rodapé que TAMBÉM tem conteúdo próprio pra mostrar quando parada
-   (form ou confirmação) — pra uma Action "plana", sem NENHUM dos
-   dois, deixe ela terminar normalmente** (sem `halt()`); o modal da
-   Action MÃE continua aberto de qualquer forma, porque terminar uma
-   Action ANINHADA só faz Livewire despopular ELA da pilha
-   (`mountedActions`), voltando a mostrar a mãe — `halt()` só é
-   necessário quando é a PRÓPRIA Action mãe que, ao concluir sem ele,
-   fecharia (comportamento padrão do Filament pra uma Action bem-
-   sucedida).
+5. **`$action->halt()` numa Action de rodapé "chata" (sem `->form()`
+   nem `requiresConfirmation()`) deixa ela PRESA em `mountedActions`
+   pra sempre, quebrando o fechamento do modal PAI** — versão CORRIGIDA
+   deste achado (a primeira redação, de 2026-09-05, estava incompleta:
+   dizia que só `criarItensPromob` tinha esse problema e que
+   `checarTotalPromob` "nunca teve" — **errado**, só não tinha sido
+   testado o suficiente: `checarTotalPromob` tinha o MESMO bug,
+   silencioso — o modal continuava VISÍVEL e aparentemente normal
+   depois de clicar nele, mas nem "Cancelar" nem Esc conseguiam mais
+   fechá-lo depois disso, ver achado 6). `halt()` deixa a Action sem
+   passar por `unmountAction()` (que faz `array_pop($this
+   ->mountedActions)`) — pra uma Action com form/confirmação, isso é
+   EXATAMENTE o objetivo (manter o modal DELA aberto); pra uma Action
+   "chata" sem nenhum dos dois, não existe modal próprio pra manter
+   aberto — só sobra uma entrada FANTASMA empilhada por cima da Action
+   mãe, e o mecanismo do Filament que decide "qual modal fechar ao
+   clicar Cancelar/Esc" se confunde com essa entrada extra sem
+   conteúdo. **Regra sem exceção**: `$action->halt()` só em Action que
+   TEM `->form()` ou `requiresConfirmation()` — qualquer Action "chata"
+   (`checarTotalPromob` incluída) deve terminar normalmente, sem
+   `halt()`; terminar uma Action aninhada só a remove da pilha,
+   nunca fecha quem a chamou.
+6. **O botão "Cancelar"/"X" do modal fecha via Alpine PURO — sem
+   NENHUMA requisição ao servidor** — `Action::close()` (usado por
+   `getModalCancelAction()`, vendor) faz `getJsClickHandler()` retornar
+   `null` quando `shouldClose()` é `true`, e sem isso
+   `getLivewireClickHandler()` também fica `null` — o botão renderiza
+   SEM `wire:click`, só com `x-on:click="close()"` (Alpine). Ou seja,
+   `unmountAction()` NUNCA roda ao cancelar. Como `$livewire
+   ->mountedActions` é uma property PÚBLICA do Livewire (persistida no
+   snapshot da página entre requisições, não recriada do zero a cada
+   uma), cancelar deixa pra trás uma entrada "fantasma" de
+   `inserirItemPromob` — reabrir empurra outra (`mountAction()` sempre
+   dá `$this->mountedActions[] = [...]`, sem checar se já existe uma
+   com o mesmo nome), então o índice de `inserirItemPromob` cresce a
+   cada ciclo abrir→cancelar→reabrir. **Ler um índice FIXO (`0`, como a
+   primeira versão fazia) é um bug garantido depois do primeiro
+   cancelamento** — a correção foi buscar sempre a ÚLTIMA entrada cujo
+   `name` é `inserirItemPromob` (`ProjetoResource::
+   indiceMountedActionInserirItemPromob()`), nunca um índice fixo. Foi
+   a causa raiz ÚNICA dos 3 bugs relatados em 2026-09-06 (estado não
+   resetado entre aberturas, "Checar Total" habilitado à toa,
+   confirmação de "Criar Itens" não disparando) — todos liam
+   `arquivos_xml` de uma sessão ERRADA (antiga), então pareciam 3
+   sintomas diferentes mas eram 1 causa só. Resetar em `mountUsing()`
+   (pedido original da tarefa, "resetar só na entrada") continua sendo
+   a estratégia CERTA — nunca foi o reset em si que falhava, e sim ler
+   a entrada errada depois.
 
 ## Limitações conhecidas
 
