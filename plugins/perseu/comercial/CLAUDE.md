@@ -346,35 +346,73 @@ da primeira tentativa, corrigido nesta data).
   inspecionar o HTML renderizado, usar `$test->call(...)`. Nenhuma das
   duas cobre as duas coisas ao mesmo tempo.
 
-### Toolbar do RichEditor de "Item Avulso" removida — atalhos de teclado (2026-09-03, texto fixo trocado por ícone com balão em 2026-09-03, ícone movido pro cabeçalho em 2026-09-04, campo migrado pra dentro do modal em 2026-09-06)
+### Toolbar do RichEditor de "Item Avulso" — removida na linha inline, REABILITADA no modal (2026-09-03, texto fixo trocado por ícone com balão em 2026-09-03, ícone movido pro cabeçalho em 2026-09-04, campo migrado pra dentro do modal em 2026-09-06, toolbar reabilitada em 2026-09-06, ampliada pra padrão COMPLETO no mesmo dia)
 
-**HISTÓRICO (até 2026-09-06): linha de INPUT inline.** Até a migração
-pra Form Modal (ver "Item Avulso migrado de linha inline pra Form
-Modal" mais abaixo), o campo de Descrição vivia numa linha de INPUT
-inline, um SEGUNDO `Grid::make(24)` logo abaixo do cabeçalho de
+**HISTÓRICO (até 2026-09-06): linha de INPUT inline, sem toolbar.** Até
+a migração pra Form Modal (ver "Item Avulso migrado de linha inline
+pra Form Modal" mais abaixo), o campo de Descrição vivia numa linha de
+INPUT inline, um SEGUNDO `Grid::make(24)` logo abaixo do cabeçalho de
 colunas, com os MESMOS `columnSpan` do cabeçalho — `RichEditor::make('novo_item_descricao')`
 com `->hiddenLabel()` (o rótulo de verdade vivia só na linha de
-CABEÇALHO acima) e um `->hintIcon()` pro texto de orientação dos
-atalhos. **Hoje o campo se chama só `descricao`, vive dentro do
-`->form()` do Form Modal (`camposFormularioItemAvulso()`) e tem
-`->label()`/`->helperText()` PRÓPRIOS e sempre visíveis** — não
-precisa mais de `->hiddenLabel()`/`->hintIcon()` porque o modal não
-compartilha layout com nenhum cabeçalho de tabela; o texto de
-orientação dos atalhos (`descricao-atalhos`) virou `->helperText()`
-comum, sempre visível abaixo do campo dentro do modal (sem o
-custo de "ocupar espaço na tela o tempo todo" que motivou o ícone com
-balão originalmente — um modal já é um contexto todo dedicado a
-preencher aquele item, diferente da linha inline que ficava lado a
-lado com o resto do formulário do Projeto).
+CABEÇALHO acima), `->toolbarButtons([])` (SEM toolbar visual — só
+atalhos de teclado, ver investigação do bubble menu abaixo) e um
+`->hintIcon()` pro texto de orientação dos atalhos. Logo depois da
+migração pro modal (mesma data, 2026-09-06), o campo passou a se
+chamar só `descricao`, ganhou `->label()`/`->helperText()` PRÓPRIOS
+(`descricao-atalhos` virou `->helperText()` comum) — mas a toolbar
+continuava desativada nesse primeiro momento, por inércia da decisão
+antiga.
 
-`RichEditor::make('descricao')->toolbarButtons([])` continua igual —
-`getToolbarButtons()` retorna array vazio, `RichEditor::toEmbeddedHtml()`
-pula o `<div class="fi-fo-rich-editor-toolbar">` inteiro (`if ((! $isDisabled)
-&& filled($toolbarButtons))`), sem afetar nada mais: as extensões
-TipTap continuam TODAS carregadas (`toolbarButtons()` só controla quais
-BOTÕES aparecem, não quais extensões/marcas o editor sabe processar),
-então os atalhos de teclado de cada uma continuam funcionando
-normalmente, dentro do modal igual antes.
+**Toolbar REABILITADA (mesmo dia, 2026-09-06)** — o motivo original
+pra remover a toolbar (linha de input inline, espaço horizontal muito
+apertado — 7 de 24 colunas) deixou de existir: dentro do Form Modal
+sobra espaço de sobra (a `Descrição` usa `->columnSpanFull()` da
+largura TOTAL do modal). Primeira tentativa: `->toolbarButtons([['bold',
+'italic', 'underline', 'bulletList']])` — conjunto REDUZIDO, só os 4
+botões considerados essenciais pra uma descrição curta de item. O
+`->helperText('descricao-atalhos')` (texto "Use atalhos de teclado
+para formatar...") foi REMOVIDO do campo nesse mesmo momento — não faz
+mais sentido pedir pro usuário decorar atalhos com a toolbar visual
+presente. A chave de tradução `descricao-atalhos` **continua existindo
+e em uso** — é o tooltip do ícone de ajuda da coluna "Descrição" no
+CABEÇALHO fixo da listagem (`linhaExibicaoItem`/cabeçalho da tabela,
+mecanismo `Icon`/`Flex`/`->dense()` documentado na subseção "Cabeçalho
+estilo planilha..." acima), que é uma UI completamente separada do
+modal.
+
+**Ampliada pro padrão COMPLETO do Filament (mesmo dia, 2026-09-06,
+tarefa seguinte)** — decisão explícita do usuário: começar com TODOS
+os botões disponíveis (`RichEditor::getDefaultToolbarButtons()`, 20
+botões — negrito/itálico/sublinhado/tachado/subscrito/sobrescrito/
+link, cabeçalho (H2)/subtítulo (H3), alinhar início/centro/fim,
+citação/bloco de código/lista com marcadores/lista ordenada, tabela/
+anexar arquivos, desfazer/refazer) e só reduzir DEPOIS, com uso real,
+se algum botão se mostrar desnecessário — em vez de já cortar
+preventivamente sem ter usado. Implementação: `->toolbarButtons([...])`
+foi REMOVIDO por completo do campo (nenhuma customização) —
+`RichEditor::toEmbeddedHtml()` usa `getDefaultToolbarButtons()` como
+fallback sempre que `toolbarButtons()` não foi chamado, então a
+ausência da chamada já é suficiente pra voltar ao padrão inteiro do
+pacote (não precisa listar os 20 botões manualmente). **Confirmado por
+teste de navegador (Playwright)**: os 20 botões aparecem, cabem numa
+única linha sem overflow nem quebra de layout no modal (não precisou
+nem quebrar em duas linhas, como a tarefa antecipava como aceitável);
+formatar um trecho como H2 (botão "Cabeçalho") e salvar persiste
+corretamente no banco (`<h2>...</h2>`, confirmado lendo o registro).
+**Se o usuário decidir reduzir a toolbar no futuro** (subconjunto
+específico pra descrição de item), a forma é reintroduzir
+`->toolbarButtons([[...]])` com os botões escolhidos — mesma sintaxe
+já testada na tentativa reduzida acima, só o CONTEÚDO do array muda.
+
+`RichEditor::toEmbeddedHtml()` só pula o `<div class="fi-fo-rich-editor-
+toolbar">` quando `toolbarButtons()` resolve pra um array vazio
+(`if ((! $isDisabled) && filled($toolbarButtons))`) — com botões
+(reduzidos ou o default completo), a barra sempre renderiza
+normalmente. As extensões TipTap SEMPRE estiveram todas carregadas,
+independente da toolbar (`toolbarButtons()` só controla quais BOTÕES
+aparecem, não quais extensões/marcas o editor sabe processar) — os
+atalhos de teclado (tabela abaixo) sempre funcionaram, com ou sem
+toolbar reduzida/completa/nenhuma.
 
 **Investigação (2026-09-03, ainda válida): toolbar "tipo bubble menu"
 (só em foco, esconde ao perder foco) — NÃO implementada, descartada
@@ -443,22 +481,25 @@ são de fato usados), então esse atalho específico NÃO funcionaria
 mesmo citando-o — por isso não faz parte da tabela acima.
 
 **Limitação de teste confirmada**: `Livewire::test()` não serve pra
-verificar visualmente que o texto continua formatado (negrito/itálico)
-sem a toolbar — o conteúdo do `RichEditor` é renderizado inteiramente
-no CLIENTE via TipTap/Alpine (`wire:ignore` na div raiz, conteúdo
-passado como JSON via `$wire.entangle()`, DOM populado por JS depois
-do carregamento da página), então o HTML devolvido por
-`Testable::html()` nunca contém o texto formatado renderizado — só o
-wrapper/toolbar/estado inicial. O que DÁ pra confirmar via teste:
-que `$set('descricao', '<p><strong>...</strong></p>')`
+verificar visualmente que o texto aparece formatado (negrito/itálico) —
+o conteúdo do `RichEditor` é renderizado inteiramente no CLIENTE via
+TipTap/Alpine (`wire:ignore` na div raiz, conteúdo passado como JSON
+via `$wire.entangle()`, DOM populado por JS depois do carregamento da
+página), então o HTML devolvido por `Testable::html()` nunca contém o
+texto formatado renderizado — só o wrapper/toolbar/estado inicial. O
+que DÁ pra confirmar via teste: que `$set('descricao', '<p><strong>...</strong></p>')`
 converte corretamente pro formato interno JSON do TipTap (`RichEditor
 StateCast`, campo guarda `{"type":"doc","content":[...,{"marks":
 [{"type":"bold"}]}]}`, não a string HTML crua) preservando a marca
-`bold` — ou seja, a INTEGRIDADE do dado sobrevive à remoção da
-toolbar (esperado, já que `toolbarButtons()` é puramente de
-renderização, não mexe no processamento de marcas) — mas a
-confirmação visual de que aparece formatado na tela exige navegador de
-verdade.
+`bold` — ou seja, a INTEGRIDADE do dado sobrevive independente de ter
+ou não toolbar visual (esperado, já que `toolbarButtons()` é puramente
+de renderização, não mexe no processamento de marcas) — mas a
+confirmação visual de que aparece formatado na tela (ou de que os
+botões da toolbar aplicam a marca certa ao clicar) exige navegador de
+verdade. **Confirmado por Playwright nesta tarefa (2026-09-06)**:
+clicar o botão "Negrito" da toolbar (dentro do modal, com texto
+selecionado) aplica a marca corretamente — `<strong>` persistido no
+banco após salvar.
 **Os campos abaixo (Quantidade/%/Custo Unitário/Valor Unitário/Valor
 Total/Imp.%) vivem hoje dentro do Form Modal** (`camposFormularioItemAvulso()`,
 ver "Item Avulso migrado de linha inline pra Form Modal" mais abaixo) —

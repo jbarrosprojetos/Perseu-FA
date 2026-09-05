@@ -1445,7 +1445,6 @@ class ProjetoResource extends Resource
 
             RichEditor::make('descricao')
                 ->label(__('comercial::filament/resources/projeto.form.itens.item-avulso-modal.descricao-label'))
-                ->helperText(__('comercial::filament/resources/projeto.form.itens.descricao-atalhos'))
                 ->required()
                 ->rule(fn () => function (string $attribute, $value, \Closure $fail): void {
                     if (blank(static::textoPlanoRichEditor($value))) {
@@ -1455,14 +1454,18 @@ class ProjetoResource extends Resource
                 ->validationMessages([
                     'required' => __('comercial::filament/resources/projeto.form.itens.validacao.descricao-obrigatoria'),
                 ])
-                // Toolbar removida (`->toolbarButtons([])`) — decisão já
-                // tomada e documentada antes da migração pra modal (ver
-                // CLAUDE.md, "Toolbar do RichEditor de 'Item Avulso'
-                // removida"): as extensões continuam TODAS carregadas
-                // (negrito/itálico/etc. via atalho de teclado), só o
-                // botão visual é que some. Continua valendo igual dentro
-                // do modal.
-                ->toolbarButtons([])
+                // Toolbar REABILITADA (2026-09-06) — dentro do Form Modal
+                // sobra espaço de sobra (diferente da linha de input
+                // inline de antes da migração pro modal, ver CLAUDE.md,
+                // "Toolbar do RichEditor de 'Item Avulso' reabilitada"),
+                // então voltou a fazer sentido um botão visual em vez de
+                // só atalho de teclado. SEM `->toolbarButtons()` custom
+                // (2026-09-06) — usa o conjunto DEFAULT completo do
+                // Filament (`RichEditor::getDefaultToolbarButtons()`) de
+                // propósito: decisão explícita do usuário de começar com
+                // tudo disponível e só reduzir depois, com uso real,
+                // caso algum botão se mostre desnecessário pra uma
+                // descrição de item.
                 ->columnSpanFull(),
 
             Grid::make(3)
