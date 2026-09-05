@@ -2108,14 +2108,20 @@ class ProjetoResource extends Resource
      * há a mesma restrição de altura de uma grid de planilha, então a
      * formatação completa aparece direto, sem precisar entrar em modo
      * edição pra ver negrito/listas/etc.). Ícones de editar/excluir só
-     * aparecem quando `podeEditar()`/`podeExcluir()` (ver `NotaProjeto`)
-     * são verdadeiros — nunca para nota de sistema, nunca fora do prazo
-     * de 24h.
+     * aparecem quando `podeSerEditadaPor()`/`podeSerExcluidaPor()` (ver
+     * `NotaProjeto`) são verdadeiros PRO USUÁRIO ATUAL — dono da nota
+     * dentro do prazo de 24h, OU super usuário (Role `Admin`, guard
+     * `web`) sempre, mesmo de nota de outro usuário/de sistema/fora do
+     * prazo. `auth()->user()` lido direto (mesmo padrão já usado por
+     * `adicionarNotaProjeto()` com `auth()->id()`) — sem usuário
+     * autenticado (não deveria acontecer numa tela protegida), trata
+     * como sem permissão nenhuma.
      */
     protected static function linhaExibicaoNota(NotaProjeto $nota): Group
     {
-        $podeEditar = $nota->podeEditar();
-        $podeExcluir = $nota->podeExcluir();
+        $usuarioAtual = auth()->user();
+        $podeEditar = $usuarioAtual && $nota->podeSerEditadaPor($usuarioAtual);
+        $podeExcluir = $usuarioAtual && $nota->podeSerExcluidaPor($usuarioAtual);
         $autor = $nota->usuario?->name ?? __('comercial::filament/resources/projeto.form.notas.autor-sistema');
 
         return Group::make()
@@ -2212,22 +2218,49 @@ class ProjetoResource extends Resource
 
     /**
      * Releitura fresca da nota (`NotaProjeto::find()`, não o `$nota`
-     * fechado no Closure) + `podeEditar()` checado de novo aqui — nunca
-     * confiar só em esconder o ícone na tela (ver CLAUDE.md, regra de
-     * 24h): entre a hora em que a listagem foi montada e o clique em
-     * "Salvar" no modal de edição, o prazo pode ter expirado (mesmo que
-     * pouco provável, é o mesmo cuidado já validado por
-     * `salvarItemAvulso()`/Imposto obsoleto — nunca confiar em dado já
-     * lido antes da ação de gravação de fato acontecer).
+     * fechado no Closure) + `podeSerEditadaPor($usuarioAtual)` checado
+     * de novo aqui — nunca confiar só em esconder o ícone na tela (ver
+     * CLAUDE.md, regra de 24h/super usuário): entre a hora em que a
+     * listagem foi montada e o clique em "Salvar", o prazo pode ter
+     * expirado ou o usuário logado pode ter mudado (mesmo que pouco
+     * provável, é o mesmo cuidado já validado por
+     * `salvarItemAvulso()`/Imposto obsoleto).
+     *
+     * Só grava o campo `texto` — mesmo um super usuário editando NUNCA
+     * altera `usuario_id`/`numero_nota`/`tipo_sistema` (o form deste
+     * modal, `acaoEditarNota()`, só expõe o RichEditor de texto; não há
+     * como esses campos chegarem em `$data`).
+     *
+     * **`created_at` só é atualizado quando quem edita é o PRÓPRIO
+     * autor da nota, dentro do prazo de 24h** (`dentroDoPrazoDeEdicao()`
+     * + `usuario_id === $usuarioAtual->id`) — "reinicia" a janela de
+     * edição, mas NÃO reordena a listagem (ordenada por `numero_nota`,
+     * que não muda numa edição): a nota mantém sua posição, só a
+     * data/hora exibida avança. Um super usuário editando a nota de
+     * OUTRO usuário, uma nota já fora do prazo, ou uma nota de sistema
+     * NUNCA atualiza `created_at` — seria forjar uma data de criação
+     * falsa num registro que é edição de manutenção, não uma nota nova
+     * (decisão registrada no CLAUDE.md). Se o PRÓPRIO super usuário
+     * editar uma nota SUA, recém-criada (dentro do prazo), o
+     * comportamento cai na mesma regra de "autor dentro do prazo" —
+     * consistente, não é "forjar" nada, é a mesma nota sendo re-tocada
+     * pelo mesmo autor.
+     *
+     * `forceFill()` (não `update()`) — `created_at` fica DE PROPÓSITO
+     * fora do `$fillable` (é gerido pelo Eloquent), então um
+     * `update(['created_at' => ...])` seria ignorado silenciosamente,
+     * mesmo achado já documentado pra `numero_item`/`ItemProjeto
+     * ::excluirItemAvulso()`.
      */
     protected static function salvarEdicaoNota(NotaProjeto $nota, array $data): void
     {
+        $usuarioAtual = auth()->user();
         $notaAtual = NotaProjeto::find($nota->id);
 
-        if (! $notaAtual || ! $notaAtual->podeEditar()) {
+        if (! $notaAtual || ! $usuarioAtual || ! $notaAtual->podeSerEditadaPor($usuarioAtual)) {
             Notification::make()
                 ->danger()
-                ->title(__('comercial::filament/resources/projeto.form.notas.notification.prazo-expirado'))
+                ->title(__('comercial::filament/resources/projeto.form.notas.notification.sem-permissao'))
                 ->send();
 
             return;
@@ -2235,9 +2268,22 @@ class ProjetoResource extends Resource
 
         $texto = (string) $data['texto'];
 
-        if (trim((string) $notaAtual->texto) !== trim($texto)) {
-            $notaAtual->update(['texto' => $texto]);
+        if (trim((string) $notaAtual->texto) === trim($texto)) {
+            Notification::make()
+                ->success()
+                ->title(__('comercial::filament/resources/projeto.form.notas.notification.nota-atualizada'))
+                ->send();
+
+            return;
         }
+
+        $dadosParaGravar = ['texto' => $texto];
+
+        if ($notaAtual->usuario_id === $usuarioAtual->id && $notaAtual->dentroDoPrazoDeEdicao()) {
+            $dadosParaGravar['created_at'] = now();
+        }
+
+        $notaAtual->forceFill($dadosParaGravar)->save();
 
         Notification::make()
             ->success()
@@ -2249,16 +2295,18 @@ class ProjetoResource extends Resource
      * Exclusão SIMPLES (sem renumeração — ver CLAUDE.md/`NotaProjeto`),
      * dentro de `DB::transaction()` (pedido explícito da tarefa, mesmo
      * sendo uma única escrita hoje). Mesma releitura fresca +
-     * `podeExcluir()` de `salvarEdicaoNota()` acima, pelo mesmo motivo.
+     * `podeSerExcluidaPor($usuarioAtual)` de `salvarEdicaoNota()` acima,
+     * pelo mesmo motivo.
      */
     protected static function excluirNotaProjeto(NotaProjeto $nota): void
     {
+        $usuarioAtual = auth()->user();
         $notaAtual = NotaProjeto::find($nota->id);
 
-        if (! $notaAtual || ! $notaAtual->podeExcluir()) {
+        if (! $notaAtual || ! $usuarioAtual || ! $notaAtual->podeSerExcluidaPor($usuarioAtual)) {
             Notification::make()
                 ->danger()
-                ->title(__('comercial::filament/resources/projeto.form.notas.notification.prazo-expirado'))
+                ->title(__('comercial::filament/resources/projeto.form.notas.notification.sem-permissao'))
                 ->send();
 
             return;

@@ -1535,11 +1535,15 @@ no canto direito do título da Section "Cabeçalho" (`Section::headerActions()`,
 `->visible()` só com o Projeto já salvo, mesmo critério de "Atribuir
 Processos"), abrindo um modal com a lista de notas + campo de nova nota.
 
-**Model/migration** — `Perseu\Comercial\Models\NotaProjeto`, tabela
-`notas_projeto` (migration `2026_09_05_170000_create_notas_projeto_table`,
-adicionada ao array `->hasMigrations([...])` de `ComercialServiceProvider`,
-mesmo alerta já documentado pra `itens_projeto`). `LogsBusinessActivity`,
-registrada em `SubjectTypeCatalog` (rótulo "Nota de Projeto", busca por
+**Model/migrations** — `Perseu\Comercial\Models\NotaProjeto`, tabela
+`notas_projeto` (migration `2026_09_05_170000_create_notas_projeto_table`
++ `2026_09_05_180000_add_item_projeto_id_to_notas_projeto_table` — a
+segunda ALTERA a tabela já criada pela primeira, nunca editando a
+migration antiga, ver "Comandos e fluxo úteis" no CLAUDE.md da raiz —,
+ambas adicionadas ao array `->hasMigrations([...])` de
+`ComercialServiceProvider`, mesmo alerta já documentado pra
+`itens_projeto`). `LogsBusinessActivity`, registrada em
+`SubjectTypeCatalog` (rótulo "Nota de Projeto", busca por
 `texto`/`numero_nota`, referência `"#{numero_nota} — {texto truncado}"`) —
 sem `TrashCatalog` (sem `SoftDeletes`, sem Lixeira própria, mesma
 divergência de `ItemProjeto`). Sem Resource/Policy própria — vive 100%
@@ -1556,7 +1560,20 @@ já existente, mesma decisão de `ItemProjeto` (por isso também ausente de
   claro por trás da ação que a gerou. A geração automática de notas de
   sistema em si (ex.: "Item X foi excluído") é uma tarefa FUTURA — esta
   tarefa só preparou `tipo_sistema` e a regra de que, se existirem,
-  nunca são editáveis/excluíveis pela tela.
+  nunca são editáveis/excluíveis pela tela (pela UI de usuário comum —
+  ver "Dono da nota + Super usuário" abaixo pra exceção).
+- **`item_projeto_id`** (2026-09-05, segunda tarefa): FK nullable pra
+  `itens_projeto`, `nullOnDelete()` (mesmo motivo de `usuario_id` —
+  excluir o Item não deveria apagar o HISTÓRICO da nota, só o vínculo).
+  Vincula uma nota a um Item específico do Projeto — base do futuro
+  ícone "Cálculos" no menu de cada item (`ItemProjeto::notas()`/
+  `NotaProjeto::item()`), que mostrará as notas de SISTEMA vinculadas
+  àquele item; a geração automática dessas notas em si é de uma tarefa
+  futura (junto da criação de Itens via Promob), esta tarefa só
+  preparou a COLUNA e a relação. `NULL` cobre os 3 casos possíveis
+  (nota de usuário; nota de sistema sobre o Projeto como um todo; nota
+  de sistema sobre um item específico é o único caso com valor) — sem
+  precisar de nenhum valor sentinela tipo "item 0".
 - **`numero_nota`**: `unsignedInteger`, único por `projeto_id`
   (`unique(['projeto_id', 'numero_nota'])`), gerado em
   `NotaProjeto::boot()` (`creating`) com o MESMO critério de
@@ -1579,31 +1596,79 @@ já existente, mesma decisão de `ItemProjeto` (por isso também ausente de
   (`tipo_sistema` já garante isso sozinho, sem precisar de
   `SoftDeletes` como segunda trava).
 
-**Regra de prazo de 24 horas** (`NotaProjeto::podeEditar()`/
-`podeExcluir()`, hoje idênticos — mantidos como dois métodos separados
-porque a tarefa previu que possam divergir no futuro, mesmo sem
-necessidade concreta ainda):
+**Regra de prazo de 24 horas + dono + super usuário** (`NotaProjeto
+::podeSerEditadaPor(User $usuario)`/`podeSerExcluidaPor(User $usuario)`,
+hoje idênticos — mantidos como dois métodos separados porque a tarefa
+previu que possam divergir no futuro, mesmo sem necessidade concreta
+ainda; ambos delegam pra `ehSuperUsuario()`/`dentroDoPrazoDeEdicao()`):
 
 1. Nota de USUÁRIO (`tipo_sistema = false`): editável/excluível pela
    tela só dentro de 24h a partir de `created_at`
-   (`created_at->addHours(24)->isFuture()`). Depois disso, permanente
-   (somente leitura) — nenhum ícone de editar/excluir aparece.
+   (`created_at->addHours(24)->isFuture()`) **e só pelo PRÓPRIO autor**
+   (`usuario_id === $usuario->id`) — outro usuário comum, mesmo dentro
+   do prazo, não pode mexer na nota de alguém diferente (2026-09-05,
+   segunda tarefa; a primeira versão desta regra checava só o prazo,
+   sem checar o dono). Depois das 24h (ou pra qualquer usuário que não
+   seja o autor), permanente pra usuário comum — nenhum ícone de
+   editar/excluir aparece.
 2. Nota de SISTEMA (`tipo_sistema = true`): NUNCA editável/excluível
-   pela tela, independente do prazo — só o próprio sistema (código
-   interno futuro) poderia remover, não implementado agora.
-3. **Dupla validação, nunca só esconder o botão**: `linhaExibicaoNota()`
-   usa `podeEditar()`/`podeExcluir()` pra decidir se o `ActionGroup`
-   (editar/excluir) aparece, MAS `salvarEdicaoNota()`/
-   `excluirNotaProjeto()` releem a nota FRESCA do banco
-   (`NotaProjeto::find($nota->id)`, não o `$nota` fechado no Closure da
-   listagem) e checam de novo antes de gravar/excluir — mesmo cuidado
-   já validado por `salvarItemAvulso()`/Imposto obsoleto (nunca confiar
-   em dado lido antes do clique de fato acontecer). Também estruturalmente
-   reforçado: como o `ActionGroup` só é CONSTRUÍDO quando
-   `podeEditar()`/`podeExcluir()` são verdadeiros, uma nota fora do
-   prazo/de sistema nem tem a Action `editarNota{id}`/`excluirNota{id}`
+   por um usuário comum, independente do prazo.
+3. **Super usuário — Role `Admin` (guard `web`)**: pode editar (só o
+   TEXTO) ou excluir QUALQUER nota, de qualquer autor, mesmo fora do
+   prazo e mesmo de sistema — usado pra testes/manutenção.
+   `ehSuperUsuario()` checa ISSO especificamente porque foi o que a
+   investigação desta tarefa confirmou ser, na prática, a role de
+   privilégio total do sistema hoje (556 permissões atribuídas — ver
+   docblock do método pro porquê NÃO é a role `Sistema`/guard `sanctum`
+   nem o mecanismo `config('filament-shield.super_admin.*')`, ambos
+   propósitos/nomes diferentes e sem relação com isto).
+4. **Dupla validação, nunca só esconder o botão**: `linhaExibicaoNota()`
+   lê `auth()->user()` e usa `podeSerEditadaPor()`/`podeSerExcluidaPor()`
+   pra decidir se o `ActionGroup` (editar/excluir) aparece, MAS
+   `salvarEdicaoNota()`/`excluirNotaProjeto()` releem a nota FRESCA do
+   banco (`NotaProjeto::find($nota->id)`, não o `$nota` fechado no
+   Closure da listagem) e checam de novo o USUÁRIO ATUAL antes de
+   gravar/excluir — mesmo cuidado já validado por
+   `salvarItemAvulso()`/Imposto obsoleto (nunca confiar em dado lido
+   antes do clique de fato acontecer). Também estruturalmente
+   reforçado: como o `ActionGroup` só é CONSTRUÍDO quando as duas
+   checagens são verdadeiras, uma nota que o usuário logado não pode
+   mexer nem tem a Action `editarNota{id}`/`excluirNota{id}`
    REGISTRADA na árvore do Schema — não é só um botão escondido por
-   CSS, a Action simplesmente não existe pra ser encontrada/chamada.
+   CSS, a Action simplesmente não existe pra ser encontrada/chamada
+   (confirmado por teste: um segundo usuário tentando montar a Action
+   de edição da nota de outro usuário nem consegue, `mountedActions`
+   fica só com o modal pai).
+
+**`created_at` avança quando o PRÓPRIO autor edita dentro do prazo, mas
+NUNCA quando é o super usuário fazendo manutenção** (`salvarEdicaoNota()`):
+
+- Autor editando a própria nota, dentro das 24h, com o texto de fato
+  mudando: `created_at = now()` — "reinicia" a janela de edição.
+  **Isso NÃO reordena a listagem** (ordenada por `numero_nota`, que não
+  muda numa edição) — a nota mantém sua posição/número, só a data/hora
+  exibida avança. Confirmado como o comportamento mais simples e sem
+  problema aparente: `numero_nota` já garante uma posição estável
+  independente de `created_at`, então não existe nenhum efeito colateral
+  de reordenação pra tratar.
+- Super usuário editando (nota de outro autor, nota já fora do prazo,
+  ou nota de sistema): `created_at` NUNCA muda — decisão explícita, pra
+  não forjar uma data de criação falsa num registro que é edição de
+  MANUTENÇÃO, não uma nota nova.
+- **Caso de borda decidido**: se o PRÓPRIO super usuário edita uma nota
+  SUA, recém-criada (dentro do prazo), `created_at` avança do mesmo
+  jeito — a regra real que decide é `usuario_id === $usuario->id &&
+  dentroDoPrazoDeEdicao()` (dono + prazo), não "é super usuário sim/
+  não"; um super usuário mexendo na PRÓPRIA nota recente é uma edição
+  normal como qualquer usuário, não uma manutenção de terceiro.
+- Nunca escreve `usuario_id`/`numero_nota`/`tipo_sistema` — o form deste
+  modal (`acaoEditarNota()`) só expõe o `RichEditor` de texto, então
+  mesmo um super usuário fisicamente não tem como alterar esses campos
+  por essa tela, confirmado por teste (passo 9 da "Validação" abaixo).
+  `forceFill()` (não `update()`) pra gravar `texto`+`created_at` juntos
+  — `created_at` fica fora do `$fillable` (gerido pelo Eloquent), então
+  `update(['created_at' => ...])` seria ignorado silenciosamente, mesmo
+  achado já documentado pra `numero_item`.
 
 **Conteúdo do modal** (`camposModalNotasProjeto()`): lista das notas
 (`Group::make()->schema(fn () => $record->notas()->orderByDesc('numero_nota')
@@ -1685,14 +1750,40 @@ pro modal pai; excluir a nota remove o registro E não redireciona pra
 ver abaixo). Separadamente, via Eloquent puro: duas notas sequenciais
 (`1`/`2`); excluir a `1` mantém `2` inalterada; a próxima nota criada
 recebe `3` (sem reaproveitar `1`); uma nota com `created_at` forçado
-pra 25h atrás retorna `podeEditar()`/`podeExcluir()` `false`; uma nota
-`tipo_sistema = true` retorna `false`/`false` mesmo recém-criada; uma
-releitura fresca (`NotaProjeto::find()`) confirma que o bloqueio de
-backend funcionaria mesmo se alguém forçasse a Action depois do prazo.
-**Não testado nesta tarefa**: verificação VISUAL no navegador (sem
-ferramenta de browser disponível nesta sessão) — a validação cobriu o
-comportamento funcional completo via o pipeline real do Livewire, mas
-não a aparência/layout renderizado de fato.
+pra 25h atrás retorna `false` pro próprio autor (método named na época
+`podeEditar()`/`podeExcluir()`, renomeados pra `podeSerEditadaPor()`/
+`podeSerExcluidaPor()` na segunda tarefa — ver abaixo); uma nota
+`tipo_sistema = true` retorna `false` pra usuário comum mesmo recém-
+criada; uma releitura fresca (`NotaProjeto::find()`) confirma que o
+bloqueio de backend funcionaria mesmo se alguém forçasse a Action
+depois do prazo.
+
+**Validação da regra de dono + super usuário (2026-09-05, segunda
+tarefa)** — dois usuários comuns temporários criados via tinker
+(`is_active = true`, mesma `default_company_id`/`allowedCompanies()`
+do admin de teste, + as 3 permissões Shield de Projeto atribuídas
+direto via `givePermissionTo()`, SEM role — precisou desse cuidado
+extra porque um usuário sem `is_active`/empresa/permissão nenhuma
+sequer consegue passar pelo `canAccessPanel()`/Policy da tela, o que
+antes quebrava o próprio `Livewire::test()` com um erro genérico de
+snapshot, não um erro de permissão claro) e o usuário real "zemane"
+(role `Admin`) como super usuário. Confirmado ponta a ponta pelo
+PIPELINE de verdade: usuário dono edita a própria nota dentro do prazo
+→ sucesso, `created_at` avança; um SEGUNDO usuário comum tenta editar
+essa mesma nota → nem consegue montar a Action (`mountedActions` fica
+só com o modal pai, texto permanece o do dono); super usuário edita
+essa mesma nota (de outro autor) → sucesso, texto muda, `created_at`
+**não** muda, e `usuario_id`/`numero_nota`/`tipo_sistema` permanecem
+intactos; super usuário exclui a nota → sucesso, sem redirecionar pra
+`ListProjetos`. Separadamente, via Eloquent puro (`podeSerEditadaPor()`
+direto): dono dentro do prazo `true`; outro usuário comum `false`;
+super usuário `true`; dono de uma nota com `created_at` forçado pra 25h
+atrás `false`; super usuário na mesma nota antiga `true`; usuário comum
+numa nota de sistema `false`; super usuário numa nota de sistema
+`true`. **Não testado nesta tarefa**: verificação VISUAL no navegador
+(sem ferramenta de browser disponível nesta sessão) — a validação
+cobriu o comportamento funcional completo via o pipeline real do
+Livewire, mas não a aparência/layout renderizado de fato.
 
 `EditProjeto::getDefaultActionSuccessRedirectUrl()` ganhou a MESMA
 checagem já usada pra `ItemProjeto` (ver "Excluir Item redirecionava

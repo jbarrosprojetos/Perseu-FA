@@ -142,7 +142,7 @@ return [
                 'nota-adicionada'         => 'Note added successfully.',
                 'nota-atualizada'         => 'Note updated successfully.',
                 'nota-excluida'           => 'Note deleted successfully.',
-                'prazo-expirado'          => 'This note can no longer be edited or deleted (the 24-hour window has closed).',
+                'sem-permissao'           => 'You do not have permission to edit or delete this note (24-hour window closed, another user\'s note, or a system note).',
             ],
         ],
         'descricao'      => 'Job Name',

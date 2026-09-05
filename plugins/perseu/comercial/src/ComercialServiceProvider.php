@@ -52,6 +52,7 @@ class ComercialServiceProvider extends PackageServiceProvider
                 '2026_09_02_130000_add_referencia_preco_id_to_projetos_table',
                 '2026_09_04_160000_create_itens_projeto_table',
                 '2026_09_05_170000_create_notas_projeto_table',
+                '2026_09_05_180000_add_item_projeto_id_to_notas_projeto_table',
             ])
             ->runsMigrations()
             ->hasDependency('auditoria')

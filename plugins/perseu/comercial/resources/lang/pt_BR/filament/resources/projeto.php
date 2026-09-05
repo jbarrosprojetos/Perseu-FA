@@ -142,7 +142,7 @@ return [
                 'nota-adicionada'         => 'Nota adicionada com sucesso.',
                 'nota-atualizada'         => 'Nota atualizada com sucesso.',
                 'nota-excluida'           => 'Nota excluída com sucesso.',
-                'prazo-expirado'          => 'Esta nota não pode mais ser editada ou excluída (prazo de 24 horas encerrado).',
+                'sem-permissao'           => 'Você não tem permissão para editar ou excluir esta nota (prazo de 24 horas encerrado, nota de outro usuário, ou nota do sistema).',
             ],
         ],
         'descricao'      => 'Nome da Obra',

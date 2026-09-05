@@ -4,6 +4,7 @@ namespace Perseu\Comercial\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Perseu\Auditoria\Traits\LogsBusinessActivity;
 use Perseu\Comercial\Enums\OrigemItemProjeto;
 
@@ -63,6 +64,17 @@ class ItemProjeto extends Model
     public function projeto(): BelongsTo
     {
         return $this->belongsTo(Projeto::class);
+    }
+
+    /**
+     * Notas de SISTEMA vinculadas a este item especificamente (base do
+     * futuro ícone "Cálculos" no menu de cada item — ver CLAUDE.md,
+     * "Notas do Projeto"). Geração automática ainda não implementada;
+     * só a coluna/relação já existem.
+     */
+    public function notas(): HasMany
+    {
+        return $this->hasMany(NotaProjeto::class, 'item_projeto_id');
     }
 
     /**

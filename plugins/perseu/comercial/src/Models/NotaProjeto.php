@@ -14,7 +14,8 @@ use Webkul\Security\Models\User;
  * por causa de renumeração (que não existe, ver `numero_nota` abaixo),
  * é porque uma nota de USUÁRIO excluída dentro do prazo de 24h não
  * precisa de Lixeira própria, e uma nota de SISTEMA nunca é excluída
- * pela UI (`tipo_sistema` já cobre essa garantia sozinho).
+ * pela UI (`tipo_sistema` já cobre essa garantia sozinho, exceto pro
+ * super usuário — ver `podeSerEditadaPor()`/`podeSerExcluidaPor()`).
  */
 class NotaProjeto extends Model
 {
@@ -30,6 +31,7 @@ class NotaProjeto extends Model
         'usuario_id',
         'texto',
         'tipo_sistema',
+        'item_projeto_id',
     ];
 
     protected $casts = [
@@ -44,6 +46,20 @@ class NotaProjeto extends Model
     public function usuario(): BelongsTo
     {
         return $this->belongsTo(User::class, 'usuario_id');
+    }
+
+    /**
+     * `item_projeto_id` — vínculo opcional com um Item específico do
+     * Projeto (base do futuro ícone "Cálculos" no menu de cada item,
+     * ver CLAUDE.md). `null` pra nota de usuário e pra nota de sistema
+     * sobre o Projeto como um todo; preenchido só numa nota de sistema
+     * sobre um item específico (geração automática ainda não
+     * implementada — tarefa futura, junto da criação de Itens via
+     * Promob).
+     */
+    public function item(): BelongsTo
+    {
+        return $this->belongsTo(ItemProjeto::class, 'item_projeto_id');
     }
 
     /**
@@ -70,32 +86,82 @@ class NotaProjeto extends Model
     }
 
     /**
-     * Regra de prazo de 24h (ver CLAUDE.md): uma nota de USUÁRIO só
-     * pode ser editada/excluída pela tela dentro de 24h a partir de
-     * `created_at`; uma nota de SISTEMA (`tipo_sistema = true`) NUNCA
-     * pode, independente do prazo. `podeEditar()`/`podeExcluir()` hoje
-     * compartilham exatamente a mesma regra — mantidos como dois
-     * métodos (em vez de um só) porque a tarefa que os criou já previu
-     * que edição e exclusão possam divergir no futuro, mesmo sem essa
-     * necessidade concreta ainda.
+     * "Super usuário" = usuário com a Role `Admin` (guard `web`) — a
+     * role de privilégio total já usada de fato neste sistema (556
+     * permissões atribuídas hoje, sincronizadas manualmente conforme
+     * "Convenção para Model novo de cadastro de negócio" no CLAUDE.md
+     * da raiz). **Achado da investigação desta tarefa, registrado aqui
+     * porque o enunciado pediu explicitamente pra confirmar o nome**:
+     * NÃO é a Role `Sistema` (guard `sanctum`) — essa é usada só pra
+     * liberar a Debugbar (ver CLAUDE.md da raiz, "Debugbar via Role com
+     * Guard Sanctum"), um propósito completamente diferente, sem
+     * relação com privilégio administrativo geral. Também não é
+     * `config('filament-shield.super_admin.name')` — esse mecanismo do
+     * Shield está `'enabled' => false` em `config/filament-shield.php`
+     * e a role que ele nomeia (`'super_admin'`) nem existe na tabela
+     * `roles` deste banco (confirmado por query direta); os dois
+     * `Gate::before()` do projeto que checam esse nome
+     * (`bypass_company_scope`/`bypass_ownership_scope`, em
+     * `webkul/support`/`webkul/security`) estão efetivamente dormentes
+     * hoje por causa disso. `Admin` (guard `web`) é a role que de fato
+     * concentra o privilégio total na prática atual do sistema.
+     */
+    public function ehSuperUsuario(User $usuario): bool
+    {
+        return $usuario->hasRole('Admin', 'web');
+    }
+
+    /**
+     * Regra de permissão (ver CLAUDE.md, "Notas do Projeto — regra de
+     * 24h e super usuário"):
      *
-     * Usado tanto para a exibição condicional dos ícones de
-     * editar/excluir (`ProjetoResource::linhaExibicaoNota()`) quanto
-     * como validação de segurança no backend (`editarNotaProjeto()`/
+     * - Super usuário: pode editar QUALQUER nota, de qualquer usuário,
+     *   mesmo fora do prazo e mesmo de sistema — usado pra testes e
+     *   manutenção.
+     * - Nota de SISTEMA: usuário comum NUNCA pode editar, independente
+     *   do prazo.
+     * - Nota de USUÁRIO: só o próprio autor (`usuario_id === $usuario->id`)
+     *   pode editar, e só dentro de 24h a partir de `created_at`.
+     *
+     * Usado tanto pra exibição condicional dos ícones de editar/excluir
+     * (`ProjetoResource::linhaExibicaoNota()`) quanto como validação de
+     * segurança no backend (`ProjetoResource::salvarEdicaoNota()`/
      * `excluirNotaProjeto()`) — nunca confiar só em esconder o botão na
      * tela.
      */
-    public function podeEditar(): bool
+    public function podeSerEditadaPor(User $usuario): bool
     {
-        return $this->dentroDoPrazoDeEdicao();
+        if ($this->ehSuperUsuario($usuario)) {
+            return true;
+        }
+
+        if ($this->tipo_sistema) {
+            return false;
+        }
+
+        return $this->usuario_id === $usuario->id && $this->dentroDoPrazoDeEdicao();
     }
 
-    public function podeExcluir(): bool
+    /**
+     * Hoje idêntica a `podeSerEditadaPor()` — mantida como método
+     * separado porque editar e excluir podem divergir no futuro (ex.:
+     * um super usuário com permissão de editar mas não de excluir),
+     * mesmo sem essa necessidade concreta ainda.
+     */
+    public function podeSerExcluidaPor(User $usuario): bool
     {
-        return $this->dentroDoPrazoDeEdicao();
+        return $this->podeSerEditadaPor($usuario);
     }
 
-    protected function dentroDoPrazoDeEdicao(): bool
+    /**
+     * Janela de 24h a partir de `created_at` — usada por
+     * `podeSerEditadaPor()`/`podeSerExcluidaPor()` (só pra nota de
+     * USUÁRIO, o super usuário ignora completamente este prazo) e
+     * também por `ProjetoResource::salvarEdicaoNota()` pra decidir se
+     * uma edição do próprio autor deve "reiniciar" a janela (atualizar
+     * `created_at` pro momento da edição — ver CLAUDE.md).
+     */
+    public function dentroDoPrazoDeEdicao(): bool
     {
         if ($this->tipo_sistema) {
             return false;
