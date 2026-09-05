@@ -497,33 +497,6 @@ class ProjetoResource extends Resource
                                     ->dehydrated(false)
                                     ->columnSpan(4),
 
-                                // Campo de controle (não persiste, não tem
-                                // input visível — `columnSpan(['default' =>
-                                // 'hidden'])` já vem por padrão do próprio
-                                // `Hidden`) que guarda qual origem teve seu
-                                // cabeçalho de colunas exibido pelo botão
-                                // "Inserir" — hoje só "Item Avulso" liga essa
-                                // exibição (ver Action abaixo); as outras 2
-                                // origens (Promob, SketchUp) continuam de
-                                // fora, com a notificação placeholder.
-                                Hidden::make('origem_item_inserida')
-                                    ->dehydrated(false),
-
-                                // Campo de controle que guarda o ID do
-                                // ItemProjeto atualmente em edição (ver
-                                // `abrirEdicaoItemAvulso()`) — `null`
-                                // quando a linha de input está inserindo
-                                // um item NOVO (não editando um já
-                                // existente). Só um item por vez: abrir a
-                                // edição de outro item simplesmente
-                                // sobrescreve este valor (e os campos
-                                // `novo_item_*`), fechando a edição
-                                // anterior sem persistir nada dela — a
-                                // opção mais simples entre as sugeridas na
-                                // tarefa, ver CLAUDE.md.
-                                Hidden::make('item_em_edicao_id')
-                                    ->dehydrated(false),
-
                                 Actions::make([
                                     Action::make('inserirItem')
                                         ->label(__('comercial::filament/resources/projeto.form.itens.inserir'))
@@ -535,14 +508,19 @@ class ProjetoResource extends Resource
                                         // tela sempre aparece só UM botão
                                         // "Inserir" na posição, mudando de
                                         // comportamento conforme a origem
-                                        // selecionada.
-                                        ->visible(fn (Get $get) => $get('origem_item_selecionada') !== 'promob')
-                                        ->action(function (Get $get, Set $set): void {
+                                        // selecionada. "Item Avulso" TAMBÉM
+                                        // tem seu próprio botão
+                                        // (`inserirItemAvulso`, abre modal —
+                                        // ver abaixo, mesmo padrão do
+                                        // Promob) — este aqui cobre só as
+                                        // origens SEM comportamento real
+                                        // ainda ("Item de Linha", "SketchUp")
+                                        // + o aviso de "sem seleção".
+                                        ->visible(fn (Get $get) => ! in_array($get('origem_item_selecionada'), ['promob', 'item_avulso'], true))
+                                        ->action(function (Get $get): void {
                                             $origem = $get('origem_item_selecionada');
 
                                             if (blank($origem)) {
-                                                $set('origem_item_inserida', null);
-
                                                 Notification::make()
                                                     ->warning()
                                                     ->title(__('comercial::filament/resources/projeto.form.itens.notification.sem-selecao'))
@@ -551,64 +529,6 @@ class ProjetoResource extends Resource
                                                 return;
                                             }
 
-                                            // "Item Avulso" é a única origem com
-                                            // comportamento real por enquanto —
-                                            // mostra o cabeçalho de colunas e a
-                                            // linha de input (dois Grid::make(24)
-                                            // logo abaixo). "Item de Linha" e
-                                            // "SketchUp" continuam com a
-                                            // notificação placeholder até
-                                            // ganharem sua própria lógica numa
-                                            // tarefa futura ("Promob" tem seu
-                                            // próprio botão, ver acima).
-                                            if ($origem === 'item_avulso') {
-                                                $set('origem_item_inserida', $origem);
-
-                                                // Cancela qualquer edição em
-                                                // andamento (ver
-                                                // `item_em_edicao_id` acima) —
-                                                // clicar "Inserir" de novo
-                                                // sempre começa uma linha NOVA
-                                                // em branco, mesmo que outro
-                                                // item estivesse sendo editado.
-                                                $set('item_em_edicao_id', null);
-
-                                                // Reseta a linha de input a cada
-                                                // clique em "Inserir" (linha nova
-                                                // sempre começa em branco) e busca
-                                                // o Imp.% da Referência de Preços
-                                                // ATUALMENTE selecionada no
-                                                // Cabeçalho (não do registro salvo
-                                                // no banco — se o usuário troca a
-                                                // Referência antes de clicar
-                                                // "Inserir", vale a escolha atual).
-                                                // Não dá pra usar `->default()` no
-                                                // campo `novo_item_imposto`: ele
-                                                // vive dentro de um Grid com
-                                                // `->visible()` condicional, e o
-                                                // `fill()` inicial da página não
-                                                // hidrata campos que começam
-                                                // escondidos — confirmado via
-                                                // `Livewire::test()` (o campo
-                                                // ficava sempre `null` mesmo com
-                                                // Referência vinculada).
-                                                $referenciaPrecoId = $get('referencia_preco_id');
-
-                                                $set('novo_item_imposto', filled($referenciaPrecoId)
-                                                    ? ReferenciaPreco::find($referenciaPrecoId)?->imposto
-                                                    : null);
-                                                $set('novo_item_descricao', null);
-                                                $set('novo_item_quantidade', null);
-                                                $set('novo_item_porcentagem', null);
-                                                $set('novo_item_custo_unitario', null);
-                                                $set('novo_item_valor_unitario', null);
-                                                $set('novo_item_valor_total', null);
-
-                                                return;
-                                            }
-
-                                            $set('origem_item_inserida', null);
-
                                             Notification::make()
                                                 ->info()
                                                 ->title(__('comercial::filament/resources/projeto.form.itens.notification.pendente-title'))
@@ -616,6 +536,42 @@ class ProjetoResource extends Resource
                                                     'origem' => static::origensItemOptions()[$origem] ?? $origem,
                                                 ]))
                                                 ->send();
+                                        }),
+
+                                    // "Inserir" de "Item Avulso" — abre um
+                                    // FORM MODAL (mesmo padrão técnico do
+                                    // Promob: `Action::make()->form()`, que o
+                                    // Filament abre automaticamente como
+                                    // modal) no lugar da antiga linha de
+                                    // input INLINE (ver "Item Avulso: migração
+                                    // de linha inline pra Form Modal" no
+                                    // CLAUDE.md pro histórico da decisão).
+                                    // Diferente do Promob, este modal É a
+                                    // Action de SUBMIT normal do Filament
+                                    // (sem `->modalSubmitAction(false)`) —
+                                    // os campos aqui são valores escalares
+                                    // simples (não upload de arquivo), então
+                                    // a desidratação padrão do Schema
+                                    // funciona sem nenhum workaround, e
+                                    // `->action(function (array $data, ...))`
+                                    // já recebe tudo pronto/validado.
+                                    // `->mountUsing()` SEMPRE reseta o form
+                                    // (criação: tudo em branco; edição:
+                                    // preenchido com os dados atuais do item,
+                                    // recalculados a partir do Imposto ATUAL
+                                    // da Referência de Preços) — aprendido da
+                                    // correção do bug de estado do modal
+                                    // Promob: nunca confiar em "resetar ao
+                                    // fechar", só ao ABRIR.
+                                    Action::make('inserirItemAvulso')
+                                        ->label(__('comercial::filament/resources/projeto.form.itens.inserir'))
+                                        ->visible(fn (Get $get) => $get('origem_item_selecionada') === 'item_avulso')
+                                        ->modalHeading(__('comercial::filament/resources/projeto.form.itens.item-avulso-modal.heading-criar'))
+                                        ->modalSubmitActionLabel(__('comercial::filament/resources/projeto.form.itens.item-avulso-modal.criar'))
+                                        ->mountUsing(fn (?Schema $schema, Get $get, ?Projeto $record) => static::preencherFormularioItemAvulso($schema, $get, $record, null))
+                                        ->form(static::camposFormularioItemAvulso())
+                                        ->action(function (array $data, Get $get, ?Projeto $record, $livewire): void {
+                                            static::salvarItemAvulso($data, $get, $record, $livewire);
                                         }),
 
                                     // "Inserir" de "Promob" — só visível quando
@@ -842,11 +798,14 @@ class ProjetoResource extends Resource
                             ]),
 
                         // Cabeçalho de colunas estilo planilha (ver aba "00"
-                        // do Excel de referência da F.A. Marcenaria) para a
-                        // origem "Item Avulso" — só os RÓTULOS; a linha de
-                        // INPUT de verdade é o próximo Grid::make(24) logo
-                        // abaixo, com os MESMOS columnSpan (alinhamento
-                        // coluna a coluna). Última coluna (1) fica sem
+                        // do Excel de referência da F.A. Marcenaria) — SEMPRE
+                        // visível (2026-09-06: desde a migração de Item
+                        // Avulso pra Form Modal, este Grid deixou de ser o
+                        // cabeçalho de uma linha de INPUT inline condicional
+                        // e passou a ser só o cabeçalho FIXO da tabela de
+                        // itens já inseridos, listados logo abaixo — ver
+                        // CLAUDE.md, "Item Avulso: migração de linha inline
+                        // pra Form Modal"). Última coluna (1) fica sem
                         // rótulo — espaço reservado, sem uso definido ainda.
                         // Coluna "Imp.%" REMOVIDA da tela (2026-09-03) — o
                         // Imposto da Referência de Preços continua entrando
@@ -859,26 +818,19 @@ class ProjetoResource extends Resource
                         // Ícone de ajuda (2026-09-04): 4 colunas (Referência,
                         // Descrição, %, Custo Unitário) têm um ícone "?" com
                         // tooltip anexado ao PRÓPRIO `Text` do cabeçalho (via
-                        // `Flex::make([Text::make(...), Icon::make(...)])`),
-                        // não ao campo de input da linha de baixo. Motivo: o
-                        // rótulo de cada coluna vive só aqui (a linha de
-                        // input tem `->hiddenLabel()`/`Text::make('')`), e um
-                        // `->hintIcon()` no campo de input se ancora ao label
-                        // NATIVO desse campo — que está oculto/vazio — então
-                        // o ícone ficava flutuando sozinho sobre o input, sem
-                        // nenhuma relação visual com o texto do rótulo acima
-                        // (achado real, corrigido nesta data). `Icon` (não
-                        // `Text::make()->icon()`) porque `Text::toEmbeddedHtml()`
-                        // só desenha o ícone no modo `->badge()` (pill com
-                        // fundo/borda, indesejado aqui) — no modo normal
-                        // (usado por todo o cabeçalho) o ícone informado via
-                        // `->icon()` é simplesmente ignorado no render,
-                        // confirmado lendo o Blade do componente. `Flex`
-                        // porque é um Component de verdade (aceita
-                        // `->columnSpan()` do Grid pai, via `CanSpanColumns`
-                        // herdado de `Component`) — `->dense()` (gap-3, já
-                        // compilado no CSS do Filament) no lugar do gap-6
-                        // default: um `class` Tailwind arbitrário via
+                        // `Flex::make([Text::make(...), Icon::make(...)])`).
+                        // `Icon` (não `Text::make()->icon()`) porque
+                        // `Text::toEmbeddedHtml()` só desenha o ícone no modo
+                        // `->badge()` (pill com fundo/borda, indesejado
+                        // aqui) — no modo normal (usado por todo o
+                        // cabeçalho) o ícone informado via `->icon()` é
+                        // simplesmente ignorado no render, confirmado lendo
+                        // o Blade do componente. `Flex` porque é um
+                        // Component de verdade (aceita `->columnSpan()` do
+                        // Grid pai, via `CanSpanColumns` herdado de
+                        // `Component`) — `->dense()` (gap-3, já compilado no
+                        // CSS do Filament) no lugar do gap-6 default: um
+                        // `class` Tailwind arbitrário via
                         // `->extraAttributes()` (ex. `'gap-1'`) NÃO teria
                         // efeito — o painel admin usa o CSS pré-compilado do
                         // Filament (sem build Tailwind próprio escaneando
@@ -889,7 +841,6 @@ class ProjetoResource extends Resource
                         Grid::make(24)
                             ->columnSpanFull()
                             ->extraAttributes($gridGap)
-                            ->visible(fn (Get $get) => $get('origem_item_inserida') === 'item_avulso')
                             ->schema([
                                 Text::make(__('comercial::filament/resources/projeto.form.itens.cabecalho-item-avulso.item'))
                                     ->weight(FontWeight::Bold)
@@ -951,190 +902,21 @@ class ProjetoResource extends Resource
                                     ->columnSpan(1),
                             ]),
 
-                        // Linha de INPUT de Item Avulso — mesmos columnSpan
-                        // do cabeçalho acima, pra alinhar coluna a coluna.
-                        // Nenhum dado é persistido aqui ainda (todos os
-                        // campos `dehydrated(false)`) — é só a interface
-                        // reativa calculando em tempo real; a tabela de
-                        // Itens e a ação de confirmar/salvar de fato ficam
-                        // pra uma tarefa futura (ver botão "confirmar" da
-                        // última coluna, ainda sem ação real).
-                        Grid::make(24)
-                            ->columnSpanFull()
-                            ->extraAttributes($gridGap)
-                            ->visible(fn (Get $get) => $get('origem_item_inserida') === 'item_avulso')
-                            ->schema([
-                                // Numeração automática (###) — em MODO
-                                // EDIÇÃO (`item_em_edicao_id` preenchido)
-                                // mostra o número REAL já gravado daquele
-                                // item; em modo inserção (linha nova) mostra
-                                // uma PRÉVIA do próximo número, mesma conta
-                                // usada de verdade por `ItemProjeto::boot()`
-                                // (`creating`) — `MAX(...) + 1` — pra nunca
-                                // divergir do número que será gravado ao
-                                // confirmar. Sem `withTrashed()` — `ItemProjeto`
-                                // não usa `SoftDeletes` (ver Model/CLAUDE.md).
-                                Placeholder::make('novo_item_numero_display')
-                                    ->hiddenLabel()
-                                    ->content(function (Get $get, ?Projeto $record): string {
-                                        $itemEmEdicaoId = $get('item_em_edicao_id');
-
-                                        if (filled($itemEmEdicaoId)) {
-                                            $numero = $record?->itens()->find($itemEmEdicaoId)?->numero_item;
-
-                                            if (filled($numero)) {
-                                                return $numero;
-                                            }
-                                        }
-
-                                        $ultimoNumero = (int) ($record?->itens()->max('numero_item') ?? 0);
-
-                                        return str_pad((string) ($ultimoNumero + 1), 3, '0', STR_PAD_LEFT);
-                                    })
-                                    ->columnSpan(1),
-
-                                // Referência: sem campo para Item Avulso, só
-                                // reserva a coluna (mesma lógica das colunas
-                                // vazias do cabeçalho).
-                                Text::make('')
-                                    ->columnSpan(4),
-
-                                // Toolbar REMOVIDA (`->toolbarButtons([])`)
-                                // — depois de investigar e descartar o modo
-                                // "bubble menu" (aparece só em foco, ver
-                                // CLAUDE.md), a decisão foi tirar a barra de
-                                // botões de vez. O campo continua sendo um
-                                // RichEditor de verdade — todas as extensões
-                                // (Bold, Italic, Underline etc.) seguem
-                                // carregadas e os atalhos de teclado
-                                // funcionam normalmente, só o botão visual é
-                                // que some (`getToolbarButtons()` vazio pula
-                                // o `<div class="fi-fo-rich-editor-toolbar">`
-                                // inteiro no render, ver
-                                // `RichEditor::toEmbeddedHtml()`). O ícone de
-                                // ajuda com os atalhos (tooltip) NÃO fica mais
-                                // aqui — `->hintIcon()` se ancora ao label
-                                // NATIVO do campo, que este campo não tem
-                                // (`->hiddenLabel()`); o ícone vive no `Text`
-                                // "Descrição" do cabeçalho acima (ver
-                                // Grid::make(24) anterior), ao lado do rótulo
-                                // de verdade.
-                                RichEditor::make('novo_item_descricao')
-                                    ->hiddenLabel()
-                                    ->toolbarButtons([])
-                                    ->dehydrated(false)
-                                    ->columnSpan(7),
-
-                                TextInput::make('novo_item_quantidade')
-                                    ->hiddenLabel()
-                                    ->numeric()
-                                    ->integer()
-                                    ->minValue(0)
-                                    ->live(onBlur: true)
-                                    ->dehydrated(false)
-                                    ->extraInputAttributes(['class' => 'fi-input-no-spinner'])
-                                    ->afterStateUpdated(fn (Get $get, Set $set) => static::recalcularValoresItemAvulso($get, $set))
-                                    ->columnSpan(1),
-
-                                TextInput::make('novo_item_valor_unitario')
-                                    ->hiddenLabel()
-                                    ->numeric()
-                                    ->prefix('R$')
-                                    ->disabled()
-                                    ->dehydrated(false)
-                                    ->columnSpan(3),
-
-                                TextInput::make('novo_item_valor_total')
-                                    ->hiddenLabel()
-                                    ->numeric()
-                                    ->prefix('R$')
-                                    ->disabled()
-                                    ->dehydrated(false)
-                                    ->columnSpan(3),
-
-                                // Coluna "Imp.%" REMOVIDA da tela (2026-09-03)
-                                // — vira `Hidden` (sem `columnSpan` próprio,
-                                // `Hidden::setUp()` já usa
-                                // `columnSpan(['default' => 'hidden'])`, não
-                                // consome espaço no Grid). Continua vindo da
-                                // Referência de Preços ATUALMENTE selecionada
-                                // no Cabeçalho (`referencia_preco_id`),
-                                // preenchido pela própria Action "Inserir"
-                                // (acima, quando "Item Avulso" é escolhido) —
-                                // não por `->default()` aqui: o campo vive
-                                // dentro de um Grid com `->visible()`
-                                // condicional, e o `fill()` inicial da
-                                // página não hidrata campos que começam
-                                // escondidos (confirmado via
-                                // `Livewire::test()`). Sem Referência
-                                // vinculada fica em branco e é tratado como
-                                // 0% no cálculo (ver
-                                // `recalcularValoresItemAvulso()`) — o aviso
-                                // em vermelho de "sem Referência" já existe
-                                // no próprio campo lá no Cabeçalho.
-                                Hidden::make('novo_item_imposto')
-                                    ->dehydrated(false),
-
-                                TextInput::make('novo_item_porcentagem')
-                                    ->hiddenLabel()
-                                    ->numeric()
-                                    ->integer()
-                                    ->live(onBlur: true)
-                                    ->dehydrated(false)
-                                    ->extraInputAttributes(['class' => 'fi-input-no-spinner'])
-                                    ->afterStateUpdated(fn (Get $get, Set $set) => static::recalcularValoresItemAvulso($get, $set))
-                                    ->columnSpan(1),
-
-                                TextInput::make('novo_item_custo_unitario')
-                                    ->hiddenLabel()
-                                    ->numeric()
-                                    ->minValue(0)
-                                    ->prefix('R$')
-                                    ->live(onBlur: true)
-                                    ->dehydrated(false)
-                                    // Mesmo asset já usado em Qtde./Porc.%
-                                    // (`resources/css/filament/admin-input-no-spinner.css`,
-                                    // ver CLAUDE.md) — reaproveitado aqui,
-                                    // não duplicado, pra esconder as setas
-                                    // de incremento/decremento também no
-                                    // Custo Unit.
-                                    ->extraInputAttributes(['class' => 'fi-input-no-spinner'])
-                                    ->afterStateUpdated(fn (Get $get, Set $set) => static::recalcularValoresItemAvulso($get, $set))
-                                    ->columnSpan(3),
-
-                                // Confirmar inserção/alteração do item —
-                                // grava de fato em `itens_projeto` (ver
-                                // `confirmarItemAvulso()`). Mesmo ícone em
-                                // modo inserção E em modo edição (task
-                                // pediu explicitamente o MESMO ícone de
-                                // confirmação nos dois casos) — só o
-                                // resultado interno muda (`create` vs.
-                                // `update`, ver `item_em_edicao_id`).
-                                Actions::make([
-                                    Action::make('confirmarItemAvulso')
-                                        ->label(__('comercial::filament/resources/projeto.form.itens.confirmar'))
-                                        ->icon('heroicon-o-check-circle')
-                                        ->iconButton()
-                                        ->color('success')
-                                        ->action(fn (Get $get, Set $set, ?Projeto $record, $livewire) => static::confirmarItemAvulso($get, $set, $record, $livewire)),
-                                ])
-                                    ->alignCenter()
-                                    ->verticallyAlignStart()
-                                    ->columnSpan(1),
-                            ]),
-
                         // Listagem dos itens JÁ inseridos no Projeto — TODOS
                         // eles, não só os de origem Item Avulso (única
                         // origem com persistência real até agora, mas a
                         // área de listagem é a mesma pras 7, ver CLAUDE.md).
                         // `Group` (não outro `Section`) só pra agrupar as
                         // linhas dinamicamente geradas sem nenhum wrapper
-                        // visual extra. O item ATUALMENTE em edição
-                        // (`item_em_edicao_id`) é OMITIDO daqui de
-                        // propósito — os dados dele já estão sendo
-                        // mostrados na linha de INPUT acima (ver
-                        // `abrirEdicaoItemAvulso()`); mostrar as duas ao
-                        // mesmo tempo duplicaria a linha na tela.
+                        // visual extra.
+                        //
+                        // Desde a migração de Item Avulso pra Form Modal
+                        // (2026-09-06), o item em EDIÇÃO não precisa mais
+                        // ser omitido daqui — o modal de edição flutua POR
+                        // CIMA da listagem (não substitui uma linha inline
+                        // como antes), então mostrar a linha normalmente
+                        // por baixo do modal aberto não duplica/conflita
+                        // com nada.
                         //
                         // Lê `$livewire->itensCarregados` (hidratado do
                         // banco no `mount()` de `EditProjeto`, ver essa
@@ -1149,15 +931,12 @@ class ProjetoResource extends Resource
                         // a property).
                         Group::make()
                             ->columnSpanFull()
-                            ->schema(function (Get $get, $livewire): array {
+                            ->schema(function ($livewire): array {
                                 if (! $livewire instanceof EditProjeto) {
                                     return [];
                                 }
 
-                                $itemEmEdicaoId = $get('item_em_edicao_id');
-
                                 return $livewire->itensCarregados
-                                    ->reject(fn (ItemProjeto $item) => filled($itemEmEdicaoId) && ((string) $item->id === (string) $itemEmEdicaoId))
                                     ->map(fn (ItemProjeto $item) => static::linhaExibicaoItem($item))
                                     ->all();
                             }),
@@ -1532,11 +1311,12 @@ class ProjetoResource extends Resource
      *
      * Função PURA (sem `Get`/`Set`, sem tocar em Referência de Preços) —
      * usada tanto pela prévia reativa em tela (`recalcularValoresItemAvulso()`,
-     * que lê o Imp.% já em cache em `novo_item_imposto`, só pra exibição
-     * enquanto o usuário digita) quanto pela gravação de verdade
-     * (`confirmarItemAvulso()`, que busca o Imp.% FRESCO do banco antes
-     * de chamar esta função — ver essa subseção pro motivo, achado real
-     * de concorrência em `INVESTIGACAO-TRANSACOES-CONCORRENCIA.md`).
+     * que lê o Imp.% já em cache no campo `imposto` do Form Modal, só
+     * pra exibição enquanto o usuário digita) quanto pela gravação de
+     * verdade (`salvarItemAvulso()`, que busca o Imp.% FRESCO do banco
+     * antes de chamar esta função — ver essa subseção pro motivo,
+     * achado real de concorrência em
+     * `INVESTIGACAO-TRANSACOES-CONCORRENCIA.md`).
      * Extraída à parte de propósito: sem essa separação, corrigir o
      * "Imposto obsoleto" exigiria duplicar a fórmula em vez de só trocar
      * QUAL Imp.% entra nela.
@@ -1555,46 +1335,304 @@ class ProjetoResource extends Resource
     }
 
     /**
-     * Recalcula a PRÉVIA em tela a cada tecla em Qtde./Porc.%/Custo
-     * Unitário — usa o Imp.% já em cache (`novo_item_imposto`, carregado
-     * uma vez ao abrir a linha, ver `inserirItem`/`abrirEdicaoItemAvulso()`).
-     * Essa prévia PODE ficar obsoleta se a Referência de Preços mudar
-     * enquanto o usuário digita — sem problema aqui, é só exibição; a
-     * gravação de verdade (`confirmarItemAvulso()`) sempre busca o valor
-     * FRESCO do banco antes de persistir, independente do que esta
-     * prévia mostrou.
+     * Campos do FORM MODAL de "Item Avulso" — reaproveitado pelas DUAS
+     * Actions que abrem esse modal (`inserirItemAvulso`, criação, e
+     * `editarItemAvulso{id}` de cada linha da listagem, edição), pra
+     * não duplicar a definição dos campos entre as duas. Nomes de campo
+     * SEM o prefixo `novo_item_*` da versão anterior (linha inline) —
+     * não faz mais sentido, já que agora vivem DENTRO do Schema PRÓPRIO
+     * de cada Action (`mountedActions.{n}.data`), nunca mais
+     * compartilhado com o resto da Section "Itens" (ver
+     * `preencherFormularioItemAvulso()`/`salvarItemAvulso()` sobre como
+     * isso se conecta ao restante do formulário do Cabeçalho).
+     *
+     * **Validação NATIVA do Schema (`->required()`/`->rules(['gt:0'])`),
+     * não mais `ValidationException::withMessages()` manual** — achado
+     * que só passou a valer com a migração pra modal: a razão original
+     * pra validação manual era que os campos `novo_item_*` (nomes da
+     * versão anterior, linha inline) viviam no MESMO Schema da Section "Itens"
+     * inteira, e um `->required()` ali faria o Salvar/Cancelar do
+     * CABEÇALHO exigir esses campos também mesmo sem o usuário estar
+     * inserindo/editando um item. Isso não existe mais: cada Action com
+     * `->form()` tem seu PRÓPRIO Schema dedicado (mesmo mecanismo do
+     * Promob, `getMountedActionSchema()`), então `->required()` aqui só
+     * afeta a VALIDAÇÃO DESTE MODAL, nunca o formulário do Cabeçalho. A
+     * única regra que a validação nativa não cobre sozinha é "RichEditor
+     * não pode ser só HTML vazio tipo `<p></p>`" (`->required()` trata
+     * isso como PREENCHIDO, já que a string não é vazia) — por isso o
+     * `->rule()` customizado na Descrição, com a MESMA checagem
+     * (`blank(trim(strip_tags($valor)))`) que a validação manual
+     * antiga já fazia.
+     *
+     * @return array<int, \Filament\Schemas\Components\Component>
+     */
+    /**
+     * Extrai o texto puro de um valor de `RichEditor` pra checar se está
+     * "visualmente vazio" — usada pela regra de validação de `descricao`
+     * em `camposFormularioItemAvulso()`.
+     *
+     * **Achado real**: o `->rule()` de um componente do Schema roda por
+     * cima do ESTADO BRUTO do Livewire (`Filament\Schemas\Concerns\
+     * CanBeValidated::validate()` chama `$livewire->validate($rules,
+     * ...)` direto, sem passar pelo `getState()`/dehydrate do
+     * componente) — pra um `RichEditor`, esse estado bruto NUNCA é a
+     * string HTML final, é sempre o documento TipTap em ARRAY
+     * (`RichEditorStateCast::set()`, chamado ao hidratar/preencher o
+     * campo, sempre devolve `$editor->getDocument()`; só `get()`
+     * — chamado na DESIDRATAÇÃO, depois da validação passar — devolve a
+     * string HTML). Um `(string) $value` direto nesse ponto lança
+     * "Array to string conversion" (convertido pelo handler de erros do
+     * Laravel em `ErrorException`, 500 sem nenhuma mensagem de validação
+     * visível — é exatamente esse bug que esta função corrige). Recebe
+     * `mixed` de propósito (cobre os dois formatos possíveis) em vez de
+     * assumir sempre array.
+     */
+    protected static function textoPlanoRichEditor(mixed $value): string
+    {
+        if (is_string($value)) {
+            return trim(strip_tags($value));
+        }
+
+        if (! is_array($value)) {
+            return '';
+        }
+
+        $texto = '';
+
+        $percorrer = function (array $node) use (&$percorrer, &$texto): void {
+            if (is_string($node['text'] ?? null)) {
+                $texto .= $node['text'];
+            }
+
+            foreach ($node['content'] ?? [] as $filho) {
+                if (is_array($filho)) {
+                    $percorrer($filho);
+                }
+            }
+        };
+
+        $percorrer($value);
+
+        return trim($texto);
+    }
+
+    protected static function camposFormularioItemAvulso(): array
+    {
+        return [
+            Placeholder::make('numero_item_preview')
+                ->label(__('comercial::filament/resources/projeto.form.itens.item-avulso-modal.item-label'))
+                ->content(function (Get $get, ?Projeto $record): string {
+                    $itemId = $get('item_id');
+
+                    if (filled($itemId)) {
+                        $numero = $record?->itens()->find($itemId)?->numero_item;
+
+                        if (filled($numero)) {
+                            return $numero;
+                        }
+                    }
+
+                    $ultimoNumero = (int) ($record?->itens()->max('numero_item') ?? 0);
+
+                    return str_pad((string) ($ultimoNumero + 1), 3, '0', STR_PAD_LEFT);
+                }),
+
+            // Controle interno — qual `ItemProjeto` está sendo editado
+            // (`null` = criação de um item novo). Preenchido só por
+            // `preencherFormularioItemAvulso()` (`mountUsing()` das duas
+            // Actions), nunca editável pelo usuário.
+            Hidden::make('item_id'),
+
+            RichEditor::make('descricao')
+                ->label(__('comercial::filament/resources/projeto.form.itens.item-avulso-modal.descricao-label'))
+                ->helperText(__('comercial::filament/resources/projeto.form.itens.descricao-atalhos'))
+                ->required()
+                ->rule(fn () => function (string $attribute, $value, \Closure $fail): void {
+                    if (blank(static::textoPlanoRichEditor($value))) {
+                        $fail(__('comercial::filament/resources/projeto.form.itens.validacao.descricao-obrigatoria'));
+                    }
+                })
+                ->validationMessages([
+                    'required' => __('comercial::filament/resources/projeto.form.itens.validacao.descricao-obrigatoria'),
+                ])
+                // Toolbar removida (`->toolbarButtons([])`) — decisão já
+                // tomada e documentada antes da migração pra modal (ver
+                // CLAUDE.md, "Toolbar do RichEditor de 'Item Avulso'
+                // removida"): as extensões continuam TODAS carregadas
+                // (negrito/itálico/etc. via atalho de teclado), só o
+                // botão visual é que some. Continua valendo igual dentro
+                // do modal.
+                ->toolbarButtons([])
+                ->columnSpanFull(),
+
+            Grid::make(3)
+                ->schema([
+                    TextInput::make('quantidade')
+                        ->label(__('comercial::filament/resources/projeto.form.itens.item-avulso-modal.quantidade-label'))
+                        ->numeric()
+                        ->integer()
+                        ->required()
+                        ->rules(['gt:0'])
+                        ->validationMessages([
+                            'required' => __('comercial::filament/resources/projeto.form.itens.validacao.quantidade-obrigatoria'),
+                            'gt'       => __('comercial::filament/resources/projeto.form.itens.validacao.quantidade-obrigatoria'),
+                        ])
+                        ->live(onBlur: true)
+                        ->extraInputAttributes(['class' => 'fi-input-no-spinner'])
+                        ->afterStateUpdated(fn (Get $get, Set $set) => static::recalcularValoresItemAvulso($get, $set)),
+
+                    TextInput::make('porcentagem')
+                        ->label(__('comercial::filament/resources/projeto.form.itens.item-avulso-modal.porcentagem-label'))
+                        ->helperText(__('comercial::filament/resources/projeto.form.itens.porcentagem-tooltip'))
+                        ->numeric()
+                        ->integer()
+                        ->live(onBlur: true)
+                        ->extraInputAttributes(['class' => 'fi-input-no-spinner'])
+                        ->afterStateUpdated(fn (Get $get, Set $set) => static::recalcularValoresItemAvulso($get, $set)),
+
+                    TextInput::make('custo_unitario')
+                        ->label(__('comercial::filament/resources/projeto.form.itens.item-avulso-modal.custo-unitario-label'))
+                        ->helperText(__('comercial::filament/resources/projeto.form.itens.custo-unitario-tooltip'))
+                        ->numeric()
+                        ->minValue(0)
+                        ->required()
+                        ->rules(['gt:0'])
+                        ->validationMessages([
+                            'required' => __('comercial::filament/resources/projeto.form.itens.validacao.custo-unitario-obrigatorio'),
+                            'gt'       => __('comercial::filament/resources/projeto.form.itens.validacao.custo-unitario-obrigatorio'),
+                        ])
+                        ->prefix('R$')
+                        ->live(onBlur: true)
+                        ->extraInputAttributes(['class' => 'fi-input-no-spinner'])
+                        ->afterStateUpdated(fn (Get $get, Set $set) => static::recalcularValoresItemAvulso($get, $set)),
+                ]),
+
+            Grid::make(2)
+                ->schema([
+                    TextInput::make('valor_unitario')
+                        ->label(__('comercial::filament/resources/projeto.form.itens.item-avulso-modal.valor-unitario-label'))
+                        ->numeric()
+                        ->prefix('R$')
+                        ->disabled()
+                        ->dehydrated(false),
+
+                    TextInput::make('valor_total')
+                        ->label(__('comercial::filament/resources/projeto.form.itens.item-avulso-modal.valor-total-label'))
+                        ->numeric()
+                        ->prefix('R$')
+                        ->disabled()
+                        ->dehydrated(false),
+                ]),
+
+            // Imp.% da Referência de Preços ATUALMENTE selecionada no
+            // Cabeçalho — cache só pra PRÉVIA em tela
+            // (`recalcularValoresItemAvulso()`); a gravação de verdade
+            // (`salvarItemAvulso()`) sempre busca o valor FRESCO do
+            // banco no momento do clique em Criar/Salvar (ver essa
+            // função pro motivo, achado de concorrência já corrigido
+            // antes da migração pra modal).
+            Hidden::make('imposto')
+                ->dehydrated(false),
+        ];
+    }
+
+    /**
+     * Preenche o Form Modal de Item Avulso — chamado por
+     * `->mountUsing()` das DUAS Actions que abrem esse modal
+     * (`inserirItemAvulso`/`editarItemAvulso{id}`), SEMPRE, toda vez
+     * que o modal é aberto. Sem `$itemId` (criação): tudo em branco,
+     * só o Imp.% pré-buscado. Com `$itemId` (edição): preenchido com os
+     * dados atuais do item, recalculando Valor Unitário/Total a partir
+     * do Imposto ATUAL da Referência de Preços do Cabeçalho (não o
+     * Imp.% que foi usado quando o item foi originalmente gravado — a
+     * regra de "recalcular normalmente" ao entrar em edição já valia
+     * antes da migração pra modal, continua igual).
+     *
+     * **Resetar SEMPRE ao abrir, nunca confiar em resetar ao fechar** —
+     * lição aprendida corrigindo o bug de estado do modal do Promob
+     * (ver CLAUDE.md, "Fluxo Promob": o botão Cancelar de um modal
+     * fecha via Alpine puro, sem nenhuma requisição ao servidor, então
+     * qualquer reset colocado num caminho de "fechar" nunca rodaria de
+     * verdade). Aqui nem é preciso se preocupar com isso na prática:
+     * `mountUsing()` roda incondicionalmente a cada `mountAction()`
+     * (toda vez que o modal é aberto, criação OU edição), e como este
+     * modal usa a Action de SUBMIT normal do Filament (diferente do
+     * Promob), cada abertura já ganha um Schema NOVO — mas preencher
+     * tudo explicitamente aqui (em vez de confiar em algum estado
+     * anterior) deixa o comportamento óbvio e à prova de qualquer
+     * mudança futura na forma como o modal é montado.
+     */
+    protected static function preencherFormularioItemAvulso(?Schema $schema, Get $get, ?Projeto $record, ?string $itemId): void
+    {
+        $referenciaPrecoId = $get('referencia_preco_id');
+        $imposto = filled($referenciaPrecoId)
+            ? (float) (ReferenciaPreco::find($referenciaPrecoId)?->imposto ?? 0)
+            : 0.0;
+
+        $item = filled($itemId) ? $record?->itens()->find($itemId) : null;
+
+        $quantidade = $item?->quantidade;
+        $porcentagem = $item?->porcentagem;
+        $custoUnitario = $item?->custo_unitario;
+
+        $valores = (filled($quantidade) && ((float) $quantidade > 0) && filled($custoUnitario) && ((float) $custoUnitario > 0))
+            ? static::calcularValoresItemAvulso((float) $custoUnitario, (float) $quantidade, (float) ($porcentagem ?? 0), $imposto)
+            : ['valor_unitario' => null, 'valor_total' => null];
+
+        $schema?->fill([
+            'item_id'        => $itemId,
+            'descricao'      => $item?->descricao,
+            'quantidade'     => $quantidade,
+            'porcentagem'    => $porcentagem,
+            'custo_unitario' => $custoUnitario,
+            'imposto'        => $imposto,
+            'valor_unitario' => $valores['valor_unitario'],
+            'valor_total'    => $valores['valor_total'],
+        ]);
+    }
+
+    /**
+     * Recalcula a PRÉVIA em tela a cada tecla em Quantidade/%/Custo
+     * Unitário — usa o Imp.% já em cache (`imposto`, carregado uma vez
+     * ao abrir o modal, ver `preencherFormularioItemAvulso()`). Essa
+     * prévia PODE ficar obsoleta se a Referência de Preços mudar
+     * enquanto o usuário preenche o modal — sem problema aqui, é só
+     * exibição; a gravação de verdade (`salvarItemAvulso()`) sempre
+     * busca o valor FRESCO do banco antes de persistir, independente
+     * do que esta prévia mostrou.
      *
      * Sem Quantidade OU Custo Unitário (vazios/zerados), os dois campos
      * calculados ficam em branco — não há erro, só nada pra calcular
      * ainda. Imp.% sem Referência de Preços vinculada ao Projeto entra
-     * como 0% (ver campo `novo_item_imposto` acima).
+     * como 0% (ver campo `imposto` acima).
      */
     protected static function recalcularValoresItemAvulso(Get $get, Set $set): void
     {
-        $quantidade = $get('novo_item_quantidade');
-        $custoUnitario = $get('novo_item_custo_unitario');
+        $quantidade = $get('quantidade');
+        $custoUnitario = $get('custo_unitario');
 
         if (blank($quantidade) || ((float) $quantidade <= 0) || blank($custoUnitario) || ((float) $custoUnitario <= 0)) {
-            $set('novo_item_valor_unitario', null);
-            $set('novo_item_valor_total', null);
+            $set('valor_unitario', null);
+            $set('valor_total', null);
 
             return;
         }
 
-        $porcentagem = (float) ($get('novo_item_porcentagem') ?: 0);
-        $imposto = (float) ($get('novo_item_imposto') ?: 0);
+        $porcentagem = (float) ($get('porcentagem') ?: 0);
+        $imposto = (float) ($get('imposto') ?: 0);
 
         $valores = static::calcularValoresItemAvulso((float) $custoUnitario, (float) $quantidade, $porcentagem, $imposto);
 
-        $set('novo_item_valor_unitario', $valores['valor_unitario']);
-        $set('novo_item_valor_total', $valores['valor_total']);
+        $set('valor_unitario', $valores['valor_unitario']);
+        $set('valor_total', $valores['valor_total']);
     }
 
     /**
-     * Valida e persiste a linha de Item Avulso (`novo_item_*`) — chamada
-     * pelo ícone de confirmação, tanto em modo INSERÇÃO
-     * (`item_em_edicao_id` vazio, cria um `ItemProjeto` novo) quanto em
-     * modo EDIÇÃO (preenchido, `update()` só se algo mudou — ver
+     * Valida (nativamente pelo Schema, ver `camposFormularioItemAvulso()`)
+     * e persiste o Form Modal de Item Avulso — chamada pelo `->action()`
+     * das DUAS Actions que abrem esse modal, tanto em modo INSERÇÃO
+     * (`item_id` vazio, cria um `ItemProjeto` novo) quanto em modo
+     * EDIÇÃO (preenchido, `update()` só se algo mudou — ver
      * `itemAvulsoMudou()`).
      *
      * Sem `$record` (página de CRIAÇÃO do Projeto, ainda sem salvar):
@@ -1602,49 +1640,28 @@ class ProjetoResource extends Resource
      * Projeto já existente, mesmo critério já usado pelo botão "Atribuir
      * Processos" (só em `EditProjeto`, ver CLAUDE.md).
      *
-     * Validação MANUAL (`ValidationException::withMessages(['data.<campo>'
-     * => ...])`), não `->required()` nos campos do Schema — os campos
-     * `novo_item_*` são compartilhados por TODA a Section "Itens"
-     * (inclusive quando nenhum item está sendo inserido/editado); se
-     * fossem `->required()` no Schema, o botão Salvar/Cancelar do
-     * CABEÇALHO (`getFormActionsContentComponent()`, formulário
-     * DIFERENTE) passaria a exigi-los também sempre que a linha de Item
-     * Avulso estivesse visível, mesmo sem o usuário ter clicado em
-     * confirmar — efeito colateral indesejado. `ValidationException
-     * ::withMessages()` é o mesmo mecanismo usado por
-     * `Filament\Auth\Pages\Login::throwFailureValidationException()`
-     * (vendor) pra anexar erro a um campo específico do formulário sem
-     * depender de regras declaradas no Schema — confirmado lendo o
-     * código-fonte, não presumido. `'data.'` é o prefixo porque
-     * `EditRecord`/`CreateRecord` usam `->statePath('data')`
-     * (`defaultForm()`, vendor).
-     *
-     * **Imposto obsoleto — corrigido em 2026-09-05** (achado real de
-     * concorrência, ver `INVESTIGACAO-TRANSACOES-CONCORRENCIA.md`):
-     * `novo_item_imposto` (lido uma vez ao abrir a linha, ver
-     * `inserirItem`/`abrirEdicaoItemAvulso()`) fica em CACHE no estado do
-     * componente Livewire por todo o tempo que o usuário leva
-     * preenchendo/revendo o item — se outra sessão mudar o `imposto` da
-     * Referência de Preços nesse meio-tempo, o valor gravado usaria o
-     * Imp.% ANTIGO, sem ninguém perceber. Este método NÃO usa
-     * `novo_item_imposto` pra gravar — busca o `imposto` FRESCO do banco
+     * **Imposto obsoleto — corrigido antes da migração pra modal, ver
+     * `INVESTIGACAO-TRANSACOES-CONCORRENCIA.md`, continua valendo
+     * igual**: `imposto` (lido uma vez ao abrir o modal) fica em CACHE
+     * só pra prévia em tela — este método NÃO usa esse valor pra
+     * gravar, busca o `imposto` FRESCO do banco
      * (`ReferenciaPreco::lockForUpdate()`) NO MOMENTO exato do clique em
-     * "Confirmar", dentro da MESMA `DB::transaction()` da gravação, e
-     * `lockForUpdate()` na Referência de Preços trava qualquer alteração
-     * concorrente dela até esta transação terminar — fecha de vez a
-     * janela de corrida (não só reduz), pelo menos entre o clique e o
-     * commit. `imposto_aplicado` grava esse valor no próprio
-     * `ItemProjeto`, preservando o histórico do cálculo mesmo que a
-     * Referência de Preços mude depois.
+     * "Criar"/"Salvar", dentro da MESMA `DB::transaction()` da
+     * gravação, e `lockForUpdate()` na Referência de Preços trava
+     * qualquer alteração concorrente dela até esta transação terminar.
+     * `imposto_aplicado` grava esse valor no próprio `ItemProjeto`,
+     * preservando o histórico do cálculo mesmo que a Referência de
+     * Preços mude depois.
      *
-     * `$livewire->recarregarItens()` no final (achado real, 2026-09-05,
-     * ver `EditProjeto::itensCarregados`) — a listagem de itens já
-     * inseridos passou a ler uma property hidratada no `mount()` da
-     * página, não mais `$record->itens()` reconsultado a cada render;
-     * sem chamar isso aqui, o item recém-criado/editado só apareceria
-     * na listagem depois de um reload completo da página.
+     * `$livewire->recarregarItens()` no final — a listagem de itens já
+     * inseridos lê uma property hidratada no `mount()` da página, não
+     * `$record->itens()` reconsultado a cada render; sem chamar isso
+     * aqui, o item recém-criado/editado só apareceria na listagem
+     * depois de um reload completo da página.
+     *
+     * @param  array<string, mixed>  $data
      */
-    protected static function confirmarItemAvulso(Get $get, Set $set, ?Projeto $record, $livewire): void
+    protected static function salvarItemAvulso(array $data, Get $get, ?Projeto $record, $livewire): void
     {
         if (! $record) {
             Notification::make()
@@ -1656,33 +1673,14 @@ class ProjetoResource extends Resource
             return;
         }
 
-        $descricao = (string) $get('novo_item_descricao');
-        $quantidade = $get('novo_item_quantidade');
-        $custoUnitario = $get('novo_item_custo_unitario');
-
-        $erros = [];
-
-        if (blank(trim(strip_tags($descricao)))) {
-            $erros['data.novo_item_descricao'] = __('comercial::filament/resources/projeto.form.itens.validacao.descricao-obrigatoria');
-        }
-
-        if (blank($quantidade) || ((float) $quantidade <= 0)) {
-            $erros['data.novo_item_quantidade'] = __('comercial::filament/resources/projeto.form.itens.validacao.quantidade-obrigatoria');
-        }
-
-        if (blank($custoUnitario) || ((float) $custoUnitario <= 0)) {
-            $erros['data.novo_item_custo_unitario'] = __('comercial::filament/resources/projeto.form.itens.validacao.custo-unitario-obrigatorio');
-        }
-
-        if ($erros) {
-            throw ValidationException::withMessages($erros);
-        }
-
-        $porcentagem = (float) ($get('novo_item_porcentagem') ?: 0);
+        $itemId = $data['item_id'] ?? null;
+        $descricao = (string) $data['descricao'];
+        $quantidade = $data['quantidade'];
+        $custoUnitario = $data['custo_unitario'];
+        $porcentagem = (float) ($data['porcentagem'] ?? 0);
         $referenciaPrecoId = $get('referencia_preco_id');
-        $itemEmEdicaoId = $get('item_em_edicao_id');
 
-        DB::transaction(function () use ($record, $descricao, $quantidade, $custoUnitario, $porcentagem, $referenciaPrecoId, $itemEmEdicaoId): void {
+        DB::transaction(function () use ($record, $descricao, $quantidade, $custoUnitario, $porcentagem, $referenciaPrecoId, $itemId): void {
             $impostoAplicado = filled($referenciaPrecoId)
                 ? (float) (ReferenciaPreco::where('id', $referenciaPrecoId)->lockForUpdate()->value('imposto') ?? 0)
                 : 0.0;
@@ -1700,8 +1698,8 @@ class ProjetoResource extends Resource
                 'valor_total'      => $valores['valor_total'],
             ];
 
-            if (filled($itemEmEdicaoId)) {
-                $item = $record->itens()->lockForUpdate()->find($itemEmEdicaoId);
+            if (filled($itemId)) {
+                $item = $record->itens()->lockForUpdate()->find($itemId);
 
                 if ($item && static::itemAvulsoMudou($item, $dados)) {
                     $item->update($dados);
@@ -1726,8 +1724,6 @@ class ProjetoResource extends Resource
             $livewire->recarregarItens();
         }
 
-        static::resetarLinhaItemAvulso($set);
-
         Notification::make()
             ->success()
             ->title(__('comercial::filament/resources/projeto.form.itens.notification.item-avulso-confirmado'))
@@ -1741,7 +1737,7 @@ class ProjetoResource extends Resource
      * abre a edição e confirma sem mudar nada. Comparação por VALOR
      * normalizado (`round(...,2)` nos decimais, `(int)` na quantidade,
      * `trim()` na descrição) — não por igualdade estrita de string, já
-     * que `$dados` vem de `$get()` (tipos soltos de input) e o Model
+     * que `$dados` vem do FORM MODAL (tipos soltos de input) e o Model
      * devolve os campos já com cast (`decimal:2`/`integer`).
      *
      * @param  array<string, mixed>  $dados
@@ -1765,57 +1761,6 @@ class ProjetoResource extends Resource
         return false;
     }
 
-    /**
-     * Fecha a linha de Item Avulso e volta ao estado inicial da Section
-     * "Itens" — chamada ao final de `confirmarItemAvulso()`. NÃO reseta
-     * `origem_item_selecionada` de propósito (o Select continua com
-     * "Item Avulso" escolhido) — depois de confirmar um item é comum
-     * querer inserir outro da MESMA origem em seguida; resetar o Select
-     * exigiria escolher a origem de novo a cada item.
-     */
-    protected static function resetarLinhaItemAvulso(Set $set): void
-    {
-        $set('origem_item_inserida', null);
-        $set('item_em_edicao_id', null);
-        $set('novo_item_imposto', null);
-        $set('novo_item_descricao', null);
-        $set('novo_item_quantidade', null);
-        $set('novo_item_porcentagem', null);
-        $set('novo_item_custo_unitario', null);
-        $set('novo_item_valor_unitario', null);
-        $set('novo_item_valor_total', null);
-    }
-
-    /**
-     * Preenche a linha de INPUT com os dados de um item JÁ existente e
-     * liga o modo EDIÇÃO (`item_em_edicao_id`) — chamada pelo ícone de
-     * edição de uma linha da listagem (`linhaExibicaoItem()`). Recalcula
-     * Valor Unitário/Valor Total a partir do Imposto ATUAL da Referência
-     * de Preços do Cabeçalho (mesma regra já usada por "Inserir", não o
-     * Imp.% que foi usado quando o item foi originalmente gravado — a
-     * tarefa pediu explicitamente "recalculados normalmente" ao entrar
-     * em edição) — se a Referência não mudou desde a criação do item, o
-     * resultado bate exatamente com o valor já salvo (importante pra
-     * `itemAvulsoMudou()` não acusar mudança sem o usuário ter alterado
-     * nada).
-     */
-    protected static function abrirEdicaoItemAvulso(Get $get, Set $set, ItemProjeto $item): void
-    {
-        $set('origem_item_inserida', OrigemItemProjeto::ItemAvulso->value);
-        $set('item_em_edicao_id', $item->id);
-
-        $referenciaPrecoId = $get('referencia_preco_id');
-
-        $set('novo_item_imposto', filled($referenciaPrecoId)
-            ? ReferenciaPreco::find($referenciaPrecoId)?->imposto
-            : null);
-        $set('novo_item_descricao', $item->descricao);
-        $set('novo_item_quantidade', $item->quantidade);
-        $set('novo_item_porcentagem', $item->porcentagem);
-        $set('novo_item_custo_unitario', $item->custo_unitario);
-
-        static::recalcularValoresItemAvulso($get, $set);
-    }
 
     /**
      * Uma linha de EXIBIÇÃO da listagem de itens já inseridos — mesma
@@ -1867,10 +1812,25 @@ class ProjetoResource extends Resource
                     ->columnSpan(3),
                 Actions::make([
                     ActionGroup::make([
-                        Action::make("editarItemProjeto{$item->id}")
+                        // Abre o MESMO Form Modal de "Inserir" (ver
+                        // `inserirItemAvulso`/`camposFormularioItemAvulso()`),
+                        // preenchido com os dados atuais deste item —
+                        // migração de linha inline pra modal (2026-09-06,
+                        // ver CLAUDE.md). `$item->id` fica FECHADO no
+                        // Closure (não precisa de `->arguments()`/`->record()`
+                        // pra identificar QUAL item, já que
+                        // `linhaExibicaoItem()` já roda uma vez por item,
+                        // com `$item` capturado normalmente).
+                        Action::make("editarItemAvulso{$item->id}")
                             ->label(__('comercial::filament/resources/projeto.form.itens.editar'))
                             ->icon('heroicon-o-pencil-square')
-                            ->action(fn (Get $get, Set $set) => static::abrirEdicaoItemAvulso($get, $set, $item)),
+                            ->modalHeading(__('comercial::filament/resources/projeto.form.itens.item-avulso-modal.heading-editar'))
+                            ->modalSubmitActionLabel(__('comercial::filament/resources/projeto.form.itens.item-avulso-modal.salvar'))
+                            ->mountUsing(fn (?Schema $schema, Get $get, ?Projeto $record) => static::preencherFormularioItemAvulso($schema, $get, $record, (string) $item->id))
+                            ->form(static::camposFormularioItemAvulso())
+                            ->action(function (array $data, Get $get, ?Projeto $record, $livewire): void {
+                                static::salvarItemAvulso($data, $get, $record, $livewire);
+                            }),
                         // `DeleteAction` só pelo VISUAL padrão (ícone de
                         // lixeira, cor "danger", `->requiresConfirmation()`
                         // já ligado por padrão em `setUp()`) — mesmo

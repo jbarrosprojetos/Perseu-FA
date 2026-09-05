@@ -231,26 +231,30 @@ Itens ainda não implementadas).
   quando `$this` é um `EditProjeto`, a de `CreateRecord` quando é um
   `CreateProjeto`. Nenhuma mudança no Resource foi necessária.
 
-### Cabeçalho estilo planilha para "Item Avulso" (2026-09-03, colunas corrigidas 2026-09-03, Imp.% removido 2026-09-03, ícones de ajuda no cabeçalho 2026-09-04, "Custo Unitário" abreviado 2026-09-04)
+### Cabeçalho estilo planilha para "Item Avulso" (2026-09-03, colunas corrigidas 2026-09-03, Imp.% removido 2026-09-03, ícones de ajuda no cabeçalho 2026-09-04, "Custo Unitário" abreviado 2026-09-04, virou cabeçalho FIXO da listagem em 2026-09-06)
 
-Ao clicar "Inserir" com "Item Avulso" selecionado, em vez da
-notificação placeholder aparece um cabeçalho de colunas — `Grid::make(24)`
-com **9 colunas visíveis** (`columnSpan`: Item 1, Referência 4,
-Descrição 7, Qtde. 1, Valor Unit. 3, Valor Total 3, Porc.% 1, Custo
-Unitário 3, última coluna sem rótulo 1 — soma 24), no espaço reservado
-logo abaixo do Select+Botão, dentro da mesma Section "Itens". A
-inspiração é a aba "00" do Excel `260000 Cliente Padrão Proposta
-00.xlsm` usado hoje pela F.A. Marcenaria. Todos os rótulos aparecem
-abreviados ("Qtde.", "Valor Unit.", "Porc.%") — **"Porc.%" é a mesma
-coluna que já passou por "Desconto" → "Porcentagem" → "Porc.%"**, não
-confundir com uma coluna nova; a última coluna (1) continua reservada,
-sem texto — sem uso definido ainda (a coluna que ANTES se chamava
-"Total Custo" foi renomeada para "Custo Unitário" em 2026-09-03 —
-representa o custo unitário do item, não mais um "total"). As outras 3
-origens do dropdown (Item de Linha, Promob, SketchUp) continuam com a
-notificação placeholder normal (Promob ganhou depois um modal próprio,
-ver subseção "Fluxo Promob" abaixo); só "Item Avulso" tem este
-cabeçalho/linha de input próprios até agora.
+Este cabeçalho de colunas — `Grid::make(24)` com **9 colunas visíveis**
+(`columnSpan`: Item 1, Referência 4, Descrição 7, Qtde. 1, Valor Unit.
+3, Valor Total 3, Porc.% 1, Custo Unitário 3, última coluna sem rótulo
+1 — soma 24) — é hoje o cabeçalho FIXO da tabela de itens já inseridos
+(sempre visível, independente de origem/seleção — ver "Item Avulso
+migrado de linha inline pra Form Modal" mais abaixo pra essa mudança).
+Até 2026-09-06 ele só aparecia ao clicar "Inserir" com "Item Avulso"
+selecionado, condicionado a um `Hidden` de estado (ver bullet
+"Estado via `Hidden::make(...)`" logo abaixo, HISTÓRICO — esse campo
+foi removido); a distribuição de colunas em si não mudou. A inspiração
+é a aba "00" do Excel `260000 Cliente Padrão Proposta 00.xlsm` usado
+hoje pela F.A. Marcenaria. Todos os rótulos aparecem abreviados
+("Qtde.", "Valor Unit.", "Porc.%") — **"Porc.%" é a mesma coluna que já
+passou por "Desconto" → "Porcentagem" → "Porc.%"**, não confundir com
+uma coluna nova; a última coluna (1) continua reservada, sem texto —
+sem uso definido ainda (a coluna que ANTES se chamava "Total Custo" foi
+renomeada para "Custo Unitário" em 2026-09-03 — representa o custo
+unitário do item, não mais um "total"). As outras 3 origens do dropdown
+(Item de Linha, Promob, SketchUp) continuam com a notificação
+placeholder normal (Promob ganhou depois um modal próprio, ver
+subseção "Fluxo Promob" abaixo); só "Item Avulso" tem esta tabela/
+modal próprios até agora.
 
 **Coluna "Imp.%" removida da tela em 2026-09-03** (ver subseção "Imp.%
 removido..." mais abaixo) — a distribuição ATUAL de 9 colunas acima já
@@ -317,16 +321,16 @@ da primeira tentativa, corrigido nesta data).
   a um cabeçalho estilo planilha. `Grid` (não Flex) porque todo campo
   tem largura fixa em número de colunas, mesmo critério já registrado
   em "Grid vs. static::flexRow()" (`plugins/perseu/pessoas/CLAUDE.md`).
-- **Estado via `Hidden::make('origem_item_inserida')`** (`dehydrated(false)`,
-  fora do `$fillable`) — guarda qual origem teve seu botão "Inserir"
-  clicado por último; a Action de "Inserir" faz `$set()` nesse campo
-  (`'item_avulso'` só quando essa origem é a selecionada, `null` nos
-  demais casos) e o `Grid::make(24)` do cabeçalho usa
-  `->visible(fn (Get $get) => $get('origem_item_inserida') === 'item_avulso')`.
-  Precisa ser um campo à parte do `Select::make('origem_item_selecionada')`
-  (que reflete a opção escolhida no dropdown, mudando a cada seleção) —
-  o cabeçalho só deve reagir ao CLIQUE em "Inserir", não à troca de
-  opção no Select antes de clicar.
+- **HISTÓRICO (removido em 2026-09-06): estado via `Hidden::make('origem_item_inserida')`**
+  (`dehydrated(false)`, fora do `$fillable`) — guardava qual origem
+  tinha seu botão "Inserir" clicado por último; a Action de "Inserir"
+  fazia `$set()` nesse campo (`'item_avulso'` só quando essa origem era
+  a selecionada, `null` nos demais casos) e o `Grid::make(24)` do
+  cabeçalho usava `->visible(fn (Get $get) => $get('origem_item_inserida')
+  === 'item_avulso')`. Deixou de existir quando o cabeçalho virou fixo
+  (sempre visível) e a linha de INPUT (que também dependia desse campo)
+  virou modal — ver "Item Avulso migrado de linha inline pra Form
+  Modal" mais abaixo.
 - **Achado de teste**: `Livewire\Testing\Testable::html()` devolve o
   HTML do ÚLTIMO ciclo de vida real do componente (`$this->lastState`)
   — chamar a action via `$test->instance()->mountAction(...)` direto
@@ -342,104 +346,70 @@ da primeira tentativa, corrigido nesta data).
   inspecionar o HTML renderizado, usar `$test->call(...)`. Nenhuma das
   duas cobre as duas coisas ao mesmo tempo.
 
-### Linha de INPUT de "Item Avulso" + botão "Mobilização e Frete" (2026-09-03)
+### Toolbar do RichEditor de "Item Avulso" removida — atalhos de teclado (2026-09-03, texto fixo trocado por ícone com balão em 2026-09-03, ícone movido pro cabeçalho em 2026-09-04, campo migrado pra dentro do modal em 2026-09-06)
 
-Logo abaixo do cabeçalho de colunas (subseção anterior), um SEGUNDO
-`Grid::make(24)` com os MESMOS `columnSpan` (1,4,7,1,3,3,1,3,1 — ver
-"Imp.% removido" mais abaixo pra a distribuição ATUAL) traz os campos
-de verdade — ainda nenhuma persistência (todos `dehydrated(false)`,
-prefixo `novo_item_*`, fora do `$fillable` de `Projeto`); a tabela
-`itens_projeto` (ou nome equivalente) e a ação real de confirmar/
-salvar ficam pra uma próxima etapa.
+**HISTÓRICO (até 2026-09-06): linha de INPUT inline.** Até a migração
+pra Form Modal (ver "Item Avulso migrado de linha inline pra Form
+Modal" mais abaixo), o campo de Descrição vivia numa linha de INPUT
+inline, um SEGUNDO `Grid::make(24)` logo abaixo do cabeçalho de
+colunas, com os MESMOS `columnSpan` do cabeçalho — `RichEditor::make('novo_item_descricao')`
+com `->hiddenLabel()` (o rótulo de verdade vivia só na linha de
+CABEÇALHO acima) e um `->hintIcon()` pro texto de orientação dos
+atalhos. **Hoje o campo se chama só `descricao`, vive dentro do
+`->form()` do Form Modal (`camposFormularioItemAvulso()`) e tem
+`->label()`/`->helperText()` PRÓPRIOS e sempre visíveis** — não
+precisa mais de `->hiddenLabel()`/`->hintIcon()` porque o modal não
+compartilha layout com nenhum cabeçalho de tabela; o texto de
+orientação dos atalhos (`descricao-atalhos`) virou `->helperText()`
+comum, sempre visível abaixo do campo dentro do modal (sem o
+custo de "ocupar espaço na tela o tempo todo" que motivou o ícone com
+balão originalmente — um modal já é um contexto todo dedicado a
+preencher aquele item, diferente da linha inline que ficava lado a
+lado com o resto do formulário do Projeto).
 
-- **Item** (1): `Placeholder` só-leitura, formato `###`. Ainda não há
-  tabela de Itens pra contar registros reais — fixo em `"001"` por
-  enquanto (todo Projeto "começa" sem nenhum item confirmado, já que
-  confirmar/persistir é tarefa futura). Quando a tabela existir, trocar
-  por uma contagem real de itens do Projeto.
-- **Referência** (4): sem campo, só `Text::make('')` reservando a
-  coluna (Item Avulso não usa essa coluna).
-- **Descrição** (7): `RichEditor::make('novo_item_descricao')` sem
-  `->toolbarButtons()` — o conjunto DEFAULT do Filament
-  (`RichEditor::getDefaultToolbarButtons()`) já cobre bold/italic/
-  underline/strike/sub/superscript/link, h2/h3, alinhamento,
-  blockquote/codeBlock/listas, tabela, anexos, undo/redo — não precisa
-  declarar nada pra "todas as ferramentas padrão" pedidas.
-  **Investigação (2026-09-03): toolbar "tipo bubble menu" (só em foco,
-  esconde ao perder foco) — NÃO implementada, descartada por conflito
-  de UX, não por dificuldade técnica pura.** O mecanismo existe e é de
-  primeira classe (`RichEditor::floatingToolbars()`, documentado em
-  `vendor/filament/forms/docs/10-rich-editor.md`, "Customizing floating
-  toolbars") — usa `@tiptap/extension-bubble-menu` por baixo
-  (`vendor/filament/forms/resources/js/components/rich-editor.js`,
-  `BubbleMenuPlugin`). Mas o `shouldShow` que decide quando o bubble
-  aparece é HARDCODED no JS do pacote (não configurável via PHP): pra
-  qualquer chave que NÃO seja `'paragraph'` (ex.: `'heading'`,
-  `'table'`) já basta o CURSOR estar dentro do nó
-  (`editor.isFocused && editor.isActive(key)`, sem precisar de seleção)
-  — mas pra `'paragraph'` (o nó onde vive praticamente todo texto
-  digitado normalmente) a condição EXTRA `!editor.state.selection.empty`
-  é exigida, ou seja, o bubble só aparece com TEXTO SELECIONADO, não
-  com o cursor simplesmente posicionado/em foco. Migrar TODAS as
-  ferramentas padrão pra dentro de `floatingToolbars(['paragraph' =>
-  [...]])` (esvaziando a toolbar fixa) trocaria "sempre visível" por
-  "só aparece com seleção" — quebra ferramentas que não fazem sentido
-  como bubble de seleção (undo/redo, anexar arquivo, inserir tabela:
-  ações de documento, não de trecho selecionado) e impede o fluxo
-  comum de "clicar em Negrito ANTES de digitar" (sem seleção prévia,
-  não haveria toolbar visível pra clicar). Um focus/blur "puro" (sem
-  depender de seleção) exigiria (a) sobrescrever a Blade view do
-  componente — inviável hoje porque o `RichEditor` não tem NENHUM
-  arquivo `.blade.php` no pacote pra publicar/copiar, é 100% renderizado
-  via `toEmbeddedHtml()` em PHP (~500 linhas) — ou (b) fazer fork do
-  asset JS compilado (`rich-editor.js`) pra expor um estado `isFocused`
-  reativo e religar `x-show` manualmente no wrapper da toolbar,
-  mantido à mão em todo upgrade do Filament (alto risco de quebrar
-  silenciosamente numa atualização futura). Estimativa: 1-2 dias +
-  manutenção contínua — não vale o custo/risco agora.
-  **Decisão seguinte (2026-09-03): toolbar removida de vez**
-  (`->toolbarButtons([])`), sem tentar escondê-la condicionalmente —
-  ver subseção seguinte.
+`RichEditor::make('descricao')->toolbarButtons([])` continua igual —
+`getToolbarButtons()` retorna array vazio, `RichEditor::toEmbeddedHtml()`
+pula o `<div class="fi-fo-rich-editor-toolbar">` inteiro (`if ((! $isDisabled)
+&& filled($toolbarButtons))`), sem afetar nada mais: as extensões
+TipTap continuam TODAS carregadas (`toolbarButtons()` só controla quais
+BOTÕES aparecem, não quais extensões/marcas o editor sabe processar),
+então os atalhos de teclado de cada uma continuam funcionando
+normalmente, dentro do modal igual antes.
 
-### Toolbar do RichEditor de "Item Avulso" removida — atalhos de teclado (2026-09-03, texto fixo trocado por ícone com balão em 2026-09-03, ícone movido pro cabeçalho em 2026-09-04)
-
-Em vez do "aparece só em foco" (descartado acima), a decisão foi tirar
-a barra de ferramentas de vez: `RichEditor::make('novo_item_descricao')
-->toolbarButtons([])` — `getToolbarButtons()` retorna array vazio,
-`RichEditor::toEmbeddedHtml()` pula o `<div class="fi-fo-rich-editor-
-toolbar">` inteiro (`if ((! $isDisabled) && filled($toolbarButtons))`),
-sem afetar nada mais: as extensões TipTap continuam TODAS carregadas
-(`toolbarButtons()` só controla quais BOTÕES aparecem, não quais
-extensões/marcas o editor sabe processar), então os atalhos de teclado
-de cada uma continuam funcionando normalmente.
-
-**Orientação ao usuário: ícone com balão, não mais texto fixo.** A
-primeira versão usava `->helperText(...)` (texto sempre visível abaixo
-do campo) — trocado por `->hintIcon('heroicon-o-question-mark-circle',
-tooltip: __(...))`, um ícone ao lado do rótulo que só mostra o balão ao
-passar o mouse/focar. Motivo: o texto fixo ocupava espaço permanente
-na tela mesmo quando o usuário não precisa da informação; o ícone
-resolve isso sem perder a orientação. Funciona mesmo com
-`->hiddenLabel()` no campo — o slot "after label" que carrega o ícone
-(`Filament\Forms\Components\Concerns\HasHint::setUpHint()`) é
-independente do texto do rótulo: `field-wrapper.blade.php` só esconde
-o TEXTO do label (`fi-sr-only`, texto ainda existe pra leitor de tela)
-quando `hiddenLabel()` está ativo, mas o container do label continua
-renderizando se houver qualquer conteúdo em `afterLabel` (nosso caso) —
-confirmado lendo o Blade do componente, não presumido.
-
-**Achado real (corrigido em 2026-09-04): o `->hintIcon()` acima
-ficava POSICIONADO ERRADO.** O campo (`RichEditor` desta linha de
-INPUT) tem `->hiddenLabel()` — o rótulo "Descrição" de verdade vive
-SÓ na linha de CABEÇALHO acima (`Text::make(...)`, Grid::make(24)
-anterior), não neste campo. `->hintIcon()` se ancora ao label NATIVO
-do componente em que é chamado — com esse label vazio/oculto, o ícone
-ficava flutuando sozinho sobre a linha de input, sem nenhuma relação
-visual com o texto "Descrição" acima. Correção: o `->hintIcon()` foi
-REMOVIDO daqui — o ícone (mesmo tooltip) agora vive no `Text` do
-cabeçalho, junto com outros 3 (Referência, %, Custo Unitário), ver
-detalhes técnicos (`Icon`/`Flex`/`->dense()`) na subseção "Cabeçalho
-estilo planilha para 'Item Avulso'" acima.
+**Investigação (2026-09-03, ainda válida): toolbar "tipo bubble menu"
+(só em foco, esconde ao perder foco) — NÃO implementada, descartada
+por conflito de UX, não por dificuldade técnica pura.** O mecanismo
+existe e é de primeira classe (`RichEditor::floatingToolbars()`,
+documentado em `vendor/filament/forms/docs/10-rich-editor.md`,
+"Customizing floating toolbars") — usa `@tiptap/extension-bubble-menu`
+por baixo (`vendor/filament/forms/resources/js/components/rich-editor.js`,
+`BubbleMenuPlugin`). Mas o `shouldShow` que decide quando o bubble
+aparece é HARDCODED no JS do pacote (não configurável via PHP): pra
+qualquer chave que NÃO seja `'paragraph'` (ex.: `'heading'`,
+`'table'`) já basta o CURSOR estar dentro do nó
+(`editor.isFocused && editor.isActive(key)`, sem precisar de seleção)
+— mas pra `'paragraph'` (o nó onde vive praticamente todo texto
+digitado normalmente) a condição EXTRA `!editor.state.selection.empty`
+é exigida, ou seja, o bubble só aparece com TEXTO SELECIONADO, não
+com o cursor simplesmente posicionado/em foco. Migrar TODAS as
+ferramentas padrão pra dentro de `floatingToolbars(['paragraph' =>
+[...]])` (esvaziando a toolbar fixa) trocaria "sempre visível" por
+"só aparece com seleção" — quebra ferramentas que não fazem sentido
+como bubble de seleção (undo/redo, anexar arquivo, inserir tabela:
+ações de documento, não de trecho selecionado) e impede o fluxo
+comum de "clicar em Negrito ANTES de digitar" (sem seleção prévia,
+não haveria toolbar visível pra clicar). Um focus/blur "puro" (sem
+depender de seleção) exigiria (a) sobrescrever a Blade view do
+componente — inviável hoje porque o `RichEditor` não tem NENHUM
+arquivo `.blade.php` no pacote pra publicar/copiar, é 100% renderizado
+via `toEmbeddedHtml()` em PHP (~500 linhas) — ou (b) fazer fork do
+asset JS compilado (`rich-editor.js`) pra expor um estado `isFocused`
+reativo e religar `x-show` manualmente no wrapper da toolbar,
+mantido à mão em todo upgrade do Filament (alto risco de quebrar
+silenciosamente numa atualização futura). Estimativa: 1-2 dias +
+manutenção contínua — não vale o custo/risco agora.
+**Decisão seguinte (2026-09-03): toolbar removida de vez**
+(`->toolbarButtons([])`), sem tentar escondê-la condicionalmente.
 
 **Atalhos confirmados** (lidos direto do bundle compilado
 `vendor/filament/forms/dist/components/rich-editor.js`, procurando
@@ -480,7 +450,7 @@ passado como JSON via `$wire.entangle()`, DOM populado por JS depois
 do carregamento da página), então o HTML devolvido por
 `Testable::html()` nunca contém o texto formatado renderizado — só o
 wrapper/toolbar/estado inicial. O que DÁ pra confirmar via teste:
-que `$set('novo_item_descricao', '<p><strong>...</strong></p>')`
+que `$set('descricao', '<p><strong>...</strong></p>')`
 converte corretamente pro formato interno JSON do TipTap (`RichEditor
 StateCast`, campo guarda `{"type":"doc","content":[...,{"marks":
 [{"type":"bold"}]}]}`, não a string HTML crua) preservando a marca
@@ -489,13 +459,23 @@ toolbar (esperado, já que `toolbarButtons()` é puramente de
 renderização, não mexe no processamento de marcas) — mas a
 confirmação visual de que aparece formatado na tela exige navegador de
 verdade.
-- **Qtde.** (1), **Porc.%** (1) e **Custo Unit.** (3, este último desde
-  2026-09-05): `TextInput` `->numeric()->integer()` (Custo Unit. sem
-  `->integer()`, aceita decimal), `->live(onBlur: true)`, disparam o
-  recálculo (ver fórmula abaixo). Porc.% SEM `->minValue()` — aceita
-  negativo de propósito (acréscimo/desconto). **Sem setas de
-  incremento/decremento** (2026-09-03, estendido ao Custo Unit. em
-  2026-09-05 — mesmo asset reaproveitado, não duplicado):
+**Os campos abaixo (Quantidade/%/Custo Unitário/Valor Unitário/Valor
+Total/Imp.%) vivem hoje dentro do Form Modal** (`camposFormularioItemAvulso()`,
+ver "Item Avulso migrado de linha inline pra Form Modal" mais abaixo) —
+até 2026-09-06 viviam na linha de INPUT inline descrita no início desta
+subseção, com prefixo `novo_item_*` nos nomes; os detalhes técnicos
+abaixo (CSS sem-spinner, fórmula, tratamento de Imp.%) continuam
+valendo integralmente, só os NOMES dos campos e o CONTAINER (modal, não
+mais um Grid condicional na página) mudaram.
+
+- **Quantidade** (`quantidade`), **% Acréscimo/Desconto** (`porcentagem`)
+  e **Custo Unitário** (`custo_unitario`, desde 2026-09-05): `TextInput`
+  `->numeric()->integer()` (Custo Unitário sem `->integer()`, aceita
+  decimal), `->live(onBlur: true)`, disparam o recálculo (ver fórmula
+  abaixo). `porcentagem` SEM `->minValue()` — aceita negativo de
+  propósito (acréscimo/desconto). **Sem setas de incremento/decremento**
+  (2026-09-03, estendido ao Custo Unitário em 2026-09-05 — mesmo asset
+  reaproveitado, não duplicado):
   `->extraInputAttributes(['class' => 'fi-input-no-spinner'])` +
   `resources/css/filament/admin-input-no-spinner.css` (registrado em
   `AdminPanelProvider::boot()` via `FilamentAsset::register()`, mesmo
@@ -525,55 +505,42 @@ verdade.
   não só este). Corrigido rodando `filament:assets` e commitando o
   arquivo publicado (mesmo padrão de `admin-topbar.css`/
   `admin-select-badge.css`, ambos versionados em `public/css/app/`).
-- **Valor Unitário** (3) e **Valor Total** (3): `TextInput`
-  `->disabled()` — nunca digitados, só `$set()` pelo recálculo.
-  `disabled()` já implica não-dehydratado, mas mantido
+- **Valor Unitário** (`valor_unitario`) e **Valor Total** (`valor_total`):
+  `TextInput` `->disabled()` — nunca digitados, só `$set()` pelo
+  recálculo. `disabled()` já implica não-dehydratado, mas mantido
   `->dehydrated(false)` explícito por consistência com os outros
-  campos `novo_item_*`.
-- **Imp.% removido da tela em 2026-09-03** — vira `Hidden::make('novo_item_imposto')`
-  (sem `columnSpan` próprio; `Hidden::setUp()` já usa
-  `columnSpan(['default' => 'hidden'])`, não consome espaço no Grid).
-  O ESPAÇO que a coluna ocupava (columnSpan 1) foi redistribuído:
-  Referência 3→4, Descrição 6→7, Valor Unitário 2→3, última coluna 3→1
-  (ver nova distribuição completa na subseção do cabeçalho, acima).
-  **O valor continua vindo normalmente** da Referência de Preços
-  ATUALMENTE selecionada no Cabeçalho (`referencia_preco_id`, não
-  necessariamente a salva no banco — se o usuário troca a Referência
-  antes de clicar "Inserir", vale a escolha atual) e ENTRA na fórmula
-  do mesmo jeito, só não aparece mais como coluna própria. **Achado de
-  teste** (ainda válido, campo continua populado do mesmo jeito, só
-  mudou de `TextInput` visível pra `Hidden`): NÃO dá pra popular via
-  `->default(fn (?Projeto $record) => $record?->referenciaPreco?->imposto)`
-  — o campo vive dentro de um Grid com `->visible()` condicional a
-  `origem_item_inserida`, e o `fill()` inicial da página (Create/Edit)
-  não hidrata campos que COMEÇAM escondidos; confirmado via
-  `Livewire::test()` — o campo ficava sempre `null` mesmo com
-  Referência vinculada, mesmo depois do Grid virar visível
-  (visibilidade muda o RENDER, não re-executa `fill()`). Correção: a
-  própria Action "Inserir" (quando `$origem === 'item_avulso'`) faz
-  `$set('novo_item_imposto', ReferenciaPreco::find($get('referencia_preco_id'))?->imposto)`
-  explicitamente — e aproveita pra resetar todos os `novo_item_*` a
-  cada clique (linha nova sempre em branco). Sem Referência vinculada,
-  fica em branco (`null`) — tratado como 0% no cálculo (ver fórmula
-  abaixo); o aviso em vermelho já existe no campo "Referência de
-  Preços" do Cabeçalho.
-- **Custo Unitário** (3): `TextInput` `->numeric()->minValue(0)`
+  campos calculados.
+- **Custo Unitário** (`custo_unitario`): `TextInput` `->numeric()->minValue(0)`
   (só positivo), `->live(onBlur: true)`, dispara o recálculo. Sem setas
   de incremento/decremento desde 2026-09-05 — mesmo `.fi-input-no-spinner`
-  de Qtde./Porc.%, ver acima.
-- **Última coluna** (1, antes 3 — encolhida pra sobrar espaço com a
-  remoção do Imp.%): `Actions::make([Action::make('confirmarItemAvulso')
-  ->iconButton()])` — SEM ação real (notificação placeholder própria,
-  chaves `notification.confirmar-pendente-*`); a persistência de fato é
-  a próxima tarefa. `->verticallyAlignStart()` (2026-09-03, antes
-  `->verticallyAlignEnd()` por engano/herança do padrão usado no botão
-  "Inserir") — `.fi-sc-actions` é um `flex flex-col h-full` (`vendor/
-  filament/schemas/resources/css/components/actions.css`), então
-  `verticalAlignment` vira `justify-content` no eixo vertical desse
-  container de altura cheia: `start` = topo, `end` = fim. Alinhar ao
-  TOPO deixa o ícone na mesma altura dos outros campos da linha (Item,
-  Descrição, Qtde. etc., que começam todos no topo por padrão) — sem
-  isso o ícone ficava visivelmente mais baixo que o resto da linha.
+  de Quantidade/%, ver acima.
+- **Imp.% (`imposto`)** — `Hidden::make('imposto')->dehydrated(false)`,
+  sem coluna própria na tela desde 2026-09-03 (ver "Imp.% removido"
+  no histórico desta subseção). **Preenchimento atual (desde a
+  migração pra modal, 2026-09-06)**: `preencherFormularioItemAvulso()`
+  — chamada pelo `->mountUsing()` das duas Actions que abrem o modal —
+  busca `ReferenciaPreco::find($get('referencia_preco_id'))?->imposto`
+  e faz `$schema?->fill([...'imposto' => $imposto, ...])` toda vez que
+  o modal ABRE (criação ou edição), sempre com o valor ATUAL da
+  Referência de Preços do Cabeçalho (não necessariamente a salva no
+  banco — se o usuário trocar a Referência antes de abrir o modal, vale
+  a escolha atual). Sem Referência vinculada, fica em branco (`null`) —
+  tratado como 0% no cálculo (ver fórmula abaixo); o aviso em vermelho
+  já existe no campo "Referência de Preços" do Cabeçalho. **Esse valor
+  é só CACHE pra prévia em tela** (`recalcularValoresItemAvulso()`, a
+  cada tecla) — a gravação de verdade (`salvarItemAvulso()`) sempre relê
+  o banco no momento do clique em Criar/Salvar, ver "Imposto obsoleto ao
+  gravar" mais abaixo (o mecanismo de releitura fresca não mudou com a
+  migração pro modal, só ONDE o valor de prévia é populado). **HISTÓRICO
+  (até 2026-09-06, já não se aplica)**: quando este campo vivia na linha
+  de INPUT inline (dentro de um `Grid` com `->visible()` condicional),
+  não dava pra popular via `->default(fn (?Projeto $record) => ...)` —
+  o `fill()` inicial da página não hidratava campos que COMEÇAVAM
+  escondidos (confirmado via `Livewire::test()`); a Action "Inserir" da
+  época fazia esse `$set()` manualmente ao clicar. Um Form Modal não tem
+  esse problema — `mountUsing()` roda (e o `$schema?->fill()` popula
+  tudo) toda vez que o modal abre, then já visível desde o primeiro
+  frame.
 - **Botão "Mobilização e Frete"**: ao lado de "Inserir" (mesmo
   `Actions::make([...])`, `columnSpan` do Grid de 12 colunas aumentado
   de 2 pra 6 pra caber os dois botões), sem ação própria —
@@ -599,9 +566,11 @@ Quantidade), essa é a regra pedida: os dois calculados ficam juntos,
 tudo ou nada. Sem Imp.% disponível (Projeto sem Referência de Preços),
 entra como 0% na fórmula — decisão registrada aqui, não bloqueia o
 cálculo. "Imp.%" na fórmula é só o nome interno do valor (variável
-`$imposto`/campo `novo_item_imposto`) — desde 2026-09-03 não existe
-mais como rótulo de coluna na tela (ver "Imp.% removido da tela"
-acima), só o cálculo por baixo dos panos.
+`$imposto`/campo `imposto`, prefixo `novo_item_` removido na migração
+pro modal, ver "Item Avulso migrado de linha inline pra Form Modal"
+mais abaixo) — desde 2026-09-03 não existe mais como rótulo de coluna
+na tela (ver "Imp.% removido da tela" acima), só o cálculo por baixo
+dos panos.
 
 ### Tabela `itens_projeto` + persistência real de Item Avulso (2026-09-04)
 
@@ -646,8 +615,9 @@ completo (incompatível com a renumeração exigida pela exclusão).
   `SoftDeletes`. **Sem tabela de sequência própria** (diferente de
   `numero_projeto`/`GeradorNumeroProjeto`) — a tarefa pediu
   explicitamente "maior número já usado + 1", um `MAX()` simples já
-  atende; concorrência coberta só parcialmente, ver
-  `confirmarItemAvulso()` abaixo.
+  atende; concorrência coberta só parcialmente, ver `salvarItemAvulso()`
+  abaixo (HISTÓRICO: chamava-se `confirmarItemAvulso()` até a migração
+  pro Form Modal, 2026-09-06).
 - **SEM Resource/Policy própria** — divergência deliberada do passo 4-6
   da "Convenção para Model novo de cadastro de negócio" (CLAUDE.md da
   raiz): `ItemProjeto` não tem navegação/CRUD Filament independente,
@@ -666,41 +636,48 @@ completo (incompatível com a renumeração exigida pela exclusão).
   contígua" abaixo) — não existe Lixeira possível pra ele. Ver
   `plugins/perseu/auditoria/CLAUDE.md`.
 
-**Fluxo de INSERÇÃO** (`ProjetoResource::confirmarItemAvulso()`,
-chamado pelo ícone ✓ da última coluna):
+**Fluxo de INSERÇÃO** (`ProjetoResource::salvarItemAvulso()`, chamado
+pelo `->action()` da Action `inserirItemAvulso` — HISTÓRICO: até
+2026-09-06 esse método se chamava `confirmarItemAvulso()` e era
+disparado pelo ícone ✓ de uma linha de input inline; ver "Item Avulso
+migrado de linha inline pra Form Modal" mais abaixo pra essa migração
+completa):
 
 1. Sem `$record` (página de CRIAÇÃO do Projeto, ainda não salva) —
    bloqueia com notificação "salve o Projeto primeiro", mesmo critério
    já usado pelo botão "Atribuir Processos" (só existe depois de salvo).
-2. Validação MANUAL — Descrição (texto puro não-vazio, `strip_tags()`),
-   Quantidade > 0, Custo Unitário > 0 — via `ValidationException
-   ::withMessages(['data.novo_item_quantidade' => ...])`, **não**
-   `->required()` nos campos do Schema. Motivo: os campos `novo_item_*`
-   são compartilhados por TODA a Section "Itens", inclusive quando
-   nenhum item está sendo inserido; `->required()` no Schema faria o
-   Salvar/Cancelar do CABEÇALHO (formulário diferente, ver "Section
-   'Itens' e reposicionamento de Salvar/Cancelar" acima) exigir esses
-   campos também sempre que a linha estivesse visível, mesmo sem clicar
-   em confirmar — efeito colateral indesejado. `ValidationException
-   ::withMessages()` é o MESMO mecanismo usado por
-   `Filament\Auth\Pages\Login::throwFailureValidationException()`
-   (vendor) — confirmado lendo o código-fonte, não presumido — e
-   funciona idêntico dentro de uma Action sem `->schema()` própria:
-   propaga pelo pipeline normal de chamada do Livewire e aparece como
-   erro inline no campo certo, com `'data.'` de prefixo (`statePath('data')`
-   de `CreateRecord`/`EditRecord`).
-3. Sem erros: `$record->itens()->create([...])` dentro de
+2. Validação NATIVA do Schema (`->required()`/`->rules(['gt:0'])`/
+   `->validationMessages()` em `camposFormularioItemAvulso()`) —
+   Quantidade > 0, Custo Unitário > 0. Descrição usa `->rule()` com uma
+   Closure própria (`textoPlanoRichEditor()`, ver achado do
+   `RichEditor` mais abaixo) em vez de só `->required()`, porque
+   "preenchido" pro Laravel (documento TipTap não-vazio) não é o mesmo
+   que "tem texto visível" (usuário só formatou um parágrafo vazio).
+   **HISTÓRICO (até 2026-09-06)**: essa validação era MANUAL
+   (`ValidationException::withMessages(['data.novo_item_quantidade' =>
+   ...])`), porque os campos `novo_item_*` da linha inline eram
+   compartilhados por TODA a Section "Itens" — um `->required()` ali
+   teria exigido esses campos também no Salvar/Cancelar do CABEÇALHO.
+   O Form Modal elimina esse problema: `camposFormularioItemAvulso()`
+   é um Schema PRÓPRIO da Action (`mountedActions.{n}.data`), isolado
+   do form da página — `->required()`/`->rules()` nativos já bastam,
+   sem efeito colateral nenhum no restante do formulário.
+3. Sem erros: `$record->itens()->create([...])` (ou `update()` em modo
+   edição, ver "Fluxo de EDIÇÃO" mais abaixo) dentro de
    `DB::transaction()` com `lockForUpdate()` nas linhas já existentes
    daquele `projeto_id` — trava concorrência de dois cliques rápidos NO
    MESMO Projeto enquanto o `MAX()+1` do `numero_item` é calculado.
    **Sem proteção no PRIMEIRO item de um Projeto** (nada pra travar
    ainda) — risco aceito, não é um fluxo multi-usuário simultâneo real
    (um usuário editando um Projeto de cada vez).
-4. `resetarLinhaItemAvulso()` — fecha a linha de input
-   (`origem_item_inserida`/`item_em_edicao_id` = `null`, todos os
-   `novo_item_*` limpos). **NÃO reseta `origem_item_selecionada`** de
-   propósito — o Select continua em "Item Avulso", já que inserir outro
-   item da mesma origem em seguida é o caso comum.
+4. O PRÓPRIO Filament fecha o modal ao final de um `->action()` sem
+   `$action->halt()` (comportamento padrão de qualquer Action com
+   `->form()`) — nenhum reset explícito é necessário aqui, porque o
+   modal recebe um `$schema?->fill()` limpo toda vez que ABRE de novo
+   (`preencherFormularioItemAvulso()`, chamada por `->mountUsing()`),
+   não ao fechar. **NÃO reseta `origem_item_selecionada`** (campo da
+   página, fora do modal) — o Select continua em "Item Avulso", já que
+   inserir outro item da mesma origem em seguida é o caso comum.
 
 ### Imposto obsoleto ao gravar — corrigido (2026-09-05)
 
@@ -712,65 +689,78 @@ outra sessão mudasse o `imposto` da Referência de Preços nesse
 meio-tempo, o valor gravado usava o Imp.% ANTIGO, sem ninguém perceber
 — um bug de corretude de dado financeiro, silencioso.
 
-**Correção**: `confirmarItemAvulso()` não usa mais `novo_item_imposto`
-pra gravar — dentro da MESMA `DB::transaction()` da gravação, busca o
-`imposto` FRESCO com `ReferenciaPreco::where('id', $referenciaPrecoId)
+**Correção**: `salvarItemAvulso()` (HISTÓRICO: `confirmarItemAvulso()`
+até a migração pro modal) não usa o `imposto` do formulário pra gravar
+— dentro da MESMA `DB::transaction()` da gravação, busca o `imposto`
+FRESCO com `ReferenciaPreco::where('id', $referenciaPrecoId)
 ->lockForUpdate()->value('imposto')` e recalcula
 `valor_unitario`/`valor_total` com esse valor. `lockForUpdate()` na
 Referência de Preços fecha a janela de corrida por completo (não só
-reduz) entre o clique em "Confirmar" e o commit. O resultado é gravado
-em `itens_projeto.imposto_aplicado` (`decimal(5,2)`, nullable) — cópia/
-snapshot do Imp.% efetivamente usado, NÃO um FK vivo — preserva o
-histórico do cálculo mesmo que a Referência de Preços mude depois
-(também útil pra explicar/auditar um valor calculado meses depois).
-`novo_item_imposto` continua existindo e sendo usado — mas só pra
+reduz) entre o clique em "Criar"/"Salvar" e o commit. O resultado é
+gravado em `itens_projeto.imposto_aplicado` (`decimal(5,2)`, nullable)
+— cópia/snapshot do Imp.% efetivamente usado, NÃO um FK vivo — preserva
+o histórico do cálculo mesmo que a Referência de Preços mude depois
+(também útil pra explicar/auditar um valor calculado meses depois). O
+campo `imposto` do modal continua existindo e sendo usado — mas só pra
 PRÉVIA em tela (`recalcularValoresItemAvulso()`, a cada tecla), que
 pode ficar obsoleta sem problema (é só exibição); a gravação de
 verdade sempre relê o banco. `Perseu\Comercial\...\ProjetoResource
 ::calcularValoresItemAvulso()` foi extraído como função PURA (sem
 `Get`/`Set`) justamente pra essa separação: a prévia e a gravação usam
 a MESMA fórmula, só com fontes diferentes de Imp.% (cache vs. fresco).
-`itemAvulsoMudou()` também passou a comparar `imposto_aplicado`.
+`itemAvulsoMudou()` também passou a comparar `imposto_aplicado`. **Essa
+lógica de concorrência sobreviveu INTEIRA à migração pro Form Modal
+(2026-09-06)** — só mudou de onde ela é chamada (`->action()` do modal,
+não mais de um ícone ✓ de linha inline).
 
-**Fluxo de EDIÇÃO**: ícone de edição (`heroicon-o-pencil-square`) em
-cada linha da listagem chama `abrirEdicaoItemAvulso()` — seta
-`item_em_edicao_id` + `origem_item_inserida = 'item_avulso'` (reaproveita
-a MESMA linha de input/visibilidade da inserção, só muda o que
-`confirmarItemAvulso()` faz internamente: `create` vs. `update`) e
-preenche `novo_item_*` com os dados atuais do item, **recalculando
-Valor Unitário/Total a partir do Imposto ATUAL da Referência de Preços
-do Cabeçalho** (não o Imp.% usado quando o item foi originalmente
-criado — a tarefa pediu explicitamente "recalculados normalmente" ao
-entrar em edição; se a Referência não mudou, bate exatamente com o
-valor já salvo). Ao confirmar, `itemAvulsoMudou()` compara os valores
-atuais (normalizados — `round(...,2)` nos decimais, `(int)` na
-quantidade, `trim()` na descrição) contra os já gravados; **sem
-diferença nenhuma, NÃO chama `update()`** (nem grava log de auditoria
-"updated" vazio) — só fecha a linha de volta pra modo exibição.
+**Fluxo de EDIÇÃO** (migrado pra modal em 2026-09-06 — ver "Item Avulso
+migrado de linha inline pra Form Modal" mais abaixo pros detalhes
+completos da migração): o `ActionGroup` (Editar/Excluir) de cada linha
+da listagem abre uma Action `editarItemAvulso{id}` que reaproveita o
+MESMO `->form()` (`camposFormularioItemAvulso()`) e o mesmo
+`->action()` (`salvarItemAvulso()`) da inserção — só muda o
+`->mountUsing()`, que chama `preencherFormularioItemAvulso($schema,
+$get, $record, (string) $item->id)` passando o ID do item (em vez de
+`null`) pra preencher com os dados atuais dele. `preencherFormularioItemAvulso()`
+sempre **recalcula Valor Unitário/Total a partir do Imposto ATUAL da
+Referência de Preços do Cabeçalho** (não o Imp.% usado quando o item
+foi originalmente criado — a tarefa original pediu explicitamente
+"recalculados normalmente" ao entrar em edição; se a Referência não
+mudou, bate exatamente com o valor já salvo). Ao confirmar,
+`itemAvulsoMudou()` compara os valores atuais (normalizados —
+`round(...,2)` nos decimais, `(int)` na quantidade, `trim()` na
+descrição) contra os já gravados; **sem diferença nenhuma, NÃO chama
+`update()`** (nem grava log de auditoria "updated" vazio) — só fecha o
+modal.
 
-**Só um item em edição por vez** — decisão mais simples entre as
-sugeridas na tarefa: `item_em_edicao_id` é um único campo (não uma
-lista); abrir a edição de outro item simplesmente SOBRESCREVE esse
-valor (e os `novo_item_*`), descartando silenciosamente qualquer edição
-não confirmada do item anterior. Clicar "Inserir" de novo (pra um item
-NOVO) também cancela qualquer edição em andamento
-(`item_em_edicao_id = null` dentro da própria Action `inserirItem`).
+**"Só um item em edição por vez" deixou de ser uma decisão de estado
+pra virar consequência natural do modal** — HISTÓRICO (até 2026-09-06):
+`item_em_edicao_id` era um único campo de página; abrir a edição de
+outro item SOBRESCREVIA esse valor, descartando silenciosamente
+qualquer edição não confirmada do item anterior. Um Form Modal já é
+inerentemente exclusivo (só um `mountedAction` de cada vez tem sentido
+de UX — o Filament nem oferece dois modais abertos ao mesmo tempo),
+então essa garantia não precisa mais de nenhum campo de controle
+dedicado.
 
-**Listagem dos itens já inseridos** — `Group::make()->schema(fn (Get
-$get, $livewire) => [...])`, uma `Grid::make(24)` por item
+**Listagem dos itens já inseridos** — `Group::make()->schema(fn
+($livewire) => [...])`, uma `Grid::make(24)` por item
 (`linhaExibicaoItem()`), MESMA distribuição de `columnSpan` do
-cabeçalho/input (1,4,7,1,3,3,1,3,1), com `Text` somente-leitura + um
-`ActionGroup` (Editar/Excluir) na última coluna. O item ATUALMENTE em
-edição é OMITIDO da listagem (`->reject()`) — seus dados já aparecem na
-linha de input logo acima; mostrar as duas ao mesmo tempo duplicaria a
-linha. Mostra TODOS os itens do Projeto, não só os de origem Item
-Avulso — única origem com persistência real até agora, mas a área é a
-mesma pras 7 (task pediu explicitamente). Descrição aparece em TEXTO
-PURO (`Str::stripTags()`) na listagem — o dado gravado é HTML
-(RichEditor), mas exibir a formatação de verdade ali exigiria um
-componente `Html`/`View` em vez de `Text`, com risco de quebrar a
-altura/alinhamento de uma grid pensada pra uma linha só; a formatação
-completa continua disponível ao entrar em modo edição.
+cabeçalho (1,4,7,1,3,3,1,3,1), com `Text` somente-leitura + um
+`ActionGroup` (Editar/Excluir) na última coluna. **Desde a migração pro
+modal (2026-09-06), TODOS os itens aparecem sempre** — não existe mais
+"item atualmente em edição" pra omitir da listagem (HISTÓRICO: até
+então, o item em edição sumia da listagem via `->reject()`, porque seus
+dados apareciam duplicados na linha de input logo acima; sem linha de
+input inline, essa omissão deixou de fazer sentido). Mostra TODOS os
+itens do Projeto, não só os de origem Item Avulso — única origem com
+persistência real até agora, mas a área é a mesma pras 4 origens (task
+original pediu explicitamente). Descrição aparece em TEXTO PURO
+(`Str::stripTags()`) na listagem — o dado gravado é HTML (RichEditor),
+mas exibir a formatação de verdade ali exigiria um componente
+`Html`/`View` em vez de `Text`, com risco de quebrar a altura/
+alinhamento de uma grid pensada pra uma linha só; a formatação completa
+continua disponível ao entrar em modo edição (modal).
 
 ### Itens não apareciam ao abrir a tela de edição — corrigido (2026-09-05)
 
@@ -791,7 +781,8 @@ hidrata essa property (mesmo padrão já usado por "Atribuir Processos":
 `CreateProjeto` simplesmente não tem a property, e a checagem de tipo
 já cobre o caso).
 
-- **`confirmarItemAvulso()`/`excluirItemAvulso()` chamam
+- **`confirmarItemAvulso()` (hoje `salvarItemAvulso()`, ver "Item Avulso
+  migrado de linha inline pra Form Modal")/`excluirItemAvulso()` chamam
   `$livewire->recarregarItens()`** depois de escrever no banco (dentro
   da própria `DB::transaction()` já existente) — sem isso, inserir/
   editar/excluir um item só apareceria atualizado na tela depois de um
@@ -971,6 +962,118 @@ NÃO executa uma Action com `->requiresConfirmation()` — precisa de um
 usadas até então neste fluxo), renumeração correta após excluir, e um
 `Livewire::test()` NOVO (segunda instância, simulando reload de
 página) mostrando os itens — e a exclusão — vindos do banco.
+
+### Item Avulso migrado de linha inline pra Form Modal (2026-09-06)
+
+Toda a UI de inserir/editar um Item Avulso — até aqui uma linha de
+INPUT inline (`Grid::make(24)` visível condicionalmente, campos
+`novo_item_*` compartilhados com o resto da Section "Itens") — foi
+migrada pro MESMO padrão técnico já usado pelo upload do Promob
+(`Action::make()->form()->modal()`, ver "Fluxo Promob" abaixo). O
+cabeçalho de colunas (`Grid::make(24)` com os rótulos + ícones de
+ajuda) **não mudou** — virou o cabeçalho FIXO da tabela de itens já
+inseridos, sempre visível, sem depender de nenhum estado de "linha
+inserida" (ver "Cabeçalho estilo planilha..." acima). Todas as
+subseções anteriores desta Section já foram atualizadas inline com o
+estado ATUAL; esta subseção documenta a migração em si — mecanismo e
+achados novos.
+
+- **Duas Actions, um `->form()` e um `->action()` compartilhados**:
+  `inserirItemAvulso` (visível só quando `origem_item_selecionada ===
+  'item_avulso'`, substitui o antigo branch `item_avulso` dentro de
+  `inserirItem`) e `editarItemAvulso{$item->id}` (uma por linha da
+  listagem, dentro do `ActionGroup`) chamam a MESMA
+  `camposFormularioItemAvulso(): array` pro `->form()` e a MESMA
+  `salvarItemAvulso(array $data, Get $get, ?Projeto $record, $livewire): void`
+  pro `->action()` — só o `->mountUsing()`/`->modalHeading()`/
+  `->modalSubmitActionLabel()` diferem (criação vs. edição, `null` vs.
+  `(string) $item->id`). Evita duplicar a definição dos 7 campos (e o
+  risco de uma das duas cópias divergir da outra com o tempo).
+- **Diferente do Promob: SEM `->modalSubmitAction(false)`** — o modal
+  de Item Avulso usa o botão de submit AUTOMÁTICO do Filament
+  (`->modalSubmitActionLabel()` só troca o RÓTULO, "Criar"/"Salvar").
+  O achado 1 documentado em "Validação do nome do arquivo..." abaixo
+  (`Get`/`$record` quebram em `extraModalFooterActions()` sem
+  `->modalSubmitAction(false)` + `prepareModalAction()`) só se aplica a
+  botões de RODAPÉ extras — este modal não tem nenhum, então o submit
+  automático (que sempre passa pelo pipeline certo) é mais simples e
+  suficiente.
+- **Validação nativa do Schema substitui `ValidationException::withMessages()`**
+  — possível porque `camposFormularioItemAvulso()` agora é um Schema
+  PRÓPRIO da Action (isolado do form da página), ver "Fluxo de
+  INSERÇÃO" acima pro motivo completo.
+- **Reset de estado: SÓ no `mountUsing()`, nunca no fechar** — mesma
+  lição já aprendida e documentada no bugfix do modal do Promob (ver
+  achado 6 em "Validação do nome do arquivo..." abaixo): o botão
+  Cancelar de um modal fecha via Alpine PURO (`x-on:click="close()"`,
+  sem `wire:click`), então qualquer reset que dependesse do fechamento
+  simplesmente NUNCA rodaria. `preencherFormularioItemAvulso()` —
+  chamada pelo `->mountUsing()` das DUAS Actions — sempre faz um
+  `$schema?->fill([...])` completo (todos os 7 campos, inclusive
+  `item_id`/`imposto`) toda vez que o modal ABRE, então um Cancelar
+  seguido de reabertura (inserir outro item, ou editar um item
+  diferente) nunca herda lixo de uma sessão anterior do modal —
+  confirmado por teste de navegador (Playwright): preencher parcialmente
+  o modal de inserção, Cancelar, reabrir "Inserir" mostra todos os
+  campos limpos de novo.
+
+**Achado real (bug novo, não presumido — descoberto e corrigido nesta
+tarefa): `RichEditor` dentro de um `->rule()` customizado recebe um
+ARRAY, nunca a string HTML.** Sintoma: salvar o modal (mesmo com todos
+os campos preenchidos) estourava um "Internal Server Error" — 500 puro,
+sem nenhuma mensagem de validação visível — com `ErrorException: Array
+to string conversion` apontando pra dentro da Closure de validação da
+Descrição (que fazia `(string) $value` antes de `strip_tags()`). Causa
+raiz, confirmada lendo o vendor:
+
+- `Filament\Schemas\Concerns\CanBeValidated::validate()` chama
+  `$livewire->validate($rules, ...)` **direto sobre o ESTADO BRUTO do
+  Livewire** — nunca sobre o resultado de `$component->getState()`
+  (que já teria passado pelo `StateCast` de desidratação). As regras
+  (`->rule()`/`->rules()`) sempre veem o valor CRU do componente, antes
+  de qualquer conversão de saída.
+- Pra um `RichEditor`, o estado CRU nunca é a string HTML — é sempre o
+  documento TipTap em ARRAY (`Filament\Forms\Components\RichEditor\
+  StateCasts\RichEditorStateCast::set()`, chamado toda vez que o campo
+  é HIDRATADO/preenchido — inclusive pelo `$schema?->fill()` de
+  `preencherFormularioItemAvulso()` — sempre devolve
+  `$editor->getDocument()`, um array). Só o `get()` do MESMO StateCast
+  (chamado na DESIDRATAÇÃO, `$component->getState()`, que só acontece
+  DEPOIS da validação passar) devolve a string HTML final — é esse
+  valor que `salvarItemAvulso()` recebe em `$data['descricao']`, correto
+  e já testado antes desta correção.
+- Ou seja: um `(string) $value`/`strip_tags($value)` direto dentro de
+  um `->rule()` de `RichEditor` está **sempre** operando sobre o valor
+  ERRADO (array, não HTML) — não é um caso de borda, é o comportamento
+  normal pra QUALQUER `RichEditor` com regra de validação customizada,
+  em qualquer Schema deste projeto.
+
+**Correção**: `textoPlanoRichEditor(mixed $value): string` — função
+nova, pura — trata os dois formatos possíveis (`string` HTML, via
+`strip_tags()`; `array` TipTap, percorrendo recursivamente os nós
+`content`/`text` acumulando o texto puro). A regra de `descricao` virou
+`blank(static::textoPlanoRichEditor($value))`, sem nenhum cast direto.
+**Vale para qualquer `RichEditor` futuro que precise de uma regra de
+validação própria além de `->required()`** (ex.: "não pode ter só
+espaço em branco", como aqui) — `->required()` sozinho NÃO pega esse
+caso (um documento TipTap com só um parágrafo vazio ainda é um array
+"preenchido" pro Laravel, `required` não falha), mas qualquer Closure
+de `->rule()` precisa passar pelo `textoPlanoRichEditor()` (ou
+equivalente) em vez de assumir string.
+
+**Confirmado por teste de navegador (Playwright), checklist completo**:
+modal "Inserir" abre com cálculo ao vivo funcionando (Quantidade/%/
+Custo Unitário → Valor Unitário/Total); modal "Editar" de um item
+existente abre PRÉ-PREENCHIDO com rótulo "Salvar" (não "Criar");
+salvar sem alterar nada fecha o modal sem chamar `update()`
+(`itemAvulsoMudou()` intacto); Cancelar + reabrir (tanto "Inserir" pra
+um item novo quanto "Editar" de outro item) sempre mostra o modal
+limpo/correto, nunca resíduo de uma sessão anterior; Excluir continua
+com confirmação + renumeração intactas (`DeleteAction`/`excluirItemAvulso()`
+não foram tocados nesta tarefa). Usuário de teste temporário e o
+`ItemProjeto` de teste criado durante a validação foram removidos ao
+final (`forceDelete()` no usuário; o item de teste foi o mesmo excluído
+como parte do próprio checklist de "Excluir").
 
 ### Fluxo Promob: modal de upload + "Checar Total" (2026-09-05)
 
