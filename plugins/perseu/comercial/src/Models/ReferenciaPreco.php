@@ -35,6 +35,7 @@ class ReferenciaPreco extends Model
         'valor_pecas',
         'fator_madeiras',
         'fator_ferragens_miscelanias',
+        'fator_acabamento_corte',
         'fator_mao_obra',
     ];
 
@@ -50,6 +51,7 @@ class ReferenciaPreco extends Model
         'valor_pecas'                 => 'decimal:2',
         'fator_madeiras'              => 'decimal:2',
         'fator_ferragens_miscelanias' => 'decimal:2',
+        'fator_acabamento_corte'      => 'decimal:2',
         'fator_mao_obra'              => 'decimal:2',
     ];
 

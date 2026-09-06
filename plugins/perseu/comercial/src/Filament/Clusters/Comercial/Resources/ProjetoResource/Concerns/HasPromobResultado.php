@@ -25,4 +25,15 @@ trait HasPromobResultado
      * @var array<string, mixed>|null
      */
     public ?array $promobResultado = null;
+
+    /**
+     * "Criar Itens" (ver CLAUDE.md, "Fluxo Promob" — fluxo de criação
+     * real dos Itens, 2026-09-06) fica DESABILITADO até "Checar Total"
+     * rodar com sucesso PELO MENOS UMA VEZ nesta sessão do modal — não
+     * basta ter um XML "000" válido selecionado (`promobTemXmlGeralValido()`,
+     * checagem só de NOME de arquivo), precisa ter processado de fato.
+     * Resetado em `mountUsing()` de `inserirItemPromob`, mesma lição de
+     * nunca confiar em estado de uma sessão anterior do modal.
+     */
+    public bool $promobChecagemFeitaComSucesso = false;
 }

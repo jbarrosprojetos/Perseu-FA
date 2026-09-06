@@ -337,6 +337,85 @@ final class PromobChecagemTotal
     }
 
     /**
+     * O arquivo identificado por este nome é o XML "000" (Projeto
+     * Geral/consolidado)? `false` também pra nome fora do padrão (sem
+     * lançar exceção) — usado por `ProjetoResource::iniciarFilaItensPromob()`
+     * pra separar o XML geral dos XMLs de item, sem duplicar o valor
+     * `NUMERO_XML_TOTAL` (privado) fora desta classe.
+     */
+    public static function ehArquivoGeral(string $nomeArquivo): bool
+    {
+        try {
+            return static::identificarArquivo($nomeArquivo)['numero_item'] === self::NUMERO_XML_TOTAL;
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * Descrição pré-preenchida do modal de "Criar Itens" (ver CLAUDE.md,
+     * "Fluxo Promob") — o trecho do nome do arquivo que vem DEPOIS do
+     * código de 3 dígitos do item e ANTES da extensão `.xml`. Ex.: do
+     * arquivo "2630001 - 001 Superior.xml", devolve "Superior". Usa o
+     * MESMO `PADRAO_NOME_ARQUIVO` de `identificarArquivo()` (ancorado no
+     * início), só que capturando o restante do nome depois do match —
+     * `trim()` remove o espaço que normalmente separa o código do item
+     * do texto livre. Nome fora do padrão (não deveria chegar aqui, já
+     * validado por `validarNomesDeArquivos()` antes) devolve string
+     * vazia, nunca lança exceção — este método serve só pra preencher um
+     * campo de formulário, não pra validar.
+     */
+    public static function descricaoDoArquivo(string $nomeArquivo): string
+    {
+        $nomeSemExtensao = pathinfo($nomeArquivo, PATHINFO_FILENAME);
+
+        if (preg_match(self::PADRAO_NOME_ARQUIVO, $nomeSemExtensao, $match, PREG_OFFSET_CAPTURE) !== 1) {
+            return '';
+        }
+
+        [, $offset] = $match[0];
+
+        return trim(substr($nomeSemExtensao, $offset + strlen($match[0][0])));
+    }
+
+    /**
+     * Parte 1 do fluxo "Criar Itens" (2026-09-06, ver CLAUDE.md): o
+     * código de 3 dígitos no NOME do arquivo (ex.: "001", "002") é só
+     * uma referência do Promob pra ORDEM de processamento — nunca define
+     * o `numero_item` real gravado em `itens_projeto` (esse continua
+     * gerado por `ItemProjeto::boot()`, maior número já usado no Projeto
+     * + 1). Filtra o XML "000" (não é um item) e qualquer nome fora do
+     * padrão (não deveria chegar aqui, já filtrado por
+     * `validarNomesDeArquivos()` antes de chamar isto) e ordena os
+     * demais numericamente pelo código do arquivo.
+     *
+     * @param  array<int, string>  $nomesDeArquivos
+     * @return array<int, string> nomes de arquivo de ITEM (sem o "000"), na ordem de processamento
+     */
+    public static function ordenarNomesDeArquivosDeItens(array $nomesDeArquivos): array
+    {
+        $nomesDeItens = [];
+
+        foreach ($nomesDeArquivos as $nomeArquivo) {
+            try {
+                $identificacao = static::identificarArquivo($nomeArquivo);
+            } catch (\Throwable) {
+                continue;
+            }
+
+            if ($identificacao['numero_item'] === self::NUMERO_XML_TOTAL) {
+                continue;
+            }
+
+            $nomesDeItens[$nomeArquivo] = $identificacao['numero_item'];
+        }
+
+        asort($nomesDeItens, SORT_STRING);
+
+        return array_keys($nomesDeItens);
+    }
+
+    /**
      * Existe, entre os arquivos informados, um XML "000" (Projeto
      * Geral) que também pertence ao Projeto atual? Usado só pra
      * decidir se os botões "Checar Total"/"Criar Itens" ficam

@@ -141,6 +141,28 @@ final class PromobXmlParser
         }
     }
 
+    /**
+     * `DATE`/`HOUR` do nó raiz `<LISTING>` — data/hora em que o Promob
+     * GEROU o XML (não a data de upload/processamento no sistema). Usado
+     * pra identificar o arquivo em `NotaProjeto.texto` (ver
+     * `ProjetoResource`, "Criar Itens" do fluxo Promob/CLAUDE.md) — tanto
+     * na Nota geral de checagem (XML "000") quanto na Nota de cada item.
+     * Formato bruto do Promob, sem reformatar (`"16/07/2026"`/`"11:43:19"`,
+     * confirmado nos XMLs de exemplo) — já vem no formato brasileiro
+     * esperado, não precisa de `Carbon::parse()`/reformatação.
+     *
+     * @return array{data: string, hora: string}
+     */
+    public static function dataHora(string $xmlContent): array
+    {
+        $doc = static::carregarXml($xmlContent);
+
+        return [
+            'data' => trim((string) ($doc['DATE'] ?? '')),
+            'hora' => trim((string) ($doc['HOUR'] ?? '')),
+        ];
+    }
+
     private static function carregarXml(string $xmlContent): SimpleXMLElement
     {
         // O Promob exporta com BOM UTF-8 — `simplexml_load_string()` lida

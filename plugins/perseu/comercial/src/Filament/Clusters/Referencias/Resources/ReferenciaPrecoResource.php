@@ -158,6 +158,11 @@ class ReferenciaPrecoResource extends Resource
                             ->numeric()
                             ->required()
                             ->suffix('%'),
+                        TextInput::make('fator_acabamento_corte')
+                            ->label(__('comercial::filament/resources/referencia-preco.form.fator-acabamento-corte'))
+                            ->numeric()
+                            ->required()
+                            ->suffix('%'),
                         TextInput::make('fator_mao_obra')
                             ->label(__('comercial::filament/resources/referencia-preco.form.fator-mao-obra'))
                             ->numeric()
@@ -244,6 +249,11 @@ class ReferenciaPrecoResource extends Resource
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('fator_ferragens_miscelanias')
                     ->label(__('comercial::filament/resources/referencia-preco.table.columns.fator-ferragens-miscelanias'))
+                    ->formatStateUsing(fn (?string $state) => static::formatPercent($state))
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('fator_acabamento_corte')
+                    ->label(__('comercial::filament/resources/referencia-preco.table.columns.fator-acabamento-corte'))
                     ->formatStateUsing(fn (?string $state) => static::formatPercent($state))
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
