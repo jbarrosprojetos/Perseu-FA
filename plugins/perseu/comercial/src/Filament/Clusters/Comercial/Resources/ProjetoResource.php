@@ -49,11 +49,13 @@ use Perseu\Comercial\Filament\Clusters\Comercial\Resources\ProjetoResource\Pages
 use Perseu\Comercial\Filament\Clusters\Comercial\Resources\ProjetoResource\Pages\EditProjeto;
 use Perseu\Comercial\Filament\Clusters\Comercial\Resources\ProjetoResource\Pages\ListProjetos;
 use Perseu\Comercial\Filament\Clusters\Projetos;
+use Perseu\Comercial\Models\FreteMobilizacao;
 use Perseu\Comercial\Models\ItemProjeto;
 use Perseu\Comercial\Models\NotaProjeto;
 use Perseu\Comercial\Models\Projeto;
 use Perseu\Comercial\Models\ReferenciaPreco;
 use Perseu\Comercial\Services\PromobChecagemTotal;
+use Perseu\Comercial\Services\PromobXmlParser;
 use Perseu\Pessoas\Enums\TipoEndereco;
 use Perseu\Pessoas\Models\Contato;
 use Perseu\Pessoas\Models\Endereco;
@@ -556,7 +558,7 @@ class ProjetoResource extends Resource
                                         // origens SEM comportamento real
                                         // ainda ("Item de Linha", "SketchUp")
                                         // + o aviso de "sem seleção".
-                                        ->visible(fn (Get $get) => ! in_array($get('origem_item_selecionada'), ['promob', 'item_avulso'], true))
+                                        ->visible(fn (Get $get) => ! in_array($get('origem_item_selecionada'), ['promob', 'item_avulso', 'mobilizacao_frete'], true))
                                         ->action(function (Get $get): void {
                                             $origem = $get('origem_item_selecionada');
 
@@ -670,6 +672,10 @@ class ProjetoResource extends Resource
                                         ->modalSubmitAction(false)
                                         ->mountUsing(function (?Schema $schema, $livewire): void {
                                             $livewire->promobResultado = null;
+                                            // Reset de "Criar Itens" (2026-09-06) — mesma lição de
+                                            // sempre: nunca confiar em estado de uma sessão
+                                            // anterior do modal, inclusive "Checar Total já rodou".
+                                            $livewire->promobChecagemFeitaComSucesso = false;
                                             $schema?->fill();
                                         })
                                         ->form([
@@ -742,35 +748,40 @@ class ProjetoResource extends Resource
                                                 ->label(__('comercial::filament/resources/projeto.form.itens.promob.modal.processar'))
                                                 ->disabled(fn (?Projeto $record, $livewire) => ! static::promobTemXmlGeralValido(static::arquivosXmlPromobAtuais($livewire), $record))
                                                 ->action(function (?Projeto $record, $livewire): void {
-                                                    $livewire->promobResultado = static::calcularResultadoPromob(static::arquivosXmlPromobAtuais($livewire), $record);
+                                                    $resultado = static::calcularResultadoPromob(static::arquivosXmlPromobAtuais($livewire), $record);
+                                                    $livewire->promobResultado = $resultado;
+                                                    // "Criar Itens" (2026-09-06) só libera depois
+                                                    // de "Checar Total" ter rodado SEM erro fatal
+                                                    // pelo menos uma vez nesta sessão do modal —
+                                                    // ver `HasPromobResultado::$promobChecagemFeitaComSucesso`.
+                                                    // "Sucesso" aqui é "não deu erro" (nome de
+                                                    // arquivo inválido, XML corrompido etc.), NÃO
+                                                    // "sem divergência" — divergência é permitida,
+                                                    // só exige confirmação (ver `criarItensPromob`).
+                                                    $livewire->promobChecagemFeitaComSucesso = ! isset($resultado['erro']);
                                                 }),
 
-                                            // "Criar Itens" — mesma condição
-                                            // de habilitação do "Checar
-                                            // Total" acima (precisa do "000"
-                                            // válido pra ter ALGO pra
-                                            // comparar/decidir se pede
-                                            // confirmação). Roda a MESMA
-                                            // checagem internamente mesmo que
-                                            // o usuário não tenha clicado
-                                            // "Checar Total" antes
-                                            // (`calcularResultadoPromob()`
-                                            // reaproveitado dos dois
-                                            // lugares) — com qualquer uma
-                                            // das 5 métricas de diferença
-                                            // fora de zero, pede confirmação
-                                            // antes de seguir; ainda SEM
-                                            // ação real de criação (só a
-                                            // notificação placeholder já
-                                            // usada pelas outras origens/
-                                            // ações pendentes —
-                                            // "Mobilização e Frete" já
-                                            // reaproveita o mesmo par de
-                                            // traduções).
+                                            // "Criar Itens" (2026-09-06) — mesma condição de
+                                            // habilitação do "Checar Total" acima MAIS a
+                                            // exigência de "Checar Total" já ter rodado com
+                                            // sucesso nesta sessão (`$promobChecagemFeitaComSucesso`).
+                                            // Roda a MESMA checagem internamente mesmo que o
+                                            // usuário não tenha clicado "Checar Total" de novo
+                                            // depois de trocar os arquivos (`calcularResultadoPromob()`
+                                            // reaproveitado) — com qualquer uma das 5 métricas de
+                                            // diferença fora de zero, pede confirmação antes de
+                                            // seguir (Parte 2 do enunciado); sem nenhuma
+                                            // divergência, segue direto pra
+                                            // `criarTodosItensPromob()`, que cria a Nota geral
+                                            // de checagem e TODOS os Itens de uma vez, sem
+                                            // modal por item (2026-09-06, decisão do usuário
+                                            // de simplificar o fluxo — ver essa função e
+                                            // CLAUDE.md, "Fluxo Promob").
                                             Action::make('criarItensPromob')
                                                 ->label(__('comercial::filament/resources/projeto.form.itens.promob.modal.criar-itens'))
                                                 ->color('gray')
-                                                ->disabled(fn (?Projeto $record, $livewire) => ! static::promobTemXmlGeralValido(static::arquivosXmlPromobAtuais($livewire), $record))
+                                                ->disabled(fn (?Projeto $record, $livewire) => ! static::promobTemXmlGeralValido(static::arquivosXmlPromobAtuais($livewire), $record)
+                                                    || ! $livewire->promobChecagemFeitaComSucesso)
                                                 ->requiresConfirmation(fn (?Projeto $record, $livewire) => static::promobPrecisaConfirmarCriacao($livewire, $record))
                                                 // `modalHeading`/`modalDescription` também PRECISAM
                                                 // ser condicionais (não strings fixas) — achado real:
@@ -794,18 +805,7 @@ class ProjetoResource extends Resource
                                                     ? __('comercial::filament/resources/projeto.form.itens.promob.modal.confirmar-criacao-description')
                                                     : null)
                                                 ->action(function (?Projeto $record, $livewire): void {
-                                                    $resultado = static::calcularResultadoPromob(static::arquivosXmlPromobAtuais($livewire), $record);
-                                                    $livewire->promobResultado = $resultado;
-
-                                                    if (! isset($resultado['erro'])) {
-                                                        Notification::make()
-                                                            ->info()
-                                                            ->title(__('comercial::filament/resources/projeto.form.itens.notification.pendente-title'))
-                                                            ->body(__('comercial::filament/resources/projeto.form.itens.notification.pendente-body', [
-                                                                'origem' => __('comercial::filament/resources/projeto.form.itens.promob.modal.criar-itens'),
-                                                            ]))
-                                                            ->send();
-                                                    }
+                                                    static::criarTodosItensPromob($record, $livewire);
                                                 }),
                                         ]),
                                     // O "Cancelar" nativo do modal continua
@@ -815,22 +815,34 @@ class ProjetoResource extends Resource
                                     // pt_BR pelo próprio pacote, sem precisar
                                     // sobrescrever.
 
-                                    // Sem ação própria ainda — mesmo padrão do
-                                    // botão "Inserir" quando foi criado
-                                    // (notificação placeholder), reaproveitando
-                                    // o mesmo par de traduções
-                                    // pendente-title/pendente-body.
-                                    Action::make('mobilizacaoFrete')
-                                        ->label(__('comercial::filament/resources/projeto.form.itens.mobilizacao-frete'))
-                                        ->color('gray')
-                                        ->action(function (): void {
-                                            Notification::make()
-                                                ->info()
-                                                ->title(__('comercial::filament/resources/projeto.form.itens.notification.pendente-title'))
-                                                ->body(__('comercial::filament/resources/projeto.form.itens.notification.pendente-body', [
-                                                    'origem' => __('comercial::filament/resources/projeto.form.itens.mobilizacao-frete'),
-                                                ]))
-                                                ->send();
+                                    // "Mobilização e Frete" (2026-09-06) — deixou
+                                    // de ser um botão dedicado fora do dropdown e
+                                    // virou mais uma origem do Select "Origem do
+                                    // Item" (ver `origensItemOptions()`/
+                                    // `OrigemItemProjeto`), com Action própria
+                                    // (ganhou regra de negócio real, por isso não
+                                    // usa mais o botão genérico `inserirItem` —
+                                    // mesmo padrão técnico de `inserirItemAvulso`/
+                                    // `inserirItemPromob` acima: form modal +
+                                    // gravação em `salvarMobilizacaoFrete()`, que
+                                    // grava TANTO o `ItemProjeto` quanto o
+                                    // `FreteMobilizacao` vinculado, na mesma
+                                    // transação).
+                                    Action::make('inserirMobilizacaoFrete')
+                                        ->label(__('comercial::filament/resources/projeto.form.itens.inserir'))
+                                        ->visible(fn (Get $get) => $get('origem_item_selecionada') === 'mobilizacao_frete')
+                                        ->modalHeading(__('comercial::filament/resources/projeto.form.itens.mobilizacao-frete-modal.heading-criar'))
+                                        ->modalSubmitActionLabel(__('comercial::filament/resources/projeto.form.itens.mobilizacao-frete-modal.criar'))
+                                        // O DOBRO da largura de um modal comum
+                                        // (`Width::Large`, usado pelo resto do
+                                        // sistema) — pedido do usuário, pra
+                                        // caber os 15 campos de input em Grid
+                                        // de 5 colunas (3 linhas) em vez de 4.
+                                        ->modalWidth(Width::FiveExtraLarge)
+                                        ->mountUsing(fn (?Schema $schema, Get $get, ?Projeto $record) => static::preencherFormularioMobilizacaoFrete($schema, $get, $record, null))
+                                        ->form(static::camposFormularioMobilizacaoFrete())
+                                        ->action(function (array $data, Get $get, ?Projeto $record, $livewire): void {
+                                            static::salvarMobilizacaoFrete($data, $get, $record, $livewire);
                                         }),
                                 ])
                                     ->verticallyAlignEnd()
@@ -993,10 +1005,11 @@ class ProjetoResource extends Resource
     protected static function origensItemOptions(): array
     {
         return [
-            'item_avulso' => __('comercial::filament/resources/projeto.form.itens.origens.item-avulso'),
-            'item_linha'  => __('comercial::filament/resources/projeto.form.itens.origens.item-linha'),
-            'promob'      => __('comercial::filament/resources/projeto.form.itens.origens.promob'),
-            'sketchup'    => __('comercial::filament/resources/projeto.form.itens.origens.sketchup'),
+            'item_avulso'       => __('comercial::filament/resources/projeto.form.itens.origens.item-avulso'),
+            'item_linha'        => __('comercial::filament/resources/projeto.form.itens.origens.item-linha'),
+            'promob'            => __('comercial::filament/resources/projeto.form.itens.origens.promob'),
+            'sketchup'          => __('comercial::filament/resources/projeto.form.itens.origens.sketchup'),
+            'mobilizacao_frete' => __('comercial::filament/resources/projeto.form.itens.origens.mobilizacao-frete'),
         ];
     }
 
@@ -1219,15 +1232,46 @@ class ProjetoResource extends Resource
     }
 
     /**
+     * Só o super usuário (mesmo critério de `NotaProjeto::
+     * ehSuperUsuario()`, role `Admin`/guard `web` — ver CLAUDE.md,
+     * "Notas do Projeto — regra de 24h e super usuário") pode confirmar
+     * e seguir com a criação dos Itens do Promob HAVENDO divergência
+     * nas 5 métricas. Instanciar `NotaProjeto` só pra chamar esse
+     * método é o mesmo padrão já usado por `podeSerEditadaPor()`/
+     * `podeSerExcluidaPor()` neste Resource — `ehSuperUsuario()` não
+     * depende de nenhum atributo da nota em si, só do usuário
+     * informado.
+     */
+    protected static function promobUsuarioPodeConfirmarDivergencia(): bool
+    {
+        $usuario = auth()->user();
+
+        return $usuario !== null && (new NotaProjeto())->ehSuperUsuario($usuario);
+    }
+
+    /**
      * "Criar Itens" só pede confirmação quando existe um XML "000" pra
      * comparar E pelo menos uma das 5 métricas de diferença é != 0 —
      * chamado a partir de `requiresConfirmation()`/`modalHeading()`/
      * `modalDescription()` da Action `criarItensPromob` (as três
      * PRECISAM concordar entre si, ver comentário ali sobre
      * `shouldOpenModal()`).
+     *
+     * **Só pede confirmação pro super usuário** (`promobUsuarioPodeConfirmarDivergencia()`)
+     * — o padrão esperado é diferença = 0; havendo diferença, a criação
+     * é uma exceção mantida exclusivamente pro super usuário (pra não
+     * travar o processo inteiro numa situação anômala). Pra qualquer
+     * outro usuário havendo divergência, não faz sentido abrir um modal
+     * de confirmação que ele não tem permissão de confirmar — a
+     * criação é bloqueada direto em `criarTodosItensPromob()`, sem
+     * modal nenhum.
      */
     protected static function promobPrecisaConfirmarCriacao($livewire, ?Projeto $record): bool
     {
+        if (! static::promobUsuarioPodeConfirmarDivergencia()) {
+            return false;
+        }
+
         $resultado = static::calcularResultadoPromob(static::arquivosXmlPromobAtuais($livewire), $record);
 
         return isset($resultado['metricas'])
@@ -1343,6 +1387,522 @@ class ProjetoResource extends Resource
                 'valor' => number_format($metricas['misc'], 2, ',', '.'),
             ]),
         ];
+    }
+
+    // ========================================================================
+    // "Criar Itens" do Promob (2026-09-06, reformulado no mesmo dia) —
+    // geração real dos Itens do Projeto a partir dos XMLs processados,
+    // ver CLAUDE.md, "Fluxo Promob". `criarItensPromob` chama
+    // `criarTodosItensPromob()`, que cria a Nota geral de checagem E
+    // TODOS os Itens (+ suas Notas de cálculo vinculadas) de uma vez,
+    // numa ÚNICA `DB::transaction()` — SEM modal por item, SEM
+    // confirmação individual.
+    //
+    // **Decisão do usuário (2026-09-06) que substituiu a versão
+    // anterior**: a primeira versão desta tarefa abria um Form Modal
+    // por item (Referência/Descrição/Quantidade/% editáveis ANTES de
+    // confirmar cada um, com o próximo modal se auto-abrindo depois de
+    // cada "Criar"). Esse mecanismo ("montar uma Action de dentro do
+    // `->action()` de outra Action do mesmo nome, repetidamente, sem
+    // nunca desmontar a anterior") causou uma sequência de bugs reais
+    // (índice fixo de `schemaComponent`, depois campos "atrasados" um
+    // item — ver histórico completo no CLAUDE.md) sem uma causa raiz
+    // clara pro segundo. O usuário preferiu simplificar: criar tudo
+    // automaticamente (com a MESMA fórmula/regras já validadas) e, se
+    // algum item precisar de ajuste, editar DEPOIS pelo ícone de lápis
+    // já existente na listagem (`editarItemAvulso{id}`, que abre o
+    // MESMO modal usado por Item Avulso — funciona pra qualquer origem,
+    // já validado). Isso eliminou inteiramente a classe de bugs do
+    // mecanismo antigo (nenhum modal remontado programaticamente) e boa
+    // parte do código (removidas ~10 funções/uma trait de estado de
+    // fila — ver diff do commit).
+    // ========================================================================
+
+    /**
+     * Único passo de "Criar Itens" (chamado pelo `->action()` de
+     * `criarItensPromob`, já depois de qualquer confirmação de
+     * divergência necessária): cria a Nota geral de checagem
+     * (`tipo_sistema = true`, `item_projeto_id = null`, nome do "000" +
+     * `DATE`/`HOUR` do próprio XML + resumo das 5 métricas) e, na
+     * sequência, TODOS os Itens (na ordem de
+     * `PromobChecagemTotal::ordenarNomesDeArquivosDeItens()`), cada um
+     * com sua `NotaProjeto` de cálculo vinculada — tudo numa ÚNICA
+     * `DB::transaction()` (2026-09-06: sem mais interação do usuário no
+     * meio do processo, não faz sentido mais deixar itens parciais
+     * criados se algo falhar no meio — atômico, tudo ou nada).
+     *
+     * Cada Item usa os DEFAULTS que antes só apareciam pré-preenchidos
+     * no modal removido: Descrição = texto do nome do arquivo
+     * (`PromobChecagemTotal::descricaoDoArquivo()`), Quantidade = 1,
+     * % = 0, Referência = nome do arquivo + data/hora do XML (agora
+     * gravada na coluna `referencia` de `itens_projeto` — ver migration
+     * `2026_09_06_110000` — exibida na coluna "Referência" da listagem,
+     * reservada desde sempre pro "Item de Linha" mas nunca usada até
+     * agora). Ajustes finos (Descrição/Quantidade/%/Custo Unitário)
+     * ficam pro fluxo de edição já existente (ícone de lápis de cada
+     * linha), 1 item por vez.
+     *
+     * **Trava: exige `referencia_preco_id` no Projeto** — a fórmula de
+     * Custo Unitário (`calcularDetalhamentoCustoPromob()`) depende
+     * inteiramente dos Fatores/Valores da Referência de Preços; sem
+     * ela, TODO Item sairia com Custo Unitário zerado, um erro
+     * silencioso e consequente (diferente do Imposto do Item Avulso,
+     * que degrada pra 0% sem bloquear).
+     */
+    protected static function criarTodosItensPromob(?Projeto $record, $livewire): void
+    {
+        if (! $record) {
+            Notification::make()
+                ->warning()
+                ->title(__('comercial::filament/resources/projeto.form.itens.notification.projeto-nao-salvo-title'))
+                ->body(__('comercial::filament/resources/projeto.form.itens.notification.projeto-nao-salvo-body'))
+                ->send();
+
+            return;
+        }
+
+        if (blank($record->referencia_preco_id)) {
+            Notification::make()
+                ->danger()
+                ->title(__('comercial::filament/resources/projeto.form.itens.promob.criar-itens.notification.sem-referencia-title'))
+                ->body(__('comercial::filament/resources/projeto.form.itens.promob.criar-itens.notification.sem-referencia-body'))
+                ->send();
+
+            return;
+        }
+
+        $arquivos = static::arquivosXmlPromobAtuais($livewire);
+        $resultado = static::calcularResultadoPromob($arquivos, $record);
+
+        if (isset($resultado['erro'])) {
+            Notification::make()
+                ->danger()
+                ->title(__('comercial::filament/resources/projeto.form.itens.promob.criar-itens.notification.erro-title'))
+                ->body($resultado['erro'])
+                ->send();
+
+            return;
+        }
+
+        // Trava: havendo divergência em qualquer uma das 5 métricas,
+        // só o super usuário pode confirmar e seguir com a criação
+        // (`promobUsuarioPodeConfirmarDivergencia()`, mesmo critério de
+        // `NotaProjeto::ehSuperUsuario()`) — pra qualquer outro
+        // usuário, a criação é BLOQUEADA aqui, não apenas avisada. O
+        // padrão esperado é diferença = 0; a exceção existe só pro
+        // super usuário resolver casos muito atípicos sem travar o
+        // processo inteiro (ver CLAUDE.md, "Fluxo Promob"). Redundante
+        // com `promobPrecisaConfirmarCriacao()` (que já evita abrir o
+        // modal de confirmação nesse caso pra quem não é super
+        // usuário), mas repetido aqui como validação de segurança no
+        // backend — nunca confiar só em esconder/pular o modal na
+        // tela, mesmo padrão de `salvarEdicaoNota()`/`excluirNotaProjeto()`.
+        if (isset($resultado['metricas'])
+            && $resultado['metricas']['tem_geral']
+            && ! static::diferencaMetricasZerada($resultado['metricas']['diferenca'])
+            && ! static::promobUsuarioPodeConfirmarDivergencia()) {
+            Notification::make()
+                ->danger()
+                ->title(__('comercial::filament/resources/projeto.form.itens.promob.criar-itens.notification.divergencia-bloqueada-title'))
+                ->body(__('comercial::filament/resources/projeto.form.itens.promob.criar-itens.notification.divergencia-bloqueada-body'))
+                ->send();
+
+            return;
+        }
+
+        $conteudoPorNome = [];
+
+        foreach ($arquivos as $arquivo) {
+            $conteudoPorNome[$arquivo->getClientOriginalName()] = $arquivo->get();
+        }
+
+        $nomeGeral = null;
+
+        foreach (array_keys($conteudoPorNome) as $nome) {
+            if (PromobChecagemTotal::ehArquivoGeral($nome)) {
+                $nomeGeral = $nome;
+
+                break;
+            }
+        }
+
+        // Defensivo — `criarItensPromob->disabled()` já exige um XML
+        // "000" válido pra sequer habilitar o botão; não deveria chegar
+        // aqui sem ele.
+        if ($nomeGeral === null) {
+            Notification::make()
+                ->danger()
+                ->title(__('comercial::filament/resources/projeto.form.itens.promob.criar-itens.notification.erro-title'))
+                ->body(__('comercial::filament/resources/projeto.form.itens.promob.erros.projeto-nao-salvo'))
+                ->send();
+
+            return;
+        }
+
+        $dataHoraGeral = PromobXmlParser::dataHora($conteudoPorNome[$nomeGeral]);
+        $nomesItens = PromobChecagemTotal::ordenarNomesDeArquivosDeItens(array_keys($conteudoPorNome));
+        $referenciaPrecoId = $record->referencia_preco_id;
+
+        $criados = DB::transaction(function () use ($record, $resultado, $nomeGeral, $dataHoraGeral, $nomesItens, $conteudoPorNome, $referenciaPrecoId): int {
+            // Nota GERAL de checagem só quando há alguma divergência
+            // (`! diferencaMetricasZerada()`) — diferença = 0 é o caso
+            // COMUM/esperado e não precisa de registro; a nota existe
+            // pra documentar justamente a exceção (inclusive porque,
+            // havendo divergência, quem chegou até aqui necessariamente
+            // é o super usuário confirmando a criação mesmo assim — ver
+            // trava logo acima).
+            if (! static::diferencaMetricasZerada($resultado['metricas']['diferenca'])) {
+                $record->notas()->create([
+                    'usuario_id'   => auth()->id(),
+                    'tipo_sistema' => true,
+                    'texto'        => static::renderizarResumoNotaGeralPromob($nomeGeral, $dataHoraGeral, $resultado['metricas']),
+                ]);
+            }
+
+            // `lockForUpdate()` na Referência de Preços UMA VEZ pra todo
+            // o lote (não por item) — mesma disciplina de concorrência
+            // de sempre (nunca confiar em Fatores/Imposto já em cache),
+            // mas sem sentido relê-la item a item aqui: tudo acontece
+            // na MESMA transação, sem interação do usuário no meio que
+            // pudesse deixar o valor ficar obsoleto entre um item e o
+            // próximo.
+            $referencia = ReferenciaPreco::where('id', $referenciaPrecoId)->lockForUpdate()->first();
+            $impostoAplicado = (float) ($referencia->imposto ?? 0);
+
+            // `lockForUpdate()` nas linhas já existentes deste Projeto
+            // UMA VEZ, antes do loop — mesma disciplina de concorrência
+            // de `salvarItemAvulso()` pro `numero_item`
+            // (`ItemProjeto::boot()`), cobrindo o LOTE inteiro.
+            $record->itens()->lockForUpdate()->get();
+
+            $totalCriados = 0;
+
+            foreach ($nomesItens as $nomeArquivo) {
+                $conteudo = $conteudoPorNome[$nomeArquivo];
+                $metricas = PromobXmlParser::metricas($conteudo);
+                $dataHoraItem = PromobXmlParser::dataHora($conteudo);
+                $detalhamento = static::calcularDetalhamentoCustoPromob($metricas, $referencia);
+                $custoUnitario = round($detalhamento['custo_unitario'], 2);
+                $valores = static::calcularValoresItemAvulso($custoUnitario, 1, 0, $impostoAplicado);
+                $novoItem = $record->itens()->create([
+                    'origem'           => OrigemItemProjeto::Promob,
+                    // Referência (2026-09-06, revisado) — só um LABEL
+                    // curto de origem, NÃO o nome do arquivo + data/hora
+                    // (decisão original, revertida pelo usuário): essa
+                    // informação detalhada já fica visível por item no
+                    // ícone "Cálculos" (`renderizarResumoCalculoItemPromob()`
+                    // → `NotaProjeto`), duplicar tudo aqui só encheria a
+                    // coluna/base à toa. Mesmo padrão do rótulo "Item
+                    // Avulso" gravado em `salvarItemAvulso()` — ver
+                    // CLAUDE.md, "Fluxo Promob".
+                    'referencia'       => 'Promob',
+                    'descricao'        => PromobChecagemTotal::descricaoDoArquivo($nomeArquivo),
+                    'quantidade'       => 1,
+                    'porcentagem'      => 0,
+                    'custo_unitario'   => $custoUnitario,
+                    'imposto_aplicado' => $impostoAplicado,
+                    'valor_unitario'   => $valores['valor_unitario'],
+                    'valor_total'      => $valores['valor_total'],
+                ]);
+
+                // `$novoItem->notas()` já seta `item_projeto_id` sozinho
+                // (é a FK da própria relação) — só `projeto_id` precisa
+                // ser passado explicitamente aqui (não é a FK desta
+                // relação).
+                $novoItem->notas()->create([
+                    'projeto_id'   => $record->id,
+                    'usuario_id'   => auth()->id(),
+                    'tipo_sistema' => true,
+                    'texto'        => static::renderizarResumoCalculoItemPromob($nomeArquivo, $dataHoraItem, $detalhamento),
+                ]);
+
+                $totalCriados++;
+            }
+
+            return $totalCriados;
+        });
+
+        if ($livewire instanceof EditProjeto) {
+            $livewire->recarregarItens();
+        }
+
+        Notification::make()
+            ->success()
+            ->title(__('comercial::filament/resources/projeto.form.itens.promob.criar-itens.notification.concluido-title'))
+            ->body(trans_choice(
+                'comercial::filament/resources/projeto.form.itens.promob.criar-itens.notification.concluido-body',
+                $criados,
+                ['count' => $criados],
+            ))
+            ->send();
+    }
+
+    /**
+     * Calcula o detalhamento COMPLETO do Custo Unitário de um item do
+     * Promob (Parte 4.2 do enunciado) — fórmula confirmada:
+     *
+     * ```
+     * Madeira              = Tot.Custo(item) × FatorMadeira
+     * FerragensMiscelanea  = Tot.Misc(item) × FatorFerragensMiscelanea
+     * Laminacao            = Tot.MLinear(item) × ValorLaminacao
+     * Corte                = Tot.MLinear(item) × ValorCorte
+     * PecasDoItem          = Tot.Peças(item) × ValorPorPeca
+     * AcabamentoCorte      = (Laminacao + Corte + PecasDoItem) × FatorAcabamentoCorte
+     * MaoObraProducao      = Tot.m²(item) × ValorHoraProducao
+     * MaoObraExecucao      = Tot.m²(item) × ValorHoraExecucao
+     * MaoDeObra            = (MaoObraProducao + MaoObraExecucao) × FatorMaoDeObra
+     * CustoUnitario        = Madeira + FerragensMiscelanea + AcabamentoCorte + MaoDeObra
+     * ```
+     *
+     * "× Fator" é sempre uma multiplicação pura — os Fatores são
+     * percentuais gravados como número cru (ex.: `200.00` = 200%),
+     * então cada um entra na fórmula dividido por 100 primeiro (`×2.0`,
+     * não `×200`). `?ReferenciaPreco $referencia` aceita `null` de
+     * propósito (todos os Fatores/Valores caem pra `0`, resultando em
+     * Custo Unitário `0`) só como salvaguarda defensiva — o CAMINHO
+     * normal já bloqueia mais cedo sem Referência vinculada (ver
+     * `criarTodosItensPromob()`).
+     *
+     * Função PURA (sem `Get`/`Set`) — mesma separação já usada por
+     * `calcularValoresItemAvulso()`.
+     *
+     * @param  array{pecas: int, m2: float, mlinear: float, custo: float, misc: float}  $metricasItem
+     * @return array<string, mixed>
+     */
+    protected static function calcularDetalhamentoCustoPromob(array $metricasItem, ?ReferenciaPreco $referencia): array
+    {
+        $fatorMadeira = (float) ($referencia->fator_madeiras ?? 0);
+        $fatorFerragensMiscelania = (float) ($referencia->fator_ferragens_miscelanias ?? 0);
+        $fatorAcabamentoCorte = (float) ($referencia->fator_acabamento_corte ?? 0);
+        $fatorMaoObra = (float) ($referencia->fator_mao_obra ?? 0);
+        $valorLaminacao = (float) ($referencia->laminacao ?? 0);
+        $valorCorte = (float) ($referencia->corte ?? 0);
+        $valorPorPeca = (float) ($referencia->valor_pecas ?? 0);
+        $valorHoraProducao = (float) ($referencia->hora_producao ?? 0);
+        $valorHoraExecucao = (float) ($referencia->hora_execucao ?? 0);
+
+        $custoItem = $metricasItem['custo'];
+        $miscItem = $metricasItem['misc'];
+        $mlinearItem = $metricasItem['mlinear'];
+        $pecasItem = (float) $metricasItem['pecas'];
+        $m2Item = $metricasItem['m2'];
+
+        $madeira = $custoItem * ($fatorMadeira / 100);
+        $ferragensMiscelania = $miscItem * ($fatorFerragensMiscelania / 100);
+
+        $laminacao = $mlinearItem * $valorLaminacao;
+        $corte = $mlinearItem * $valorCorte;
+        $pecasValor = $pecasItem * $valorPorPeca;
+        $acabamentoCorteBase = $laminacao + $corte + $pecasValor;
+        $acabamentoCorte = $acabamentoCorteBase * ($fatorAcabamentoCorte / 100);
+
+        $maoObraProducao = $m2Item * $valorHoraProducao;
+        $maoObraExecucao = $m2Item * $valorHoraExecucao;
+        $maoObraBase = $maoObraProducao + $maoObraExecucao;
+        $maoDeObra = $maoObraBase * ($fatorMaoObra / 100);
+
+        $custoUnitario = $madeira + $ferragensMiscelania + $acabamentoCorte + $maoDeObra;
+
+        return [
+            'metricas_item'              => $metricasItem,
+            'fator_madeira'              => $fatorMadeira,
+            'fator_ferragens_miscelania' => $fatorFerragensMiscelania,
+            'fator_acabamento_corte'     => $fatorAcabamentoCorte,
+            'fator_mao_obra'             => $fatorMaoObra,
+            'valor_laminacao'            => $valorLaminacao,
+            'valor_corte'                => $valorCorte,
+            'valor_por_peca'             => $valorPorPeca,
+            'valor_hora_producao'        => $valorHoraProducao,
+            'valor_hora_execucao'        => $valorHoraExecucao,
+            'madeira'                    => $madeira,
+            'ferragens_miscelania'       => $ferragensMiscelania,
+            'laminacao'                  => $laminacao,
+            'corte'                      => $corte,
+            'pecas_valor'                => $pecasValor,
+            'acabamento_corte_base'      => $acabamentoCorteBase,
+            'acabamento_corte'           => $acabamentoCorte,
+            'mao_obra_producao'          => $maoObraProducao,
+            'mao_obra_execucao'          => $maoObraExecucao,
+            'mao_obra_base'              => $maoObraBase,
+            'mao_de_obra'                => $maoDeObra,
+            'custo_unitario'             => $custoUnitario,
+        ];
+    }
+
+    /**
+     * Formata um valor monetário no padrão brasileiro (`R$ 1.234,56`).
+     */
+    private static function formatarMoedaPromob(float $valor): string
+    {
+        return 'R$ '.number_format($valor, 2, ',', '.');
+    }
+
+    /**
+     * Formata um percentual no padrão brasileiro (`200,00%`).
+     */
+    private static function formatarPercentualPromob(float $valor): string
+    {
+        return number_format($valor, 2, ',', '.').'%';
+    }
+
+    /**
+     * Tabela HTML compacta do detalhamento de Custo Unitário de UM item
+     * — gravada como `texto` da `NotaProjeto` vinculada a esse item
+     * (`criarTodosItensPromob()`), acessível depois pelo ícone
+     * "Cálculos" da listagem. Estilo COMPACTO por
+     * pedido explícito da tarefa ("Nota sobre estilo visual — sem
+     * fundo colorido por linha, só bordas leves, alinhamento numérico à
+     * direita") — `style=` INLINE em vez de classes Tailwind
+     * (`text-xs`), pra não depender de quais utilitários o CSS
+     * pré-compilado do Filament inclui (ver CLAUDE.md da raiz,
+     * "FilamentAsset::register()", sobre classes arbitrárias não
+     * usadas pelo próprio Filament não terem efeito nenhum) — o mesmo
+     * HTML também precisa renderizar OK fora do painel admin (dentro da
+     * Nota, via `Html::make()` no modal de Notas do Projeto).
+     *
+     * @param  array{data: string, hora: string}  $dataHora
+     * @param  array<string, mixed>  $detalhamento
+     */
+    protected static function renderizarResumoCalculoItemPromob(string $nomeArquivo, array $dataHora, array $detalhamento): string
+    {
+        $m = $detalhamento['metricas_item'];
+        $th = 'text-align:left;padding:2px 6px;border-bottom:1px solid #d1d5db;';
+        $thDir = 'text-align:right;padding:2px 6px;border-bottom:1px solid #d1d5db;';
+        $td = 'padding:2px 6px;border-bottom:1px solid #e5e7eb;';
+        $tdDir = $td.'text-align:right;';
+        $tdSub = 'padding:2px 6px 2px 20px;border-bottom:1px solid #e5e7eb;color:#6b7280;';
+        $tdSubDir = $tdSub.'text-align:right;';
+
+        $linha = fn (string $rotulo, string $base, string $fator, string $total, bool $sub = false) => '<tr>'
+            .'<td style="'.($sub ? $tdSub : $td).'">'.e($rotulo).'</td>'
+            .'<td style="'.($sub ? $tdSubDir : $tdDir).'">'.e($base).'</td>'
+            .'<td style="'.($sub ? $tdSubDir : $tdDir).'">'.e($fator).'</td>'
+            .'<td style="'.($sub ? $tdSubDir : $tdDir).'">'.e($total).'</td>'
+            .'</tr>';
+
+        $linhas = $linha(
+            __('comercial::filament/resources/projeto.form.itens.promob.criar-itens.tabela.madeira'),
+            static::formatarMoedaPromob($m['custo']),
+            static::formatarPercentualPromob($detalhamento['fator_madeira']),
+            static::formatarMoedaPromob($detalhamento['madeira']),
+        );
+        $linhas .= $linha(
+            __('comercial::filament/resources/projeto.form.itens.promob.criar-itens.tabela.ferragens-miscelanea'),
+            static::formatarMoedaPromob($m['misc']),
+            static::formatarPercentualPromob($detalhamento['fator_ferragens_miscelania']),
+            static::formatarMoedaPromob($detalhamento['ferragens_miscelania']),
+        );
+        $linhas .= $linha(
+            __('comercial::filament/resources/projeto.form.itens.promob.criar-itens.tabela.acabamento-corte'),
+            static::formatarMoedaPromob($detalhamento['acabamento_corte_base']),
+            static::formatarPercentualPromob($detalhamento['fator_acabamento_corte']),
+            static::formatarMoedaPromob($detalhamento['acabamento_corte']),
+        );
+        $linhas .= $linha(
+            __('comercial::filament/resources/projeto.form.itens.promob.criar-itens.tabela.laminacao'),
+            number_format($m['mlinear'], 2, ',', '.').' m',
+            static::formatarMoedaPromob($detalhamento['valor_laminacao']).'/m',
+            static::formatarMoedaPromob($detalhamento['laminacao']),
+            sub: true,
+        );
+        $linhas .= $linha(
+            __('comercial::filament/resources/projeto.form.itens.promob.criar-itens.tabela.corte'),
+            number_format($m['mlinear'], 2, ',', '.').' m',
+            static::formatarMoedaPromob($detalhamento['valor_corte']).'/m',
+            static::formatarMoedaPromob($detalhamento['corte']),
+            sub: true,
+        );
+        $linhas .= $linha(
+            __('comercial::filament/resources/projeto.form.itens.promob.criar-itens.tabela.pecas'),
+            number_format($m['pecas'], 0, ',', '.'),
+            static::formatarMoedaPromob($detalhamento['valor_por_peca']).'/pç',
+            static::formatarMoedaPromob($detalhamento['pecas_valor']),
+            sub: true,
+        );
+        $linhas .= $linha(
+            __('comercial::filament/resources/projeto.form.itens.promob.criar-itens.tabela.mao-de-obra'),
+            static::formatarMoedaPromob($detalhamento['mao_obra_base']),
+            static::formatarPercentualPromob($detalhamento['fator_mao_obra']),
+            static::formatarMoedaPromob($detalhamento['mao_de_obra']),
+        );
+        $linhas .= $linha(
+            __('comercial::filament/resources/projeto.form.itens.promob.criar-itens.tabela.producao'),
+            number_format($m['m2'], 2, ',', '.').' m²',
+            static::formatarMoedaPromob($detalhamento['valor_hora_producao']).'/m²',
+            static::formatarMoedaPromob($detalhamento['mao_obra_producao']),
+            sub: true,
+        );
+        $linhas .= $linha(
+            __('comercial::filament/resources/projeto.form.itens.promob.criar-itens.tabela.execucao'),
+            number_format($m['m2'], 2, ',', '.').' m²',
+            static::formatarMoedaPromob($detalhamento['valor_hora_execucao']).'/m²',
+            static::formatarMoedaPromob($detalhamento['mao_obra_execucao']),
+            sub: true,
+        );
+
+        $totalTd = 'padding:4px 6px;border-top:1px solid #9ca3af;font-weight:600;';
+
+        return '<p style="margin:0 0 4px;font-size:11px;color:#6b7280;">'.e("{$nomeArquivo} — {$dataHora['data']} {$dataHora['hora']}").'</p>'
+            .'<table style="width:100%;border-collapse:collapse;font-size:11px;">'
+            .'<thead><tr>'
+            .'<th style="'.$th.'">'.e(__('comercial::filament/resources/projeto.form.itens.promob.criar-itens.tabela.categoria')).'</th>'
+            .'<th style="'.$thDir.'">'.e(__('comercial::filament/resources/projeto.form.itens.promob.criar-itens.tabela.base')).'</th>'
+            .'<th style="'.$thDir.'">'.e(__('comercial::filament/resources/projeto.form.itens.promob.criar-itens.tabela.fator')).'</th>'
+            .'<th style="'.$thDir.'">'.e(__('comercial::filament/resources/projeto.form.itens.promob.criar-itens.tabela.total')).'</th>'
+            .'</tr></thead><tbody>'
+            .$linhas
+            .'<tr><td colspan="3" style="'.$totalTd.'">'.e(__('comercial::filament/resources/projeto.form.itens.promob.criar-itens.tabela.custo-unitario')).'</td>'
+            .'<td style="'.$totalTd.'text-align:right;">'.e(static::formatarMoedaPromob($detalhamento['custo_unitario'])).'</td></tr>'
+            .'</tbody></table>';
+    }
+
+    /**
+     * Tabela HTML compacta da Nota geral de checagem (Parte 3 do
+     * enunciado) — MESMO estilo visual de `renderizarResumoCalculoItemPromob()`.
+     *
+     * @param  array{data: string, hora: string}  $dataHora
+     * @param  array{tem_geral: bool, quantidade_parciais: int, parciais: array<string, int|float>, geral: array<string, int|float>|null, diferenca: array<string, int|float>|null}  $metricas
+     */
+    protected static function renderizarResumoNotaGeralPromob(string $nomeArquivoGeral, array $dataHora, array $metricas): string
+    {
+        $th = 'text-align:left;padding:2px 6px;border-bottom:1px solid #d1d5db;';
+        $thDir = 'text-align:right;padding:2px 6px;border-bottom:1px solid #d1d5db;';
+        $td = 'padding:2px 6px;border-bottom:1px solid #e5e7eb;';
+        $tdDir = $td.'text-align:right;';
+
+        $formatar = fn (string $chave, $valor) => $chave === 'pecas'
+            ? number_format((float) $valor, 0, ',', '.')
+            : number_format((float) $valor, 2, ',', '.');
+
+        $rotulos = [
+            'pecas'   => __('comercial::filament/resources/projeto.form.itens.promob.criar-itens.tabela.metrica-pecas'),
+            'm2'      => __('comercial::filament/resources/projeto.form.itens.promob.criar-itens.tabela.metrica-m2'),
+            'mlinear' => __('comercial::filament/resources/projeto.form.itens.promob.criar-itens.tabela.metrica-mlinear'),
+            'custo'   => __('comercial::filament/resources/projeto.form.itens.promob.criar-itens.tabela.metrica-custo'),
+            'misc'    => __('comercial::filament/resources/projeto.form.itens.promob.criar-itens.tabela.metrica-misc'),
+        ];
+
+        $linhas = '';
+
+        foreach ($rotulos as $chave => $rotulo) {
+            $linhas .= '<tr>'
+                .'<td style="'.$td.'">'.e($rotulo).'</td>'
+                .'<td style="'.$tdDir.'">'.e($metricas['tem_geral'] ? $formatar($chave, $metricas['geral'][$chave]) : '—').'</td>'
+                .'<td style="'.$tdDir.'">'.e($formatar($chave, $metricas['parciais'][$chave])).'</td>'
+                .'<td style="'.$tdDir.'">'.e($metricas['tem_geral'] ? $formatar($chave, $metricas['diferenca'][$chave]) : '—').'</td>'
+                .'</tr>';
+        }
+
+        return '<p style="margin:0 0 4px;font-size:11px;color:#6b7280;">'.e("{$nomeArquivoGeral} — {$dataHora['data']} {$dataHora['hora']}").'</p>'
+            .'<table style="width:100%;border-collapse:collapse;font-size:11px;">'
+            .'<thead><tr>'
+            .'<th style="'.$th.'">'.e(__('comercial::filament/resources/projeto.form.itens.promob.criar-itens.tabela.metrica')).'</th>'
+            .'<th style="'.$thDir.'">'.e(__('comercial::filament/resources/projeto.form.itens.promob.criar-itens.tabela.coluna-geral')).'</th>'
+            .'<th style="'.$thDir.'">'.e(__('comercial::filament/resources/projeto.form.itens.promob.criar-itens.tabela.coluna-soma-itens', ['quantidade' => $metricas['quantidade_parciais']])).'</th>'
+            .'<th style="'.$thDir.'">'.e(__('comercial::filament/resources/projeto.form.itens.promob.criar-itens.tabela.coluna-diferenca')).'</th>'
+            .'</tr></thead><tbody>'
+            .$linhas
+            .'</tbody></table>';
     }
 
     /**
@@ -1483,6 +2043,17 @@ class ProjetoResource extends Resource
             // Actions), nunca editável pelo usuário.
             Hidden::make('item_id'),
 
+            // Controle interno (2026-09-06) — `OrigemItemProjeto` do item
+            // sendo editado (`null` em modo criação, sempre vira Item
+            // Avulso nesse caso). Só existe pra decidir, em tela, se
+            // "Custo Unitário" abaixo fica bloqueado — ver esse campo e
+            // `salvarItemAvulso()`, que também usa a origem real do
+            // registro (não este valor, que é só CACHE de exibição) pra
+            // decidir se persiste um novo Custo Unitário ou preserva o já
+            // gravado.
+            Hidden::make('origem_atual')
+                ->dehydrated(false),
+
             RichEditor::make('descricao')
                 ->label(__('comercial::filament/resources/projeto.form.itens.item-avulso-modal.descricao-label'))
                 ->required()
@@ -1547,7 +2118,20 @@ class ProjetoResource extends Resource
                         ->prefix('R$')
                         ->live(onBlur: true)
                         ->extraInputAttributes(['class' => 'fi-input-no-spinner'])
-                        ->afterStateUpdated(fn (Get $get, Set $set) => static::recalcularValoresItemAvulso($get, $set)),
+                        ->afterStateUpdated(fn (Get $get, Set $set) => static::recalcularValoresItemAvulso($get, $set))
+                        // Bloqueado pra edição de item de origem Promob
+                        // (2026-09-06) — o Custo Unitário desses itens é
+                        // CALCULADO pela importação do XML
+                        // (`calcularDetalhamentoCustoPromob()`), não um
+                        // valor livre digitado pelo usuário; permitir
+                        // editar aqui destruiria essa rastreabilidade sem
+                        // reprocessar o XML original. `->dehydrated(false)`
+                        // junto pra nem chegar em `$data` quando bloqueado —
+                        // `salvarItemAvulso()` então preserva o valor já
+                        // gravado no registro (dupla proteção, já que o
+                        // `disabled()` sozinho pode ser burlado no DOM).
+                        ->disabled(fn (Get $get): bool => $get('origem_atual') === OrigemItemProjeto::Promob->value)
+                        ->dehydrated(fn (Get $get): bool => $get('origem_atual') !== OrigemItemProjeto::Promob->value),
                 ]),
 
             Grid::make(2)
@@ -1624,6 +2208,7 @@ class ProjetoResource extends Resource
 
         $schema?->fill([
             'item_id'        => $itemId,
+            'origem_atual'   => $item?->origem?->value,
             'descricao'      => $item?->descricao,
             'quantidade'     => $quantidade,
             'porcentagem'    => $porcentagem,
@@ -1719,32 +2304,52 @@ class ProjetoResource extends Resource
         $itemId = $data['item_id'] ?? null;
         $descricao = (string) $data['descricao'];
         $quantidade = $data['quantidade'];
-        $custoUnitario = $data['custo_unitario'];
+        $custoUnitarioDigitado = $data['custo_unitario'] ?? null;
         $porcentagem = (float) ($data['porcentagem'] ?? 0);
         $referenciaPrecoId = $get('referencia_preco_id');
 
-        DB::transaction(function () use ($record, $descricao, $quantidade, $custoUnitario, $porcentagem, $referenciaPrecoId, $itemId): void {
+        DB::transaction(function () use ($record, $descricao, $quantidade, $custoUnitarioDigitado, $porcentagem, $referenciaPrecoId, $itemId): void {
+            $item = filled($itemId) ? $record->itens()->lockForUpdate()->find($itemId) : null;
+
+            // Custo Unitário — pra item de origem Promob o campo chega
+            // BLOQUEADO no form (ver `camposFormularioItemAvulso()`,
+            // `->disabled()`/`->dehydrated(false)` condicionados a
+            // `origem_atual`), então nem entra em `$data`; preserva o
+            // valor já gravado (calculado pela importação) em vez de
+            // tentar ler um `$data['custo_unitario']` inexistente. Item
+            // Avulso (ou criação de item novo) usa normalmente o valor
+            // digitado no form.
+            $ehOrigemPromob = $item?->origem === OrigemItemProjeto::Promob;
+            $custoUnitario = $ehOrigemPromob ? (float) $item->custo_unitario : (float) $custoUnitarioDigitado;
+
             $impostoAplicado = filled($referenciaPrecoId)
                 ? (float) (ReferenciaPreco::where('id', $referenciaPrecoId)->lockForUpdate()->value('imposto') ?? 0)
                 : 0.0;
 
-            $valores = static::calcularValoresItemAvulso((float) $custoUnitario, (float) $quantidade, $porcentagem, $impostoAplicado);
+            $valores = static::calcularValoresItemAvulso($custoUnitario, (float) $quantidade, $porcentagem, $impostoAplicado);
 
             $dados = [
-                'origem'           => OrigemItemProjeto::ItemAvulso,
                 'descricao'        => $descricao,
                 'quantidade'       => (int) $quantidade,
                 'porcentagem'      => $porcentagem,
-                'custo_unitario'   => (float) $custoUnitario,
+                'custo_unitario'   => $custoUnitario,
                 'imposto_aplicado' => $impostoAplicado,
                 'valor_unitario'   => $valores['valor_unitario'],
                 'valor_total'      => $valores['valor_total'],
             ];
 
-            if (filled($itemId)) {
-                $item = $record->itens()->lockForUpdate()->find($itemId);
-
-                if ($item && static::itemAvulsoMudou($item, $dados)) {
+            if ($item) {
+                // `origem`/`referencia` NUNCA são reescritos aqui em modo
+                // EDIÇÃO (2026-09-06, achado real) — este mesmo form/Action
+                // é reaproveitado pra editar item de QUALQUER origem
+                // (`editarItemAvulso{id}`, apesar do nome, ver
+                // `linhaExibicaoItem()`), e antes desta correção `origem`
+                // vinha hardcoded como `ItemAvulso` em TODO `update()`,
+                // convertendo silenciosamente um item Promob editado em
+                // Item Avulso (e junto, perdendo o rótulo "Promob" da
+                // coluna Referência). Os dois campos ficam como já estavam
+                // gravados no registro.
+                if (static::itemAvulsoMudou($item, $dados)) {
                     $item->update($dados);
                 }
             } else {
@@ -1759,6 +2364,15 @@ class ProjetoResource extends Resource
                 // ainda) — risco aceito, ver
                 // INVESTIGACAO-TRANSACOES-CONCORRENCIA.md.
                 $record->itens()->lockForUpdate()->get();
+                $dados['origem'] = OrigemItemProjeto::ItemAvulso;
+                // Referência (2026-09-06) — só um LABEL curto de origem
+                // ("Item Avulso"), não dado variável nenhum: a
+                // rastreabilidade detalhada de um Item Avulso é a própria
+                // Descrição preenchida pelo usuário, não precisa duplicar
+                // nada aqui. Mesmo padrão do rótulo "Promob" gravado em
+                // `criarTodosItensPromob()` — ver CLAUDE.md, "Fluxo
+                // Promob".
+                $dados['referencia'] = 'Item Avulso';
                 $record->itens()->create($dados);
             }
         });
@@ -1804,6 +2418,390 @@ class ProjetoResource extends Resource
         return false;
     }
 
+    /**
+     * Campos do FORM MODAL de "Mobilização e Frete" — reaproveitado
+     * pelas DUAS Actions que abrem esse modal (`inserirMobilizacaoFrete`,
+     * criação, e `editarMobilizacaoFrete{id}` de cada linha da listagem,
+     * edição), mesmo padrão de `camposFormularioItemAvulso()`.
+     *
+     * Ordem: Descrição → campos imputados (`fretes_mobilizacao`, ver
+     * migration) → totalizações calculadas ao vivo (só exibição, NÃO
+     * persistidas — decisão do usuário) → Quantidade/Acréscimo/Custo
+     * Unitário (este último DESABILITADO, alimentado pelo
+     * `total_geral` calculado acima) → Valor Unitário/Valor Total,
+     * calculados pela MESMA regra (`calcularValoresItemAvulso()`) que
+     * qualquer outro Item do Projeto.
+     *
+     * @return array<int, \Filament\Schemas\Components\Component>
+     */
+    protected static function camposFormularioMobilizacaoFrete(): array
+    {
+        return [
+            // Mesmo Placeholder de `camposFormularioItemAvulso()` (ver
+            // esse campo lá) — o número exibido aqui é só uma PRÉVIA:
+            // `numero_item` continua sendo gerado de verdade só no
+            // momento da inserção (`ItemProjeto::boot()`, evento
+            // "creating"), independente do que esta prévia mostrar.
+            Placeholder::make('numero_item_preview')
+                ->label(__('comercial::filament/resources/projeto.form.itens.item-avulso-modal.item-label'))
+                ->content(function (Get $get, ?Projeto $record): string {
+                    $itemId = $get('item_id');
+
+                    if (filled($itemId)) {
+                        $numero = $record?->itens()->find($itemId)?->numero_item;
+
+                        if (filled($numero)) {
+                            return $numero;
+                        }
+                    }
+
+                    $ultimoNumero = (int) ($record?->itens()->max('numero_item') ?? 0);
+
+                    return str_pad((string) ($ultimoNumero + 1), 3, '0', STR_PAD_LEFT);
+                }),
+
+            Hidden::make('item_id'),
+
+            RichEditor::make('descricao')
+                ->label(__('comercial::filament/resources/projeto.form.itens.item-avulso-modal.descricao-label'))
+                ->required()
+                ->rule(fn () => function (string $attribute, $value, \Closure $fail): void {
+                    if (blank(static::textoPlanoRichEditor($value))) {
+                        $fail(__('comercial::filament/resources/projeto.form.itens.validacao.descricao-obrigatoria'));
+                    }
+                })
+                ->validationMessages([
+                    'required' => __('comercial::filament/resources/projeto.form.itens.validacao.descricao-obrigatoria'),
+                ])
+                ->columnSpanFull(),
+
+            Section::make(__('comercial::filament/resources/projeto.form.itens.mobilizacao-frete-modal.secao-dados'))
+                ->columnSpanFull()
+                ->schema([
+                    // 5 colunas (não 4) — redistribuído (2026-09-06) pra
+                    // aproveitar o modal alargado (`Width::FiveExtraLarge`,
+                    // ver `inserirMobilizacaoFrete`/`editarMobilizacaoFrete{id}`)
+                    // e reduzir de 4 pra 3 linhas os 15 campos de input.
+                    Grid::make(5)
+                        ->schema(collect([
+                            'prazo_obra_dias', 'qtde_vistoria', 'funcionarios_vistoria', 'funcionarios_obra',
+                            'valor_cafe_manha', 'valor_almoco', 'valor_jantar', 'valor_hotel',
+                            'dias_viagem', 'valor_aviao', 'valor_onibus', 'km',
+                            'qtde_frete', 'valor_frete_viagem', 'valor_translado',
+                        ])->map(fn (string $campo) => TextInput::make($campo)
+                            ->label(__("comercial::filament/resources/projeto.form.itens.mobilizacao-frete-modal.campos.{$campo}"))
+                            ->numeric()
+                            ->minValue(0)
+                            ->default(0)
+                            ->live(onBlur: true)
+                            ->extraInputAttributes(['class' => 'fi-input-no-spinner'])
+                            ->afterStateUpdated(fn (Get $get, Set $set) => static::recalcularTotaisMobilizacaoFrete($get, $set)))
+                            ->all()),
+                ]),
+
+            Section::make(__('comercial::filament/resources/projeto.form.itens.mobilizacao-frete-modal.secao-totais'))
+                ->columnSpanFull()
+                ->schema([
+                    Grid::make(4)
+                        ->schema(collect([
+                            'total_mobilizacao_vistoria', 'total_mobilizacao_obra', 'total_frete', 'total_geral',
+                        ])->map(fn (string $campo) => TextInput::make($campo)
+                            ->label(__("comercial::filament/resources/projeto.form.itens.mobilizacao-frete-modal.campos.{$campo}"))
+                            ->prefix('R$')
+                            ->disabled()
+                            ->dehydrated(false))
+                            ->all()),
+                ]),
+
+            Grid::make(3)
+                ->schema([
+                    TextInput::make('quantidade')
+                        ->label(__('comercial::filament/resources/projeto.form.itens.item-avulso-modal.quantidade-label'))
+                        ->numeric()
+                        ->integer()
+                        ->required()
+                        ->default(1)
+                        ->rules(['gt:0'])
+                        ->validationMessages([
+                            'required' => __('comercial::filament/resources/projeto.form.itens.validacao.quantidade-obrigatoria'),
+                            'gt'       => __('comercial::filament/resources/projeto.form.itens.validacao.quantidade-obrigatoria'),
+                        ])
+                        ->live(onBlur: true)
+                        ->extraInputAttributes(['class' => 'fi-input-no-spinner'])
+                        ->afterStateUpdated(fn (Get $get, Set $set) => static::recalcularValoresItemAvulso($get, $set)),
+
+                    TextInput::make('porcentagem')
+                        ->label(__('comercial::filament/resources/projeto.form.itens.item-avulso-modal.porcentagem-label'))
+                        ->helperText(__('comercial::filament/resources/projeto.form.itens.porcentagem-tooltip'))
+                        ->numeric()
+                        ->integer()
+                        ->live(onBlur: true)
+                        ->extraInputAttributes(['class' => 'fi-input-no-spinner'])
+                        ->afterStateUpdated(fn (Get $get, Set $set) => static::recalcularValoresItemAvulso($get, $set)),
+
+                    // Alimentado pelo `total_geral` calculado acima
+                    // (`recalcularTotaisMobilizacaoFrete()`) — DESABILITADO
+                    // (nunca oculto, ver CLAUDE.md), mesmo esquema já usado
+                    // pelo Custo Unitário de item de origem Promob: valor
+                    // CALCULADO, não digitado livremente pelo usuário.
+                    TextInput::make('custo_unitario')
+                        ->label(__('comercial::filament/resources/projeto.form.itens.item-avulso-modal.custo-unitario-label'))
+                        ->numeric()
+                        ->prefix('R$')
+                        ->disabled()
+                        // `->disabled()` sozinho já faria o Filament NÃO
+                        // desidratar este campo (mesmo padrão observado no
+                        // Custo Unitário de item Promob, ver
+                        // `camposFormularioItemAvulso()`) — aqui, diferente
+                        // de lá, o valor calculado (`total_geral`) PRECISA
+                        // chegar em `$data['custo_unitario']` pra
+                        // `salvarMobilizacaoFrete()` gravar, por isso
+                        // `->dehydrated()` explícito reativa o envio.
+                        ->dehydrated()
+                        ->live()
+                        ->afterStateUpdated(fn (Get $get, Set $set) => static::recalcularValoresItemAvulso($get, $set)),
+                ]),
+
+            Grid::make(2)
+                ->schema([
+                    TextInput::make('valor_unitario')
+                        ->label(__('comercial::filament/resources/projeto.form.itens.item-avulso-modal.valor-unitario-label'))
+                        ->numeric()
+                        ->prefix('R$')
+                        ->disabled()
+                        ->dehydrated(false),
+
+                    TextInput::make('valor_total')
+                        ->label(__('comercial::filament/resources/projeto.form.itens.item-avulso-modal.valor-total-label'))
+                        ->numeric()
+                        ->prefix('R$')
+                        ->disabled()
+                        ->dehydrated(false),
+                ]),
+
+            // Imp.% da Referência de Preços — mesmo mecanismo de cache
+            // pra prévia em tela de `camposFormularioItemAvulso()` (ver
+            // esse campo lá pro porquê da gravação de verdade nunca usar
+            // este valor, só o fresco do banco).
+            Hidden::make('imposto')
+                ->dehydrated(false),
+        ];
+    }
+
+    /**
+     * Soma os 15 campos de input (`fretes_mobilizacao`) num único array
+     * associativo — usada tanto por
+     * `preencherFormularioMobilizacaoFrete()` (ler do registro
+     * existente) quanto por `salvarMobilizacaoFrete()` (ler do `$data`
+     * do form) — evita repetir a lista de nomes de campo nos dois
+     * lugares.
+     *
+     * @return array<int, string>
+     */
+    protected static function camposInputMobilizacaoFrete(): array
+    {
+        return [
+            'prazo_obra_dias', 'qtde_vistoria', 'funcionarios_vistoria', 'funcionarios_obra',
+            'valor_cafe_manha', 'valor_almoco', 'valor_jantar', 'valor_hotel',
+            'dias_viagem', 'valor_aviao', 'valor_onibus', 'km',
+            'qtde_frete', 'valor_frete_viagem', 'valor_translado',
+        ];
+    }
+
+    /**
+     * Totais de "Mobilização e Frete" — função PURA (mesmo espírito de
+     * `calcularValoresItemAvulso()`), recebe os 15 campos de input já
+     * resolvidos (não lê `Get`/Model diretamente) pra poder ser
+     * reaproveitada tanto pela prévia em tela quanto pela gravação de
+     * verdade.
+     *
+     * - Mobilização (vistoria/obra) = dias x funcionários x
+     *   (hotel+café+almoço+jantar) + dias de viagem x funcionários x
+     *   (avião+ônibus) x2 + valor de translado — MESMA verba de
+     *   translado somada nas duas fases (comportamento herdado da
+     *   planilha original, ver CLAUDE.md).
+     * - Frete = quantidade de viagens x valor do frete por viagem —
+     *   modelo simplificado (2026-09-06, pedido do usuário): sem tentar
+     *   identificar região, um único valor por viagem.
+     * - `km` é só informativo neste modelo (sem campo de valor por km) —
+     *   não entra em nenhum total.
+     *
+     * @param  array<string, float|int>  $dados
+     * @return array{total_mobilizacao_vistoria: float, total_mobilizacao_obra: float, total_frete: float, total_geral: float}
+     */
+    protected static function calcularTotaisMobilizacaoFrete(array $dados): array
+    {
+        $get = fn (string $campo): float => (float) ($dados[$campo] ?? 0);
+
+        $custoDiario = $get('valor_hotel') + $get('valor_cafe_manha') + $get('valor_almoco') + $get('valor_jantar');
+        $custoViagem = ($get('valor_aviao') + $get('valor_onibus')) * 2;
+
+        $totalVistoria = ($get('qtde_vistoria') * $get('funcionarios_vistoria') * $custoDiario)
+            + ($get('dias_viagem') * $get('funcionarios_vistoria') * $custoViagem)
+            + $get('valor_translado');
+
+        $totalObra = ($get('prazo_obra_dias') * $get('funcionarios_obra') * $custoDiario)
+            + ($get('dias_viagem') * $get('funcionarios_obra') * $custoViagem)
+            + $get('valor_translado');
+
+        $totalFrete = $get('qtde_frete') * $get('valor_frete_viagem');
+
+        return [
+            'total_mobilizacao_vistoria' => round($totalVistoria, 2),
+            'total_mobilizacao_obra'     => round($totalObra, 2),
+            'total_frete'                => round($totalFrete, 2),
+            'total_geral'                => round($totalVistoria + $totalObra + $totalFrete, 2),
+        ];
+    }
+
+    /**
+     * Preenche o Form Modal de "Mobilização e Frete" — mesmo critério
+     * de `preencherFormularioItemAvulso()`: SEMPRE roda em `mountUsing()`
+     * (nunca confia em resetar ao fechar). Sem `$itemId` (criação): tudo
+     * em branco/zerado. Com `$itemId` (edição): lê o `ItemProjeto` E o
+     * `FreteMobilizacao` vinculado (`->freteMobilizacao`).
+     */
+    protected static function preencherFormularioMobilizacaoFrete(?Schema $schema, Get $get, ?Projeto $record, ?string $itemId): void
+    {
+        $referenciaPrecoId = $get('referencia_preco_id');
+        $imposto = filled($referenciaPrecoId)
+            ? (float) (ReferenciaPreco::find($referenciaPrecoId)?->imposto ?? 0)
+            : 0.0;
+
+        $item = filled($itemId) ? $record?->itens()->find($itemId) : null;
+        $frete = $item?->freteMobilizacao;
+
+        $inputs = collect(static::camposInputMobilizacaoFrete())
+            ->mapWithKeys(fn (string $campo) => [$campo => $frete?->{$campo} ?? 0])
+            ->all();
+
+        $totais = static::calcularTotaisMobilizacaoFrete($inputs);
+
+        $quantidade = $item?->quantidade ?? 1;
+        $porcentagem = $item?->porcentagem ?? 0;
+        $custoUnitario = $item ? (float) $item->custo_unitario : $totais['total_geral'];
+
+        $valores = ($quantidade > 0 && $custoUnitario > 0)
+            ? static::calcularValoresItemAvulso($custoUnitario, (float) $quantidade, (float) $porcentagem, $imposto)
+            : ['valor_unitario' => null, 'valor_total' => null];
+
+        $schema?->fill([
+            ...$inputs,
+            ...$totais,
+            'item_id'        => $itemId,
+            'descricao'      => $item?->descricao,
+            'quantidade'     => $quantidade,
+            'porcentagem'    => $porcentagem,
+            'custo_unitario' => $custoUnitario,
+            'imposto'        => $imposto,
+            'valor_unitario' => $valores['valor_unitario'],
+            'valor_total'    => $valores['valor_total'],
+        ]);
+    }
+
+    /**
+     * Recalcula, a cada tecla num dos 15 campos de input, tanto as
+     * totalizações em tela (`total_mobilizacao_vistoria`/`_obra`/
+     * `total_frete`/`total_geral`) quanto o Custo Unitário — que fica
+     * DESABILITADO pro usuário digitar, mas precisa ser atualizado
+     * programaticamente (`$set()`) pra refletir o novo `total_geral`, o
+     * que por sua vez dispara `recalcularValoresItemAvulso()` (mesmo
+     * `afterStateUpdated()` do campo, ver `camposFormularioMobilizacaoFrete()`)
+     * pra também atualizar Valor Unitário/Valor Total.
+     */
+    protected static function recalcularTotaisMobilizacaoFrete(Get $get, Set $set): void
+    {
+        $inputs = collect(static::camposInputMobilizacaoFrete())
+            ->mapWithKeys(fn (string $campo) => [$campo => $get($campo) ?? 0])
+            ->all();
+
+        $totais = static::calcularTotaisMobilizacaoFrete($inputs);
+
+        foreach ($totais as $campo => $valor) {
+            $set($campo, $valor);
+        }
+
+        $set('custo_unitario', $totais['total_geral']);
+
+        static::recalcularValoresItemAvulso($get, $set);
+    }
+
+    /**
+     * Valida e persiste o Form Modal de "Mobilização e Frete" — mesmo
+     * critério geral de `salvarItemAvulso()` (bloqueia sem `$record`,
+     * transação com `lockForUpdate()` na Referência de Preços pro
+     * Imp.% fresco), mas grava em DUAS tabelas na MESMA transação:
+     * `itens_projeto` (origem `MobilizacaoFrete`) e `fretes_mobilizacao`
+     * (`updateOrCreate` pelo `item_projeto_id`, 1-pra-1).
+     *
+     * @param  array<string, mixed>  $data
+     */
+    protected static function salvarMobilizacaoFrete(array $data, Get $get, ?Projeto $record, $livewire): void
+    {
+        if (! $record) {
+            Notification::make()
+                ->warning()
+                ->title(__('comercial::filament/resources/projeto.form.itens.notification.projeto-nao-salvo-title'))
+                ->body(__('comercial::filament/resources/projeto.form.itens.notification.projeto-nao-salvo-body'))
+                ->send();
+
+            return;
+        }
+
+        $itemId = $data['item_id'] ?? null;
+        $descricao = (string) $data['descricao'];
+        $quantidade = $data['quantidade'];
+        $custoUnitario = (float) ($data['custo_unitario'] ?? 0);
+        $porcentagem = (float) ($data['porcentagem'] ?? 0);
+        $referenciaPrecoId = $get('referencia_preco_id');
+
+        $inputs = collect(static::camposInputMobilizacaoFrete())
+            ->mapWithKeys(fn (string $campo) => [$campo => $data[$campo] ?? 0])
+            ->all();
+
+        DB::transaction(function () use ($record, $descricao, $quantidade, $custoUnitario, $porcentagem, $referenciaPrecoId, $itemId, $inputs): void {
+            $item = filled($itemId) ? $record->itens()->lockForUpdate()->find($itemId) : null;
+
+            $impostoAplicado = filled($referenciaPrecoId)
+                ? (float) (ReferenciaPreco::where('id', $referenciaPrecoId)->lockForUpdate()->value('imposto') ?? 0)
+                : 0.0;
+
+            $valores = static::calcularValoresItemAvulso($custoUnitario, (float) $quantidade, $porcentagem, $impostoAplicado);
+
+            $dadosItem = [
+                'descricao'        => $descricao,
+                'quantidade'       => (int) $quantidade,
+                'porcentagem'      => $porcentagem,
+                'custo_unitario'   => $custoUnitario,
+                'imposto_aplicado' => $impostoAplicado,
+                'valor_unitario'   => $valores['valor_unitario'],
+                'valor_total'      => $valores['valor_total'],
+            ];
+
+            if ($item) {
+                $item->update($dadosItem);
+            } else {
+                $record->itens()->lockForUpdate()->get();
+                $dadosItem['origem'] = OrigemItemProjeto::MobilizacaoFrete;
+                $dadosItem['referencia'] = __('comercial::filament/resources/projeto.form.itens.origens.mobilizacao-frete');
+                $item = $record->itens()->create($dadosItem);
+            }
+
+            FreteMobilizacao::updateOrCreate(
+                ['item_projeto_id' => $item->id],
+                ['projeto_id' => $record->id, ...$inputs],
+            );
+        });
+
+        if ($livewire instanceof EditProjeto) {
+            $livewire->recarregarItens();
+        }
+
+        Notification::make()
+            ->success()
+            ->title(__('comercial::filament/resources/projeto.form.itens.notification.item-avulso-confirmado'))
+            ->send();
+    }
 
     /**
      * Uma linha de EXIBIÇÃO da listagem de itens já inseridos — mesma
@@ -1839,7 +2837,17 @@ class ProjetoResource extends Resource
             ->schema([
                 Text::make($item->numero_item)
                     ->columnSpan(1),
-                Text::make('') // Referência — Item Avulso não usa esta coluna.
+                // Referência (2026-09-06, revisado) — LABEL curto de
+                // origem ("Promob"/"Item Avulso", ver
+                // `criarTodosItensPromob()`/`salvarItemAvulso()`), NÃO
+                // dado variável (nome de arquivo, data/hora etc.) — isso
+                // já fica disponível por item no ícone "Cálculos"
+                // (Promob) ou na própria Descrição (Item Avulso).
+                // Futuro: "Item de Linha" (ainda não implementado) deve
+                // trazer aqui o código de referência real do Produto
+                // vinculado (não um label estático) — "e o mesmo depois"
+                // pro SketchUp, quando implementado.
+                Text::make((string) ($item->referencia ?? ''))
                     ->columnSpan(4),
                 Text::make(Str::of((string) $item->descricao)->stripTags()->trim()->toString())
                     ->columnSpan(7),
@@ -1854,7 +2862,20 @@ class ProjetoResource extends Resource
                 Text::make($moeda($item->custo_unitario))
                     ->columnSpan(3),
                 Actions::make([
-                    ActionGroup::make([
+                    ActionGroup::make(array_values(array_filter([
+                        // "Cálculos" (2026-09-06, ver CLAUDE.md, "Fluxo
+                        // Promob") — só aparece pra Itens com pelo menos
+                        // uma `NotaProjeto` de SISTEMA vinculada
+                        // (`item_projeto_id`), ou seja, Itens criados via
+                        // Promob; Item Avulso nunca tem nota vinculada,
+                        // então nunca mostra este ícone. Modal
+                        // SOMENTE LEITURA — sem editar/excluir por aqui
+                        // (a edição de nota de sistema, quando permitida,
+                        // é só pelo super usuário, no modal geral de
+                        // Notas do Projeto).
+                        $item->notas()->where('tipo_sistema', true)->exists()
+                            ? static::acaoVerCalculosItem($item)
+                            : null,
                         // Abre o MESMO Form Modal de "Inserir" (ver
                         // `inserirItemAvulso`/`camposFormularioItemAvulso()`),
                         // preenchido com os dados atuais deste item —
@@ -1864,16 +2885,38 @@ class ProjetoResource extends Resource
                         // pra identificar QUAL item, já que
                         // `linhaExibicaoItem()` já roda uma vez por item,
                         // com `$item` capturado normalmente).
-                        Action::make("editarItemAvulso{$item->id}")
-                            ->label(__('comercial::filament/resources/projeto.form.itens.editar'))
-                            ->icon('heroicon-o-pencil-square')
-                            ->modalHeading(__('comercial::filament/resources/projeto.form.itens.item-avulso-modal.heading-editar'))
-                            ->modalSubmitActionLabel(__('comercial::filament/resources/projeto.form.itens.item-avulso-modal.salvar'))
-                            ->mountUsing(fn (?Schema $schema, Get $get, ?Projeto $record) => static::preencherFormularioItemAvulso($schema, $get, $record, (string) $item->id))
-                            ->form(static::camposFormularioItemAvulso())
-                            ->action(function (array $data, Get $get, ?Projeto $record, $livewire): void {
-                                static::salvarItemAvulso($data, $get, $record, $livewire);
-                            }),
+                        //
+                        // "Mobilização e Frete" (2026-09-06) tem seu PRÓPRIO
+                        // modal de edição (`editarMobilizacaoFrete{id}`,
+                        // abaixo) — o de "Item Avulso" só aparece pras
+                        // demais origens que ainda reaproveitam esse form
+                        // (Item Avulso propriamente dito, e as origens sem
+                        // lógica própria ainda).
+                        $item->origem !== OrigemItemProjeto::MobilizacaoFrete
+                            ? Action::make("editarItemAvulso{$item->id}")
+                                ->label(__('comercial::filament/resources/projeto.form.itens.editar'))
+                                ->icon('heroicon-o-pencil-square')
+                                ->modalHeading(__('comercial::filament/resources/projeto.form.itens.item-avulso-modal.heading-editar'))
+                                ->modalSubmitActionLabel(__('comercial::filament/resources/projeto.form.itens.item-avulso-modal.salvar'))
+                                ->mountUsing(fn (?Schema $schema, Get $get, ?Projeto $record) => static::preencherFormularioItemAvulso($schema, $get, $record, (string) $item->id))
+                                ->form(static::camposFormularioItemAvulso())
+                                ->action(function (array $data, Get $get, ?Projeto $record, $livewire): void {
+                                    static::salvarItemAvulso($data, $get, $record, $livewire);
+                                })
+                            : null,
+                        $item->origem === OrigemItemProjeto::MobilizacaoFrete
+                            ? Action::make("editarMobilizacaoFrete{$item->id}")
+                                ->label(__('comercial::filament/resources/projeto.form.itens.editar'))
+                                ->icon('heroicon-o-pencil-square')
+                                ->modalHeading(__('comercial::filament/resources/projeto.form.itens.mobilizacao-frete-modal.heading-editar'))
+                                ->modalSubmitActionLabel(__('comercial::filament/resources/projeto.form.itens.mobilizacao-frete-modal.salvar'))
+                                ->modalWidth(Width::FiveExtraLarge)
+                                ->mountUsing(fn (?Schema $schema, Get $get, ?Projeto $record) => static::preencherFormularioMobilizacaoFrete($schema, $get, $record, (string) $item->id))
+                                ->form(static::camposFormularioMobilizacaoFrete())
+                                ->action(function (array $data, Get $get, ?Projeto $record, $livewire): void {
+                                    static::salvarMobilizacaoFrete($data, $get, $record, $livewire);
+                                })
+                            : null,
                         // `DeleteAction` só pelo VISUAL padrão (ícone de
                         // lixeira, cor "danger", `->requiresConfirmation()`
                         // já ligado por padrão em `setUp()`) — mesmo
@@ -1896,13 +2939,72 @@ class ProjetoResource extends Resource
                             ->modalHeading(__('comercial::filament/resources/projeto.form.itens.excluir-confirmacao.heading', ['numero' => $item->numero_item]))
                             ->modalDescription(__('comercial::filament/resources/projeto.form.itens.excluir-confirmacao.description'))
                             ->action(fn ($livewire) => static::excluirItemAvulso($item, $livewire)),
-                    ])
+                    ])))
                         ->icon('heroicon-m-ellipsis-vertical')
                         ->color('gray'),
                 ])
                     ->alignCenter()
                     ->verticallyAlignStart()
                     ->columnSpan(1),
+            ]);
+    }
+
+    /**
+     * "Cálculos" (Parte 5 do enunciado da tarefa "Criar Itens do
+     * Promob") — modal SOMENTE LEITURA com a(s) Nota(s) de sistema
+     * vinculadas a este Item (`item_projeto_id`), mais recente
+     * primeiro. Reaproveita `linhaExibicaoNotaSomenteLeitura()` (mesmo
+     * visual de número/autor/data/badge/texto de `linhaExibicaoNota()`
+     * do modal geral de Notas, SEM os ícones de editar/excluir — a
+     * edição de nota de sistema, quando permitida, é só pelo super
+     * usuário, no modal geral).
+     */
+    protected static function acaoVerCalculosItem(ItemProjeto $item): Action
+    {
+        return Action::make("verCalculosItem{$item->id}")
+            ->label(__('comercial::filament/resources/projeto.form.itens.calculos.acao'))
+            ->icon('heroicon-o-calculator')
+            ->color('gray')
+            ->modalHeading(__('comercial::filament/resources/projeto.form.itens.calculos.modal.heading', ['numero' => $item->numero_item]))
+            ->modalWidth(Width::Large)
+            ->modalSubmitAction(false)
+            ->form([
+                Group::make()
+                    ->schema(fn () => $item->notas()
+                        ->where('tipo_sistema', true)
+                        ->orderByDesc('numero_nota')
+                        ->get()
+                        ->map(fn (NotaProjeto $nota) => static::linhaExibicaoNotaSomenteLeitura($nota))
+                        ->all()),
+            ]);
+    }
+
+    /**
+     * Linha de exibição SOMENTE LEITURA de uma nota — mesmo cabeçalho
+     * (número/autor/data-hora/badge "Sistema") de `linhaExibicaoNota()`
+     * (modal geral de Notas do Projeto), sem a coluna de ações
+     * (editar/excluir nunca aparecem aqui, independente de quem esteja
+     * vendo — ver `acaoVerCalculosItem()`).
+     */
+    protected static function linhaExibicaoNotaSomenteLeitura(NotaProjeto $nota): Group
+    {
+        $autor = $nota->usuario?->name ?? __('comercial::filament/resources/projeto.form.notas.autor-sistema');
+
+        return Group::make()
+            ->key("nota-calculo-{$nota->id}")
+            ->extraAttributes(['style' => 'padding-bottom: .75rem; margin-bottom: .75rem; border-bottom: 1px solid rgba(0,0,0,.08);'])
+            ->schema([
+                Flex::make(array_values(array_filter([
+                    Text::make('#'.$nota->numero_nota)->weight(FontWeight::Bold),
+                    Text::make($autor),
+                    Text::make($nota->created_at?->format('d/m/Y H:i')),
+                    $nota->tipo_sistema
+                        ? Text::make(__('comercial::filament/resources/projeto.form.notas.badge-sistema'))->badge()->color('gray')
+                        : null,
+                ])))
+                    ->dense(),
+
+                Html::make(new HtmlString((string) $nota->texto)),
             ]);
     }
 
@@ -1950,6 +3052,17 @@ class ProjetoResource extends Resource
         DB::transaction(function () use ($item): void {
             $projetoId = $item->projeto_id;
             $numeroExcluido = $item->numero_item;
+
+            // Exclui junto a(s) `NotaProjeto` de cálculo vinculada(s)
+            // a este item (`item_projeto_id`, criada em
+            // `criarTodosItensPromob()` via
+            // `renderizarResumoCalculoItemPromob()`) — sem isso, a
+            // nota ficava órfã (o registro continuava existindo com
+            // `item_projeto_id` apontando pra um item já excluído).
+            // `$item->notas()` já filtra por `item_projeto_id`, então
+            // isso não afeta a Nota GERAL do Projeto (`item_projeto_id
+            // = null`).
+            $item->notas()->delete();
 
             $item->delete();
 
@@ -2027,9 +3140,9 @@ class ProjetoResource extends Resource
             // de `nova_nota` (`$action->getSchemaContainer()` aponta pro
             // container onde a Action está DECLARADA, não pra um Schema
             // próprio — só existe Schema próprio quando a Action tem
-            // `->form()`). Mesmo mecanismo já usado por `inserirItem`/
-            // `mobilizacaoFrete` lendo `$get('origem_item_selecionada')`,
-            // campo IRMÃO deles na mesma `Actions::make([...])`.
+            // `->form()`). Mesmo mecanismo já usado por `inserirItem`
+            // lendo `$get('origem_item_selecionada')`, campo IRMÃO dele
+            // na mesma `Actions::make([...])`.
             Actions::make([
                 Action::make('adicionarNota')
                     ->label(__('comercial::filament/resources/projeto.form.notas.adicionar'))

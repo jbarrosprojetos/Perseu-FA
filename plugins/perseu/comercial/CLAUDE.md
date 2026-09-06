@@ -1528,6 +1528,285 @@ com o mesmo formulário):
    a estratégia CERTA — nunca foi o reset em si que falhava, e sim ler
    a entrada errada depois.
 
+### "Criar Itens" do Promob — geração real dos Itens + Notas de cálculo (2026-09-06)
+
+O botão "Criar Itens" (até aqui um stub — só checava divergência e
+mostrava notificação placeholder) passou a criar de verdade os
+`ItemProjeto`/`NotaProjeto` a partir dos XMLs processados. Depende da
+tabela `notas_projeto` (com `item_projeto_id`) já existir — ver "Notas
+do Projeto" logo abaixo.
+
+**Parte 0 — campos da Referência de Preços**: dos 9 campos confirmados
+pela fórmula abaixo, **8 já existiam** (`laminacao`, `corte`,
+`hora_producao`, `hora_execucao`, `valor_pecas`, `fator_madeiras`,
+`fator_ferragens_miscelanias`, `fator_mao_obra` — migrations de
+2026-08-30). **Só `fator_acabamento_corte` precisou ser criado**
+(migration `2026_09_06_100000_add_fator_acabamento_corte_to_referencias_precos_table`,
+`decimal(5,2)` nullable, campo adicionado ao form/tabela do
+`ReferenciaPrecoResource` entre Fator Ferragens/Miscelânea e Fator Mão
+de Obra). **Atenção pro usuário revisar a Referência "Padrão" (id 8)
+já cadastrada**: `fator_acabamento_corte` ficou `NULL` (campo novo,
+sem valor ainda — o form marca como `->required()`, então a PRÓXIMA
+edição vai pedir esse valor) e `fator_mao_obra` está `0.00` hoje — com
+esses dois em zero, `AcabamentoCorte`/`MãoDeObra` (ver fórmula) saem
+zerados em qualquer "Criar Itens" rodado ANTES de alguém preencher
+esses valores de verdade.
+
+**Parte 1 — numeração**: o código de 3 dígitos no NOME do arquivo XML
+(`001`, `002`...) é usado APENAS pra ORDEM de processamento
+(`PromobChecagemTotal::ordenarNomesDeArquivosDeItens()`, ordena os
+nomes — exceto o "000" — pelo código numérico) — o `numero_item` real
+gravado em `itens_projeto` continua vindo do MESMO mecanismo já
+existente (`ItemProjeto::boot()`, maior número já usado no Projeto +
+1). Confirmado por teste: um Projeto já com itens `001`/`002` (Item
+Avulso) recebeu `003`/`004` pros dois itens do Promob, mesmo os XMLs
+se chamando "001"/"002" — nunca reaproveita o código do nome do
+arquivo.
+
+**Fórmula de Custo Unitário** (`ProjetoResource::calcularDetalhamentoCustoPromob()`,
+aplicada por ITEM — usa `PromobXmlParser::metricas()` daquele XML
+individual, não o agregado do Projeto):
+
+```
+Madeira              = Tot.Custo(item) × FatorMadeira
+FerragensMiscelanea  = Tot.Misc(item) × FatorFerragensMiscelanea
+Laminacao            = Tot.MLinear(item) × ValorLaminacao
+Corte                = Tot.MLinear(item) × ValorCorte
+PecasDoItem          = Tot.Peças(item) × ValorPorPeca
+AcabamentoCorte      = (Laminacao + Corte + PecasDoItem) × FatorAcabamentoCorte
+MaoObraProducao      = Tot.m²(item) × ValorHoraProducao
+MaoObraExecucao      = Tot.m²(item) × ValorHoraExecucao
+MaoDeObra            = (MaoObraProducao + MaoObraExecucao) × FatorMaoDeObra
+CustoUnitario        = Madeira + FerragensMiscelanea + AcabamentoCorte + MaoDeObra
+```
+
+Os "Fatores" são percentuais gravados como número cru (`200.00` =
+200%) — cada um entra na fórmula `/100` antes de multiplicar (`×2.0`,
+não `×200`). Valor Unitário/Total reaproveitam a MESMA fórmula/função
+pura já usada no Item Avulso (`calcularValoresItemAvulso()`, sem
+duplicar). **Confirmado por teste** com os 3 XMLs de exemplo e uma
+Referência com todos os 9 campos preenchidos (Madeira 200%, Ferragens/
+Misc. 120%, Acabamento/Corte 120%, Mão de Obra 100%, Laminação
+R$3,50/m, Corte R$2,50/m, Peça R$1,00, Hora Produção/Execução
+R$10,00/m²): Custo Unitário do item "Superior" bateu com o cálculo
+manual passo a passo (R$ 619,24) e do "Inferior" também (R$ 1.474,13).
+
+**Trava: exige Referência de Preços vinculada ao Projeto** — sem
+`referencia_preco_id`, TODO Fator/Valor da fórmula seria `0`,
+produzindo Itens com Custo Unitário zerado silenciosamente (diferente
+do Imposto do Item Avulso, que degrada pra 0% sem bloquear — aqui
+zerar o custo inteiro seria enganoso). `criarTodosItensPromob()`
+bloqueia com notificação clara antes de criar qualquer coisa.
+
+**Fluxo — SEM modal por item, tudo automático (versão atual,
+2026-09-06, substituiu a versão original no MESMO dia — ver "Histórico:
+versão original com modal por item" mais abaixo pro porquê)**:
+
+1. `criarItensPromob` (já existente) continua desabilitado até "Checar
+   Total" rodar com sucesso pelo menos uma vez nesta sessão do modal
+   (`HasPromobResultado::$promobChecagemFeitaComSucesso`, resetado em
+   `mountUsing()` de `inserirItemPromob`).
+2. Ao clicar (confirmado ou direto, se sem divergência — mesma regra
+   de sempre: qualquer uma das 5 métricas de diferença != 0 pede
+   confirmação, `promobPrecisaConfirmarCriacao()`):
+   `ProjetoResource::criarTodosItensPromob()` roda, numa ÚNICA
+   `DB::transaction()`:
+   - Cria a Nota GERAL de checagem (`tipo_sistema = true`,
+     `item_projeto_id = null`, texto = nome do arquivo "000" +
+     `DATE`/`HOUR` do PRÓPRIO XML + tabela HTML compacta das 5
+     métricas de diferença).
+   - Relê a Referência de Preços com `lockForUpdate()` UMA VEZ pro
+     lote inteiro (não item a item — não há mais interação do usuário
+     no meio do processo que pudesse deixar o valor ficar obsoleto
+     entre um item e o próximo).
+   - Para CADA XML de item (ordem de
+     `PromobChecagemTotal::ordenarNomesDeArquivosDeItens()`): calcula
+     o detalhamento (`calcularDetalhamentoCustoPromob()`), cria o
+     `ItemProjeto` (`origem = promob`, Descrição = texto do nome do
+     arquivo via `PromobChecagemTotal::descricaoDoArquivo()`,
+     Quantidade = `1`, % = `0` — DEFAULTS, sem modal de revisão) + a
+     `NotaProjeto` de cálculo vinculada (`item_projeto_id`, mesmo
+     resumo HTML de sempre).
+   - Se QUALQUER coisa falhar no meio (XML corrompido, etc.), a
+     transação inteira desfaz — diferente da versão anterior (que
+     commitava item por item), aqui não sobra mais Item "parcial"
+     criado se algo falhar no meio, já que não há mais motivo pra isso
+     (sem interação do usuário a preservar entre um item e outro).
+3. Ao final: `recarregarItens()` (mesmo mecanismo do Item Avulso) +
+   notificação de sucesso com quantos Itens foram criados.
+4. **Ajustes finos ficam pro fluxo de edição já existente**: se algum
+   Item precisar de correção (Descrição, Quantidade, %, Custo
+   Unitário), o usuário edita DEPOIS, 1 item por vez, pelo ícone de
+   lápis já existente na listagem (`editarItemAvulso{id}` — mesmo
+   modal usado por Item Avulso, funciona pra qualquer origem, já
+   validado e sem nenhum dos bugs do mecanismo antigo).
+
+**Coluna "Referência" (2026-09-06, nova; conteúdo REVISADO no mesmo
+dia)** — `itens_projeto.referencia` (migration
+`2026_09_06_110000_add_referencia_to_itens_projeto_table`, `string`
+nullable), reservada desde a criação da tabela pro futuro "Item de
+Linha" mas nunca usada até agora (a listagem já tinha essa coluna no
+grid, sempre vazia pra Item Avulso — `linhaExibicaoItem()`).
+
+Versão original do mesmo dia gravava aqui o nome do arquivo XML + data/
+hora do próprio XML (`"{nome} — {data} {hora}"`). O usuário reconsiderou
+logo em seguida: essa informação já fica disponível, com mais detalhe,
+na `NotaProjeto` de cálculo vinculada a cada item (ícone "Cálculos"), e
+duplicá-la também na coluna encheria a base à toa sem necessidade —
+mesmo com `NULL` custando essencialmente nada em armazenamento, o
+problema aqui era volume de dado repetido, não custo de disco.
+
+**Versão atual**: a coluna guarda só um LABEL curto de ORIGEM, igual
+pras duas origens existentes:
+- Item criado via Promob (`criarTodosItensPromob()`) →
+  `referencia = "Promob"`.
+- Item criado como Item Avulso (`salvarItemAvulso()`, só no `create()`,
+  nunca no `update()` — ver "Achado real: `origem`/`referencia`
+  reescritos na edição" abaixo) → `referencia = "Item Avulso"`.
+
+Serve só pra identificar de relance a origem na listagem, sem duplicar
+detalhe que já mora em outro lugar por item (Promob: ícone "Cálculos";
+Item Avulso: a própria Descrição digitada pelo usuário). **Design
+futuro (ainda não implementado)**: quando "Item de Linha" existir, essa
+MESMA coluna passa a mostrar o código de referência REAL do Produto
+vinculado — não mais um label estático — "e o mesmo depois" quando
+SketchUp for implementado.
+
+**Achado real: `origem`/`referencia`/Custo Unitário na edição
+compartilhada (2026-09-06)** — `editarItemAvulso{id}`/
+`camposFormularioItemAvulso()`/`salvarItemAvulso()` são o mesmo modal e
+o mesmo método de gravação usados pra editar Item de QUALQUER origem
+(apesar do nome, ver item 4 do fluxo acima), não só Item Avulso. Duas
+correções feitas quando o usuário pediu pra verificar o comportamento
+de edição de item Promob:
+
+1. **`origem`/`referencia` reescritos silenciosamente** — antes desta
+   correção, `salvarItemAvulso()` gravava `origem = OrigemItemProjeto::ItemAvulso`
+   incondicionalmente em TODO `update()`, inclusive editando um item
+   Promob: o item virava "Item Avulso" pro resto do sistema (perdendo,
+   por exemplo, o rótulo "Promob" da coluna Referência e o critério que
+   mostra o ícone "Cálculos", que depende só de ter Nota de sistema
+   vinculada — esse não quebrava, mas a origem em si já estava errada).
+   Corrigido: `origem`/`referencia` só são gravados no `create()` (item
+   novo = sempre Item Avulso); no `update()`, os dois campos ficam como
+   já estavam no registro, nunca reescritos.
+2. **Custo Unitário editável em item Promob** — o campo não tinha
+   nenhuma trava por origem; um item criado via importação (custo
+   CALCULADO por `calcularDetalhamentoCustoPromob()`, não digitado)
+   podia ser alterado livremente pelo mesmo modal genérico de edição,
+   destruindo a rastreabilidade do cálculo sem reprocessar o XML.
+   Corrigido com um campo `Hidden::make('origem_atual')` novo
+   (preenchido em `preencherFormularioItemAvulso()` com
+   `$item?->origem?->value`, só CACHE de exibição/controle de UI) +
+   `->disabled()`/`->dehydrated(false)` condicionados a esse valor no
+   `TextInput::make('custo_unitario')`. Dupla proteção no backend
+   (`salvarItemAvulso()`): quando o item sendo editado é de origem
+   Promob, o Custo Unitário nem é lido de `$data` (pode nem chegar lá,
+   já que o campo desabilitado não é dehydratado) — o valor já gravado
+   no registro é reaproveitado pro recálculo de Valor Unitário/Total,
+   então mesmo um POST manipulado no DOM não teria efeito.
+
+**Ícone "Cálculos" (Parte 5)** — `ProjetoResource::acaoVerCalculosItem()`,
+na `ActionGroup` de cada linha de `linhaExibicaoItem()` (junto de
+Editar/Excluir), só aparece quando `$item->notas()->where('tipo_sistema',
+true)->exists()` — ou seja, Itens criados via Promob (sempre ganham
+uma Nota de sistema vinculada); Item Avulso nunca tem nota vinculada,
+então nunca mostra o ícone (confirmado por teste). Abre um modal
+SOMENTE LEITURA (`linhaExibicaoNotaSomenteLeitura()`, mesmo cabeçalho
+número/autor/data/badge "Sistema" de `linhaExibicaoNota()` do modal
+geral de Notas, sem coluna de ações) — nunca editar/excluir por aqui,
+mesmo pro super usuário (a edição de nota de sistema, quando permitida,
+é só pelo modal geral de Notas do Projeto).
+
+**Estilo visual do resumo/tabela** (texto das duas Notas de sistema) —
+`style=` INLINE (`font-size:11px`, bordas leves `#e5e7eb`/`#d1d5db`,
+`text-align:right` nas colunas numéricas, SEM fundo colorido por
+linha), nunca classes Tailwind arbitrárias tipo `text-xs` — mesmo
+motivo já documentado em "FilamentAsset::register()" no CLAUDE.md da
+raiz: o painel usa CSS pré-compilado do Filament, uma classe que o
+próprio Filament não usa em lugar nenhum simplesmente não tem efeito.
+Inline style funciona em QUALQUER lugar que renderize esse HTML —
+dentro do modal geral de Notas (`Html::make(new HtmlString($nota->texto))`)
+e dentro do modal "Cálculos", sem depender de nenhum CSS externo.
+
+**Histórico: versão original com modal por item, substituída no MESMO
+dia (2026-09-06)** — a primeira versão desta tarefa abria um Form
+Modal por item (Referência SOMENTE LEITURA/Descrição/Quantidade/%
+editáveis ANTES de confirmar CADA item, com o modal do próximo item se
+auto-abrindo sozinho depois de cada "Criar", via
+`$livewire->mountAction('processarItemPromob', ...)` chamado de DENTRO
+do `->action()` da Action anterior). Esse mecanismo causou uma
+sequência de bugs reais, todos achados testando pelo navegador de
+verdade (a suíte via `Livewire::test()`/tinker nunca pegou nenhum):
+
+1. **Índice fixo de `schemaComponent`** — as chamadas de
+   `mountAction()` assumiam `inserirItemPromob` sempre na posição `0`
+   da pilha de `$livewire->mountedActions`; qualquer cancelamento
+   anterior do modal Promob na mesma sessão do navegador deixava uma
+   entrada fantasma pra trás, empurrando a posição real pra um índice
+   MAIOR — usar `mountedActionSchema0` de qualquer jeito resolvia
+   contra o Schema ERRADO. Sintomas: "Referência" vazia e
+   `Undefined array key "descricao"` ao confirmar um item. Corrigido
+   recalculando o índice dinamicamente
+   (`indiceMountedActionInserirItemPromob()`, a mesma função já usada
+   por `arquivosXmlPromobAtuais()`).
+2. **Campos "atrasados" um item** — mesmo com o índice corrigido, os
+   campos Descrição/Custo Unitário/Valor Unitário/Valor Total do modal
+   do item N mostravam os valores do item N-1 (só "Referência" e o
+   resumo de cálculo, recalculados via Closure a cada render, sempre
+   corretos). O `$data` usado na GRAVAÇÃO saía correto quando o
+   usuário não mexia em nada (confirmado testando), então o problema
+   era só de EXIBIÇÃO. Uma tentativa de correção (`->key()` dinâmico
+   por campo, forçando o Livewire a tratar cada input como um elemento
+   novo) NÃO resolveu o atraso visual e AINDA introduziu uma regressão
+   nova (editar a Descrição ANTES de "Criar" voltava a disparar o
+   MESMO erro do bug 1) — revertida sem causa raiz confirmada.
+
+**Decisão do usuário**: em vez de continuar investigando o bug 2 (que
+exigiria inspecionar a resposta de rede real do Livewire, sem acesso a
+essa ferramenta nesta sessão), o usuário preferiu simplificar o fluxo
+inteiro — criar todos os Itens automaticamente (mesma fórmula/regras,
+sem modal de revisão por item) e resolver qualquer ajuste fino DEPOIS
+pelo fluxo de edição já existente. Isso eliminou a CLASSE INTEIRA de
+bugs do mecanismo antigo (nenhuma Action é mais montada de dentro do
+`->action()` de outra, nenhum `mountAction()` com `schemaComponent`
+dinâmico) e removeu boa parte do código: `acaoProcessarItemPromob()`,
+`camposFormularioItemPromob()`, `preencherFormularioItemPromob()`,
+`itemAtualDaFilaPromob()`, `tituloModalItemPromob()`,
+`salvarItemPromobEAvancar()`, `encerrarFilaItensPromob()`,
+`cancelarFilaItensPromob()`, `mountarProximoItemPromob()`, e as
+properties de fila de `HasPromobResultado`
+(`$promobFilaNomesArquivos`/`$promobFilaIndiceAtual`/
+`$promobFilaTotalCriados`) — nenhuma delas tem mais uso.
+`indiceMountedActionInserirItemPromob()` permanece (ainda usada por
+`arquivosXmlPromobAtuais()`, independente do mecanismo removido).
+
+**Validação (2026-09-06)**: sem `Livewire::test()` via `TestCase` real
+(ver CLAUDE.md da raiz sobre `TEST_TOKEN`), mas com `Livewire::test()`
+em `artisan tinker`, upload simulado via `Illuminate\Http\UploadedFile
+::fake()->createWithContent()` contra os 3 XMLs de exemplo reais e uma
+Referência de Preços de TESTE (removida ao final, nunca a real).
+Confirmado ponta a ponta pelo pipeline de verdade: sem divergência,
+"Criar Itens" segue direto (sem pedir confirmação); Nota geral criada
+ANTES de qualquer item; os 2 itens processados na ORDEM certa (Superior
+antes de Inferior, batendo com a ordem numérica do nome do arquivo),
+cada um com `referencia` gravada corretamente (nome do arquivo + data/
+hora); `numero_item` gerado pelo sistema (`003`/`004`, não `001`/`002`
+do nome do arquivo, num Projeto que já tinha 2 Itens Avulsos); Custo
+Unitário/Valor Unitário/Total batendo com o cálculo manual;
+`ItemProjeto::notas()` retornando a Nota certa por item; ícone
+"Cálculos" presente só nos 2 itens do Promob, ausente nos 2 Itens
+Avulsos pré-existentes; cenário de divergência (removendo um XML de
+item) exigindo confirmação antes de criar; bloqueio sem Referência de
+Preços vinculada. **Não testado nesta tarefa**: verificação VISUAL no
+navegador (sem ferramenta de browser disponível nesta sessão) —
+cobertura funcional completa via o pipeline real do Livewire, não a
+aparência/layout renderizado de fato; o usuário testa e confirma pelo
+navegador antes de considerar concluído. Todo dado de teste (Referência
+de Preços temporária, Itens/Notas de Promob criados durante a
+validação) foi removido ao final; a Referência "Padrão" (id 8) e os
+Itens Avulsos pré-existentes do Projeto de teste não foram tocados.
+
 ### Notas do Projeto: tabela `notas_projeto`, regra de 24h e Actions aninhadas em modal (2026-09-05)
 
 Histórico de notas/anotações por Projeto — ícone (`heroicon-o-document-text`)
@@ -1794,6 +2073,193 @@ essa checagem o mesmo bug reapareceria: qualquer `DeleteAction`/
 `ForceDeleteAction` bem-sucedido redireciona pra `ListProjetos` por
 padrão, verificando só a CLASSE da Action, não qual registro ela
 excluiu de fato.
+
+### Fluxo Promob: 3 ajustes finos (2026-09-06)
+
+Três pequenos ajustes no fluxo de "Criar Itens" do Promob, pedidos via
+handoff depois da tarefa de geração real dos Itens (ver "'Criar Itens'
+do Promob — geração real dos Itens + Notas de cálculo" acima):
+
+1. **Excluir a Nota de cálculo junto com o Item** —
+   `ProjetoResource::excluirItemAvulso()` agora chama `$item->notas()
+   ->delete()` ANTES de `$item->delete()`, dentro da mesma
+   `DB::transaction()` já existente. `$item->notas()` (relação
+   `HasMany` de `ItemProjeto`, filtrada por `item_projeto_id`) só
+   pega a(s) nota(s) de cálculo VINCULADAS a este item específico —
+   nunca a Nota GERAL do Projeto (`item_projeto_id = null`), que
+   continua intacta. Sem isso, a nota de cálculo virava órfã (row
+   ainda existente com `item_projeto_id` apontando pra um item já
+   excluído).
+2. **Confirmação de divergência restrita ao super usuário** — nova
+   regra: havendo qualquer uma das 5 métricas de diferença `!= 0`, só
+   o super usuário (mesmo critério de `NotaProjeto::ehSuperUsuario()`,
+   role `Admin`/guard `web`) pode confirmar e seguir com a criação.
+   Qualquer outro usuário tem a criação BLOQUEADA (não apenas pede
+   confirmação) — motivo, nas palavras do usuário: "Mantenho o
+   funcionamento diferente pro superusuário pra algum caso muito
+   atípico e evitar travar todo o processo"; o padrão esperado é
+   diferença = 0, e permitir seguir com diferença é uma via de exceção
+   só pro super usuário. Implementado em duas camadas (nunca confiar
+   só em esconder um botão/modal na tela, mesmo padrão já usado pelas
+   Notas):
+   - `ProjetoResource::promobUsuarioPodeConfirmarDivergencia()`
+     (método novo) — `(new NotaProjeto())->ehSuperUsuario(auth()
+     ->user())`, mesmo padrão de instanciar `NotaProjeto()` só pra
+     chamar um método que não depende de nenhum atributo da nota em
+     si, já usado por `podeSerEditadaPor()`/`podeSerExcluidaPor()`
+     neste mesmo Resource.
+   - `promobPrecisaConfirmarCriacao()` (existente) agora retorna
+     `false` direto (sem nem calcular o resultado do Promob) quando o
+     usuário atual não é super usuário — pra quem não pode confirmar,
+     não faz sentido abrir o modal de confirmação (`requiresConfirmation`/
+     `modalHeading`/`modalDescription` da Action `criarItensPromob`
+     dependem todos deste método, ver "Três achados reais/armadilhas
+     do Filament" acima).
+   - `criarTodosItensPromob()` (existente) ganhou uma trava redundante
+     ANTES de criar qualquer coisa: se há divergência E o usuário não
+     é super usuário, envia notificação de erro
+     (`divergencia-bloqueada-title`/`-body`) e retorna sem criar nada
+     — validação de segurança no backend, independente do que a tela
+     mostrou/escondeu.
+3. **Nota GERAL só quando há divergência** — `criarTodosItensPromob()`
+   só cria a `NotaProjeto` GERAL de checagem (`item_projeto_id = null`)
+   quando `! diferencaMetricasZerada($resultado['metricas']['diferenca'])`;
+   diferença = 0 é o caso comum/esperado e não precisa de registro. A
+   Nota de cálculo POR ITEM (`item_projeto_id` preenchido,
+   `renderizarResumoCalculoItemPromob()`) continua sendo criada sempre,
+   pra qualquer item — só a Nota GERAL do lote passou a ser
+   condicional.
+
+## "Mobilização e Frete": de botão dedicado a origem do dropdown (2026-09-06)
+
+- Existia um botão `Action::make('mobilizacaoFrete')` FIXO (sempre
+  visível, sem `->visible()`) ao lado do "Inserir" em "Itens" —
+  decisão do usuário: remover esse botão dedicado e tratar
+  "Mobilização e Frete" como mais uma opção do dropdown
+  `Select::make('origem_item_selecionada')` ("Origem do Item"),
+  seguindo o mesmo padrão de "Item de Linha"/"SketchUp" (que também
+  não têm Action própria ainda).
+- Mudança só de UI/estrutura — SEM regra de negócio nova (cálculo,
+  campos de form, persistência): confirmado com o usuário antes de
+  implementar.
+- `mobilizacao_frete` virou a 5ª opção de `origensItemOptions()` e o
+  5º case do enum `OrigemItemProjeto` (`MobilizacaoFrete`). Como
+  nenhuma origem nova ganha Action própria automaticamente, o botão
+  genérico `Action::make('inserirItem')` (visível pra qualquer
+  origem fora de `promob`/`item_avulso`) já cobre "Mobilização e
+  Frete" sozinho — mesma notificação placeholder
+  (`notification.pendente-title`/`-body`) que "Item de Linha"/
+  "SketchUp" recebem hoje. Nenhuma Action nova foi criada.
+- Chave de tradução `itens.mobilizacao-frete` (label do botão antigo)
+  foi REMOVIDA de `projeto.php` (pt_BR/en) — o label agora vem de
+  `itens.origens.mobilizacao-frete`, junto das outras origens.
+- Quando "Mobilização e Frete" ganhar lógica de negócio de verdade,
+  seguir o mesmo padrão já validado de `inserirItemAvulso`/
+  `inserirItemPromob`: Action própria com `->visible(fn (Get $get) =>
+  $get('origem_item_selecionada') === 'mobilizacao_frete')`, no lugar
+  de reaproveitar o `inserirItem` genérico.
+
+## "Mobilização e Frete": tabela `fretes_mobilizacao` e modal de cálculo (2026-09-06)
+
+- Ganhou lógica de negócio real (a promessa da seção anterior):
+  Action própria `inserirMobilizacaoFrete`/`editarMobilizacaoFrete{id}`,
+  form modal com o MESMO padrão técnico de `inserirItemAvulso`
+  (`->form()`, Action de submit normal do Filament).
+- Nova tabela `fretes_mobilizacao` (migration
+  `2026_09_06_120000_create_fretes_mobilizacao_table`), Model
+  `FreteMobilizacao`, vínculo 1-pra-1 com `ItemProjeto` via
+  `item_projeto_id` (`unique()` na migration, `cascadeOnDelete()` —
+  excluir o Item exclui o Frete junto). `ItemProjeto::freteMobilizacao()`
+  é a relação `HasOne` correspondente.
+- Campos da tabela (só os IMPUTADOS pelo usuário, ver
+  `ProjetoResource::camposInputMobilizacaoFrete()`):
+  `prazo_obra_dias`, `qtde_vistoria`, `funcionarios_vistoria`,
+  `funcionarios_obra`, `valor_cafe_manha`, `valor_almoco`,
+  `valor_jantar`, `valor_hotel`, `dias_viagem`, `valor_aviao`,
+  `valor_onibus`, `km`, `qtde_frete`, `valor_frete_viagem`,
+  `valor_translado` — chegou a esse desenho depois de simular a
+  planilha original (`260000 Cliente Padrão Proposta 00 somente
+  frete.xlsm`, aba "00 - MF") com o usuário, "teste de mesa" antes de
+  qualquer código.
+- **Totais NÃO são coluna da tabela** (decisão explícita do usuário) —
+  `ProjetoResource::calcularTotaisMobilizacaoFrete()` é função PURA
+  (mesmo espírito de `calcularValoresItemAvulso()`) que recebe os 15
+  campos de input e devolve `total_mobilizacao_vistoria`/
+  `total_mobilizacao_obra`/`total_frete`/`total_geral` sob demanda —
+  usada tanto pela prévia reativa em tela
+  (`recalcularTotaisMobilizacaoFrete()`) quanto por
+  `preencherFormularioMobilizacaoFrete()` (modo edição).
+- Fórmulas (herdadas da planilha original, com as simplificações
+  pedidas pelo usuário):
+  - Mobilização (vistoria/obra) = dias × funcionários ×
+    (hotel+café+almoço+jantar) + dias de viagem × funcionários ×
+    (avião+ônibus) ×2 + `valor_translado`. A MESMA verba de translado
+    entra tanto no total de vistoria quanto no de obra (2x no total
+    geral) — comportamento herdado de propósito da planilha original
+    (lá era "uber"), não um bug: confirmado com o usuário.
+  - Frete = `qtde_frete` × `valor_frete_viagem` — modelo simplificado:
+    UM valor por viagem, sem tentar identificar região (a planilha
+    original tinha um `IF` de região que estava QUEBRADO,
+    `#REF!` — motivo a mais pra simplificar em vez de consertar).
+  - `km` é só informativo neste modelo — sem campo de valor por km,
+    não entra em nenhum total (a planilha original também tinha
+    "estacionamento" calculado e nunca somado a lugar nenhum; aqui
+    nem `valor_estacionamento`/`valor_pedagio`/`valor_km` viraram
+    campo, por pedido do usuário).
+- Modal (`camposFormularioMobilizacaoFrete()`), na ordem: Descrição →
+  Section "Dados de Mobilização e Frete" (os 15 campos de input, Grid
+  de 4 colunas) → Section "Totais (calculados)" (os 4 totais,
+  `disabled()`/`dehydrated(false)`, só exibição) → Quantidade/
+  Acréscimo/Custo Unitário → Valor Unitário/Valor Total.
+  - Quantidade: sugestão inicial 1, mas EDITÁVEL — multiplica o total
+    de novo (o usuário decidiu assim de propósito: "o frete poderá
+    ter configurações únicas ou de um total mesmo").
+  - Acréscimo (`porcentagem`): editável, campo de `itens_projeto`,
+    MESMA regra de cálculo dos demais itens.
+  - Custo Unitário: **DESABILITADO** (não "hidden" — o usuário
+    corrigiu esse termo explicitamente), alimentado automaticamente
+    pelo `total_geral` calculado acima
+    (`recalcularTotaisMobilizacaoFrete()` faz `$set('custo_unitario',
+    ...)` a cada tecla nos campos de input). Achado real: um campo
+    `->disabled()` no Filament, por padrão, NÃO desidrata — igual ao
+    Custo Unitário de item Promob (`camposFormularioItemAvulso()`),
+    MAS aqui o valor calculado precisa mesmo chegar em
+    `$data['custo_unitario']`, então tem `->dehydrated()` explícito
+    reativando o envio (sem isso, `salvarMobilizacaoFrete()` receberia
+    `custo_unitario` ausente do `$data`).
+  - Valor Unitário/Valor Total: `calcularValoresItemAvulso()`
+    REAPROVEITADA sem nenhuma alteração — mesma fórmula (Custo
+    Unitário × (1+Porc.%/100) × (1+Imp.%/100), × Quantidade) de
+    qualquer outro Item do Projeto.
+- `salvarMobilizacaoFrete()` grava nas DUAS tabelas na MESMA
+  `DB::transaction()`: `itens_projeto` (origem
+  `OrigemItemProjeto::MobilizacaoFrete`, mesmo padrão de
+  `lockForUpdate()`/Imposto fresco do banco de `salvarItemAvulso()`)
+  e `FreteMobilizacao::updateOrCreate(['item_projeto_id' => ...], [...])`
+  — `updateOrCreate` pelo `item_projeto_id` cobre criação E edição sem
+  precisar de branch separado (diferente de `salvarItemAvulso()`, que
+  faz `if ($item) update() else create()` porque só grava numa
+  tabela).
+- `linhaExibicaoItem()`: o ícone "Editar" de cada linha agora se
+  ramifica pela origem do item — `editarItemAvulso{id}` (form de Item
+  Avulso) pra qualquer origem exceto Mobilização e Frete,
+  `editarMobilizacaoFrete{id}` (form novo, preenchido também com os
+  dados de `$item->freteMobilizacao`) só pra ela.
+- **Achado real (`artisan migrate` respondendo "Nothing to migrate"
+  com o arquivo já presente em `database/migrations/`)**: a migration
+  nova (`2026_09_06_120000_create_fretes_mobilizacao_table`) só passou
+  a rodar depois de acrescentada também em
+  `ComercialServiceProvider::configureCustomPackage()` →
+  `hasMigrations([...])` — essa lista é EXPLÍCITA, não um scan de
+  diretório (`loadMigrationsFrom()` só carrega o que está nomeado
+  aqui, ver o comentário já existente no próprio array sobre as "3
+  entradas que faltavam"). **Checklist obrigatório pra QUALQUER
+  migration nova deste plugin, a partir de agora**: 1) criar o arquivo
+  em `database/migrations/`, 2) adicionar o nome (sem `.php`) no fim
+  do array `hasMigrations([...])` do Service Provider, só então 3)
+  `artisan migrate` — pular o passo 2 dá exatamente esse sintoma
+  enganoso de "nada a migrar" mesmo com o arquivo certo no lugar
+  certo.
 
 ## Limitações conhecidas
 

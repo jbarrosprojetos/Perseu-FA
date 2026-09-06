@@ -5,6 +5,7 @@ namespace Perseu\Comercial\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Perseu\Auditoria\Traits\LogsBusinessActivity;
 use Perseu\Comercial\Enums\OrigemItemProjeto;
 
@@ -41,6 +42,18 @@ class ItemProjeto extends Model
         'projeto_id',
         'origem',
         'produto_id',
+        // Label curto de origem ("Promob"/"Item Avulso", 2026-09-06,
+        // revisado — NÃO nome de arquivo/data/hora, decisão original
+        // revertida), exibido na coluna "Referência" da listagem de
+        // Itens. Detalhe completo de origem fica em outro lugar por
+        // item (ícone "Cálculos" pra Promob, a própria Descrição pra
+        // Item Avulso) — não duplicado aqui pra não inchar a base à
+        // toa. Reservado desde a criação da tabela pro futuro "Item de
+        // Linha", que deve usar esta coluna pro código de referência
+        // REAL do Produto vinculado (não mais um label estático) — "e o
+        // mesmo depois" pro SketchUp. Ver migration/CLAUDE.md, "Fluxo
+        // Promob".
+        'referencia',
         'descricao',
         'quantidade',
         'valor_unitario',
@@ -75,6 +88,16 @@ class ItemProjeto extends Model
     public function notas(): HasMany
     {
         return $this->hasMany(NotaProjeto::class, 'item_projeto_id');
+    }
+
+    /**
+     * Registro de "Mobilização e Frete" vinculado 1-pra-1 a este item
+     * (só existe pra itens de origem `OrigemItemProjeto::MobilizacaoFrete`
+     * — ver `FreteMobilizacao`/`ProjetoResource::salvarMobilizacaoFrete()`).
+     */
+    public function freteMobilizacao(): HasOne
+    {
+        return $this->hasOne(FreteMobilizacao::class, 'item_projeto_id');
     }
 
     /**

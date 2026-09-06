@@ -53,6 +53,15 @@ class ComercialServiceProvider extends PackageServiceProvider
                 '2026_09_04_160000_create_itens_projeto_table',
                 '2026_09_05_170000_create_notas_projeto_table',
                 '2026_09_05_180000_add_item_projeto_id_to_notas_projeto_table',
+                '2026_09_06_100000_add_fator_acabamento_corte_to_referencias_precos_table',
+                '2026_09_06_110000_add_referencia_to_itens_projeto_table',
+                // Achado real (2026-09-06, tarefa "Mobilização e
+                // Frete") — mesma lição do comentário acima: sem
+                // acrescentar aqui, `artisan migrate` responde "Nothing
+                // to migrate" mesmo com o arquivo já presente em
+                // `database/migrations/`, porque `hasMigrations()` é
+                // uma LISTA EXPLÍCITA, não um scan de diretório.
+                '2026_09_06_120000_create_fretes_mobilizacao_table',
             ])
             ->runsMigrations()
             ->hasDependency('auditoria')
