@@ -15,6 +15,9 @@ use Perseu\Comercial\Filament\Clusters\Comercial\Resources\ProjetoResource;
 use Perseu\Comercial\Filament\Clusters\Comercial\Resources\ProjetoResource\Concerns\HasPromobResultado;
 use Perseu\Comercial\Models\ItemProjeto;
 use Perseu\Comercial\Models\NotaProjeto;
+use Perseu\Comercial\Models\Documento;
+use Perseu\Comercial\Services\DocumentoTemplateService;
+use Filament\Forms\Components\Select;
 
 class EditProjeto extends EditRecord
 {
@@ -162,21 +165,31 @@ class EditProjeto extends EditRecord
     {
         return [
             ...parent::getFormActions(),
-            // "Documentos" (2026-09-11, ver CLAUDE.md) — posicionado
-            // ANTES de "Atribuir Processos" a pedido explícito do
-            // usuário. Mesmo padrão: sem ação real ainda (o mecanismo de
-            // gerar um documento a partir de um template com marcadores
-            // de texto ainda será desenhado numa tarefa futura), só a
-            // notificação placeholder.
+            // "Documentos" (2026-09-11, atualizado 2026-09-13, ver
+            // CLAUDE.md) — posicionado ANTES de "Atribuir Processos" a
+            // pedido explícito do usuário. Abre um Select com os
+            // templates cadastrados (`DocumentoResource`), gera o
+            // arquivo via `DocumentoTemplateService::gerar()`
+            // (varredura de marcadores `%Campo%`, expansão da linha de
+            // Itens, bloco de Condições Financeiras) e devolve como
+            // download — o arquivo gerado é sempre TEMPORÁRIO
+            // (`deleteFileAfterSend`), nunca fica guardado no Perseu.
             Action::make('documentos')
                 ->label(__('comercial::filament/resources/projeto/pages/edit-projeto.form-actions.documentos.label'))
                 ->color('gray')
-                ->action(function (): void {
-                    Notification::make()
-                        ->info()
-                        ->title(__('comercial::filament/resources/projeto/pages/edit-projeto.form-actions.documentos.notification.title'))
-                        ->body(__('comercial::filament/resources/projeto/pages/edit-projeto.form-actions.documentos.notification.body'))
-                        ->send();
+                ->form([
+                    Select::make('documento_id')
+                        ->label(__('comercial::filament/resources/projeto/pages/edit-projeto.form-actions.documentos.form.documento'))
+                        ->options(fn () => Documento::query()->orderBy('descricao')->pluck('descricao', 'id'))
+                        ->searchable()
+                        ->required(),
+                ])
+                ->action(function (array $data) {
+                    $documento = Documento::findOrFail($data['documento_id']);
+                    $resultado = app(DocumentoTemplateService::class)->gerar($this->getRecord(), $documento);
+
+                    return response()->download($resultado['caminho'], $resultado['nome_arquivo'])
+                        ->deleteFileAfterSend(true);
                 }),
             Action::make('atribuirProcessos')
                 ->label(__('comercial::filament/resources/projeto/pages/edit-projeto.form-actions.atribuir-processos.label'))

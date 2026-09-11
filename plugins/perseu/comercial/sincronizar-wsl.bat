@@ -30,6 +30,17 @@ if %ERRORLEVEL% GEQ 8 (
 )
 
 echo.
+echo === Atualizando autoload do Composer ^(ddev composer dump-autoload^) ===
+wsl -d %DISTRO% -- bash -lc "cd '%PROJETO_WSL%' && ddev composer dump-autoload"
+
+if %ERRORLEVEL% NEQ 0 (
+    echo.
+    echo *** O comando ddev composer dump-autoload retornou erro ^(codigo %ERRORLEVEL%^). ***
+    pause
+    exit /b %ERRORLEVEL%
+)
+
+echo.
 echo === Limpando cache do Laravel ^(ddev artisan optimize:clear^) ===
 wsl -d %DISTRO% -- bash -lc "cd '%PROJETO_WSL%' && ddev artisan optimize:clear"
 

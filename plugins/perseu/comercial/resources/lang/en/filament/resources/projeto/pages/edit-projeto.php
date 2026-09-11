@@ -18,9 +18,8 @@ return [
     'form-actions' => [
         'documentos' => [
             'label' => 'Documents',
-            'notification' => [
-                'title' => 'Not implemented yet',
-                'body'  => 'Generating documents from templates for this Project will be implemented in a future step.',
+            'form' => [
+                'documento' => 'Template',
             ],
         ],
         'atribuir-processos' => [
