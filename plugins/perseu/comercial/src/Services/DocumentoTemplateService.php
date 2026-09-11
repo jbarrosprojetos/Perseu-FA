@@ -164,6 +164,7 @@ class DocumentoTemplateService
             'Cliente_Documento'   => $pessoaJuridica ? (string) $pessoaJuridica->cnpj : (string) $pessoaFisica?->cpf,
             'Cliente_Email'       => $pessoaJuridica ? (string) $pessoaJuridica->email : (string) $pessoaFisica?->email,
             'Cliente_Contato'     => (string) $contato?->nome,
+            'Contato_Email'       => (string) $contato?->email,
             'Cliente_Endereco'    => (string) $endereco?->logradouro,
             'Cliente_Numero'      => (string) $endereco?->numero,
             'Cliente_Complemento' => (string) $endereco?->complemento,
@@ -268,7 +269,13 @@ class DocumentoTemplateService
             $sheet->insertNewRowBefore($linhaBase + 1, $qtdeItens - 1);
 
             $colunaInicial = 'A';
-            $colunaFinal = $sheet->getHighestColumn();
+            // Coluna mais alta DAQUELA LINHA (a linha-molde), não
+            // `$sheet->getHighestColumn()` sem argumento (coluna mais
+            // alta da planilha INTEIRA, que em algumas abas ia bem mais
+            // longe por causa de formatação de coluna sem relação com a
+            // tabela de Itens). Bug encontrado em 2026-09-11.
+            $colunaFinal = $sheet->getHighestColumn($linhaBase);
+            $colunaFinalIndice = Coordinate::columnIndexFromString($colunaFinal);
 
             // duplicateStyle() só copia formatação (fonte, borda, cor,
             // formato de número) -- NÃO recria mesclagem de célula, que
@@ -291,10 +298,24 @@ class DocumentoTemplateService
 
             for ($i = 1; $i < $qtdeItens; $i++) {
                 $linhaDestino = $linhaBase + $i;
-                $sheet->duplicateStyle(
-                    $sheet->getStyle("{$colunaInicial}{$linhaBase}:{$colunaFinal}{$linhaBase}"),
-                    "{$colunaInicial}{$linhaDestino}:{$colunaFinal}{$linhaDestino}",
-                );
+
+                // duplicateStyle() com um intervalo de VÁRIAS colunas
+                // como origem (ex.: "A18:AD18") NÃO preserva o estilo de
+                // cada coluna -- ele aplica o estilo de uma única célula
+                // (a primeira do intervalo) em TODO o destino, tomando o
+                // lugar da formatação própria de cada coluna. Por isso
+                // uma coluna com estilo "de destaque" (cinza + borda, ex.
+                // a coluna do número do item) acabava vazando pra linha
+                // inteira nas linhas recém-inseridas. Duplicar
+                // coluna-a-coluna (célula única -> célula única) resolve.
+                // Bug encontrado em 2026-09-11.
+                for ($col = 1; $col <= $colunaFinalIndice; $col++) {
+                    $colunaLetra = Coordinate::stringFromColumnIndex($col);
+                    $sheet->duplicateStyle(
+                        $sheet->getStyle("{$colunaLetra}{$linhaBase}"),
+                        "{$colunaLetra}{$linhaDestino}",
+                    );
+                }
 
                 foreach ($mesclagensLinhaBase as [$colInicio, $colFim]) {
                     $sheet->mergeCells("{$colInicio}{$linhaDestino}:{$colFim}{$linhaDestino}");
@@ -364,29 +385,47 @@ class DocumentoTemplateService
     protected function ajustarFormulasDeTotal(Worksheet $sheet, array $colunas, int $linhaBase, int $qtdeItens): void
     {
         $linhaTotal = $linhaBase + $qtdeItens;
+
+        // Abas sem linha de total (ex.: "V", vistoria sem valores) nem
+        // sempre têm conteúdo até $linhaTotal -- `getRowIterator()`
+        // lança exceção ("Start row X is beyond highest row Y") se a
+        // linha pedida não existir na planilha. Usar `getCellByColumnAndRow(...,
+        // false)` (não cria a célula se não existir) evita o crash e
+        // simplesmente não acha fórmula nenhuma pra ajustar, que é o
+        // comportamento certo quando não há total. Bug encontrado em
+        // 2026-09-11.
+        if ($linhaTotal > $sheet->getHighestRow()) {
+            return;
+        }
+
         $ultimaLinhaItem = $linhaBase + $qtdeItens - 1;
         $colunasItens = array_keys($colunas);
+        $colunaMaisAlta = Coordinate::columnIndexFromString($sheet->getHighestColumn($linhaTotal));
 
-        foreach ($sheet->getRowIterator($linhaTotal, $linhaTotal) as $row) {
-            foreach ($row->getCellIterator() as $cell) {
-                $formula = $cell->getValue();
+        for ($col = 1; $col <= $colunaMaisAlta; $col++) {
+            $cell = $sheet->getCellByColumnAndRow($col, $linhaTotal, false);
 
-                if (! is_string($formula) || ! str_starts_with($formula, '=SUM(')) {
-                    continue;
-                }
-
-                if (! preg_match('/^=SUM\(([A-Z]+)\d+:[A-Z]+\d+\)$/', $formula, $m)) {
-                    continue;
-                }
-
-                $colunaFormula = $m[1];
-
-                if (! in_array($colunaFormula, $colunasItens, true)) {
-                    continue;
-                }
-
-                $cell->setValue("=SUM({$colunaFormula}{$linhaBase}:{$colunaFormula}{$ultimaLinhaItem})");
+            if ($cell === null) {
+                continue;
             }
+
+            $formula = $cell->getValue();
+
+            if (! is_string($formula) || ! str_starts_with($formula, '=SUM(')) {
+                continue;
+            }
+
+            if (! preg_match('/^=SUM\(([A-Z]+)\d+:[A-Z]+\d+\)$/', $formula, $m)) {
+                continue;
+            }
+
+            $colunaFormula = $m[1];
+
+            if (! in_array($colunaFormula, $colunasItens, true)) {
+                continue;
+            }
+
+            $cell->setValue("=SUM({$colunaFormula}{$linhaBase}:{$colunaFormula}{$ultimaLinhaItem})");
         }
     }
 

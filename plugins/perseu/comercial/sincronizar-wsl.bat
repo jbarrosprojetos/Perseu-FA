@@ -11,7 +11,7 @@ REM  usuario, nome do projeto).
 REM ============================================================
 setlocal
 
-set "ORIGEM=C:\Users\Projeto Studio\PerseuFA_comercial"
+set "ORIGEM=C:\Perseu\PerseuFA_comercial"
 set "DESTINO=\\wsl.localhost\ddev\home\projeto_studio\Perseu-FA\plugins\perseu\comercial"
 set "DISTRO=ddev"
 set "PROJETO_WSL=/home/projeto_studio/Perseu-FA"
