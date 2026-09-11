@@ -162,6 +162,22 @@ class EditProjeto extends EditRecord
     {
         return [
             ...parent::getFormActions(),
+            // "Documentos" (2026-09-11, ver CLAUDE.md) — posicionado
+            // ANTES de "Atribuir Processos" a pedido explícito do
+            // usuário. Mesmo padrão: sem ação real ainda (o mecanismo de
+            // gerar um documento a partir de um template com marcadores
+            // de texto ainda será desenhado numa tarefa futura), só a
+            // notificação placeholder.
+            Action::make('documentos')
+                ->label(__('comercial::filament/resources/projeto/pages/edit-projeto.form-actions.documentos.label'))
+                ->color('gray')
+                ->action(function (): void {
+                    Notification::make()
+                        ->info()
+                        ->title(__('comercial::filament/resources/projeto/pages/edit-projeto.form-actions.documentos.notification.title'))
+                        ->body(__('comercial::filament/resources/projeto/pages/edit-projeto.form-actions.documentos.notification.body'))
+                        ->send();
+                }),
             Action::make('atribuirProcessos')
                 ->label(__('comercial::filament/resources/projeto/pages/edit-projeto.form-actions.atribuir-processos.label'))
                 ->color('gray')

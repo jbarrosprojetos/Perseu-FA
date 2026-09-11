@@ -2301,6 +2301,150 @@ do Promob — geração real dos Itens + Notas de cálculo" acima):
   outras 4 substituídas por "Promob"/"SketchUp") podem voltar como
   sub-opções dentro de "Promob"/"SketchUp" no futuro, se necessário.
 
+## Cluster "Referências" — Condições Financeiras (2026-09-08)
+
+Novo cadastro de apoio, mesmo padrão técnico de `ReferenciaPreco`
+(catálogo com várias condições coexistindo ao mesmo tempo, NÃO
+histórico/versionamento; CRUD em modal via `CondicaoFinanceiraResource`,
+sem pages `create`/`edit` em `getPages()`; Lixeira própria via
+`SoftDeletes`/`TrashedFilter`; trava de exclusão/edição com Projeto
+vinculado igual a `ReferenciaPreco::bloquearSeVinculada()`).
+
+**Model/migration** — `Perseu\Comercial\Models\CondicaoFinanceira`,
+tabela `condicoes_financeiras` (migrations
+`2026_09_08_100000_create_condicoes_financeiras_table` +
+`2026_09_08_100001_add_condicao_financeira_id_to_projetos_table`,
+**adicionadas ao array `hasMigrations([...])` de
+`ComercialServiceProvider`** desde o início — ver comentário já
+existente nesse arquivo sobre esse gotcha).
+
+Campos do catálogo, decididos em conversa (não em planilha, diferente
+de Mobilização e Frete):
+- `descricao` — obrigatória, mesma convenção de "Data/Hora de criação
+  como identidade visual" que `ReferenciaPreco` (Descrição sozinha não
+  é única).
+- `porcentagem_entrada` (`decimal(5,2)`, "Porcentagem de Entrada") —
+  por ora só informativo; a regra de como desconta do valor financiado
+  fica para a tarefa do cálculo do Total do Projeto.
+- `qtde_parcelas` (`unsignedInteger`, default 1).
+- `intervalo_dias` (`unsignedInteger`, default 30, "Intervalo em
+  Dias") — renomeado de "Dias Fixos" a pedido do usuário; por ora só
+  informativo (espaçamento entre parcelas), sem entrar em cálculo
+  ainda.
+- `forma_pagamento` (`string`, cast pro enum
+  `Perseu\Comercial\Enums\FormaPagamento` — 3 valores: Pix/Transferência,
+  Boleto, Cartão, escolha ÚNICA, mesmo padrão de `OrigemItemProjeto`).
+- `taxa_mensal` (`decimal(5,2)`, "Taxa Mensal", sufixo "% a.m.") —
+  **decisão importante**: NÃO se guarda uma tabela fixa de fatores por
+  quantidade de parcelas (a tabela de exemplo 1x–10x que o usuário
+  trouxe, baseada no Sistema Price a 5% a.m., foi só ilustração da
+  fórmula). O fator de amortização (`fator = i / (1 - (1+i)^-n)`) será
+  **calculado em tempo real** a partir desta taxa mensal + a
+  `qtde_parcelas` escolhida no Projeto, na tarefa futura do cálculo do
+  Total do Projeto — esta tarefa só registra o modelo de dados, sem
+  implementar o cálculo ainda.
+
+**Vínculo com Projeto** — `projetos.condicao_financeira_id` (FK
+nullable, `nullOnDelete()`, mesmo padrão de `referencia_preco_id`),
+`Projeto::condicaoFinanceira(): BelongsTo` /
+`CondicaoFinanceira::projetos(): HasMany`.
+
+**Layout do form de Projeto** — a Grid::make(12) que já tinha Endereço
+(8) + Referência de Preços (4) foi redistribuída a pedido do usuário
+para caber o novo Select: Endereço da Obra `columnSpan(6)` (50%) +
+Referência de Preços `columnSpan(3)` (25%) + Condições Financeiras
+`columnSpan(3)` (25%), os três lado a lado. Select de Condições
+Financeiras sem `->required()`/sem `->hint()` de aviso (diferente de
+Referência de Preços) — vínculo puramente opcional por ora, sem trava
+de negócio identificada ainda.
+
+**Resource/Policy/permissões** — `CondicaoFinanceiraResource` (Cluster
+Referências, slug `condicoes-financeiras`, ícone
+`heroicon-o-banknotes`), `CondicaoFinanceiraPolicy` (permissões
+`*_comercial_condicao::financeira`, mesmo padrão de nomenclatura
+`Model::class` → `snake::snake` usado em `TipoProjetoPolicy`/
+`ReferenciaPrecoPolicy`), registrada em `Gate::policy()` no
+`ComercialServiceProvider::packageBooted()`. **Pendência**: como
+qualquer Resource novo com Filament Shield, as permissões
+`*_comercial_condicao::financeira` precisam ser geradas (comando
+`shield:generate` ou equivalente já usado no projeto) e atribuídas aos
+roles que devem enxergar o menu "Condições Financeiras" — não feito
+nesta tarefa (Cowork não tem acesso ao terminal ddev/artisan).
+**Pendência 2**: `TrashCatalog`/`SubjectTypeCatalog` (plugin
+`perseu/auditoria`, fora da pasta mirror `PerseuFA_comercial` acessível
+por este ambiente) não foram conferidos/atualizados — checar se
+`CondicaoFinanceira` precisa de entrada própria, mesmo processo já
+documentado para `ItemProjeto`.
+
+**Próximo passo natural** (ainda não iniciado): usar `taxa_mensal` +
+`qtde_parcelas` do Projeto para calcular o fator de Price e o Total do
+Projeto — o usuário explicitamente adiou isso para uma tarefa futura.
+
+### Section "Condições Financeiras" no form de Projeto (2026-09-08)
+
+Segunda parte da tarefa "Condições Financeiras" — o cálculo do Total do
+Projeto adiado na primeira parte (ver seção acima) foi implementado
+aqui. Nova Section, item IRMÃO de "Cabeçalho"/"Itens" no
+`ProjetoResource::form()`, posicionada **DEPOIS de "Itens"** (pedido
+explícito do usuário — o Total depende da soma dos itens já
+inseridos). Só visível com Projeto já persistido
+(`->visible(fn (?Projeto $record) => $record !== null)`), mesmo
+critério de `$livewire instanceof EditProjeto` já usado pela listagem
+de itens — some inteira em `CreateProjeto`.
+
+Todos os 5 campos são `Placeholder` (somente leitura, sem
+persistência nenhuma — é só uma prévia calculada ao vivo):
+- **Total do Projeto** — soma de `valor_total` de TODOS os itens do
+  Projeto (`$record->itens()->sum('valor_total')`), independente da
+  origem.
+- **Condições** — descrição da `CondicaoFinanceira` vinculada (ou
+  aviso "Nenhuma condição financeira selecionada").
+- **Quantidade de Parcelas** — vem da própria Condição Financeira
+  (`qtde_parcelas` do catálogo), SEM override por Projeto — decisão
+  implícita, não existe campo próprio disso em `Projeto`.
+- **Valor Entrada** — `Total × Porcentagem de Entrada / 100`.
+- **Valor da Parcela** — `(Total − Entrada) × fator de Price`, usando
+  Taxa Mensal + Qtde. Parcelas da Condição Financeira (decisão
+  explícita do usuário: "vai ter condições que poderá retornar valores
+  maiores" — confirma que os juros do Price DEVEM aumentar o total
+  pago, não é uma divisão simples).
+
+**`calcularFatorPrice(float $taxaMensalPercentual, int $qtdeParcelas): float`**
+— `fator = i / (1 - (1+i)^-n)`, com taxa 0%/não cadastrada caindo numa
+divisão simples `1/n` (evita divisão por zero, mesmo resultado do
+limite de Price quando `i -> 0`).
+
+**`calcularCondicoesFinanceirasProjeto(?Projeto $record, Get $get): array`**
+— função central reaproveitada pelos 5 Placeholders. Lê
+`condicao_financeira_id` via `Get $get` (não `$record->
+condicao_financeira_id`) de propósito — reflete a seleção ATUAL do
+Select na tela, inclusive antes de salvar. Por isso o Select
+`condicao_financeira_id` (Grid de Endereço/Preços/Condições, ver seção
+acima) ganhou `->live()` nesta tarefa — antes não recalculava nada ao
+trocar de condição sem salvar.
+
+**Pendência conhecida, não resolvida nesta tarefa**: `porcentagem_entrada`
+descontar do valor financiado ANTES do fator de Price (não incide
+juros sobre a parte de entrada) — essa foi a interpretação assumida
+(consistente com a única pergunta que chegou a ser feita sobre o
+assunto), mas não houve confirmação explícita final do usuário sobre
+esse ponto específico (a resposta dele focou só em confirmar que o
+fator de Price deveria ser usado, não a ordem entrada/juros). Se algum
+dia o valor da parcela parecer errado, checar esse detalhe primeiro.
+## Cluster "Referências" — Documentos (2026-09-11)
+
+Novo cadastro de apoio `DocumentoResource` (`Filament\Clusters\Referencias\Resources\DocumentoResource`), mesmo padrão técnico de `ReferenciaPrecoResource`/`CondicaoFinanceiraResource` (CRUD em modal, sem `create`/`edit` em `getPages()`, Lixeira própria com `TrashedFilter`/`RestoreAction`/`ForceDeleteAction`). Migration `2026_09_11_100000_create_documentos_table` (tabela `documentos`: `descricao`, `arquivo` nullable, timestamps, softDeletes). Model `Documento`, Policy `DocumentoPolicy` (permissões `comercial_documento`, modelo single-word — não confundir com `condicao::financeira`/`referencia::preco`, que são compound-word). `navigationSort = 3` (depois de Condições Financeiras).
+
+Cada registro é um **template** de Excel (`.xls`/`.xlsx`/`.xlsm`) enviado pelo usuário operacional — o arquivo em si (upload via `Filament\Forms\Components\FileUpload`) fica no disco `local` (privado, `storage/app/`, NUNCA público), diretório `documentos-templates`; a coluna `arquivo` guarda só o CAMINHO relativo, não o conteúdo do arquivo.
+
+**Decisão de arquitetura confirmada com o usuário**: arquivo binário nunca vira BLOB no banco de dados — é prática padrão (Laravel/Filament por padrão fazem assim): guardar em disco/filesystem é mais rápido, mais barato, não infla dump de backup (`mysqldump`) e não tem ganho nenhum de compressão/performance guardando como BLOB. O banco só guarda caminho/metadados.
+
+**Sem trava de exclusão/edição por vínculo** (diferente de Referência de Preços/Condição Financeira, que travam se estiverem em uso por algum Projeto) — Documento ainda não tem nenhum Model apontando pra ele. Reconsiderar quando a geração de documento por Projeto for implementada, se fizer sentido rastrear qual Documento foi usado em qual geração.
+
+Novo botão "Documentos" em `ProjetoResource\Pages\EditProjeto::getFormActions()`, posicionado ANTES de "Atribuir Processos" (a pedido explícito do usuário). Mesmo padrão dos outros botões-placeholder dessa página: sem ação real ainda, só uma notificação — o mecanismo de GERAR um documento a partir de um template com dados de um Projeto específico ainda não foi implementado.
+
+**Pendência explícita, decidida mas não implementada** — mecanismo de marcadores de texto: o template Excel vai conter marcadores no formato `%Campo%` (ex.: `%Desc_Obra%`) em células específicas, que o Perseu vai reconhecer e substituir pelos dados reais na hora de gerar o documento de um Projeto. Ainda não há: (a) o dicionário/lista oficial de nomes de campo disponíveis, (b) o parser/substituidor desses marcadores, (c) a tela/ação de "gerar documento" que efetivamente usa um Documento (template) + um Projeto pra produzir o arquivo final. Também decidido: os documentos GERADOS (Proposta, O.S., Plano de Corte etc. de um Projeto específico) não ficam armazenados permanentemente no Perseu — são oferecidos pra download na hora e o usuário salva onde quiser (OneDrive, SharePoint, local). Um link direto do SharePoint/OneDrive foi descartado como forma de referenciar o template-base porque esses links são amarrados a usuário/tenant, podem expirar e mudam se o arquivo for movido — por isso o template fica em arquivo físico dentro do próprio Perseu.
+
 ## Ver também (histórico narrado, `HISTORICO-DESENVOLVIMENTO.md`)
 
 - "Rename 'Projeto' → 'Obra' no plugin `perseu/comercial`" (28/08/2026)

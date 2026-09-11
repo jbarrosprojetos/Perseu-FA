@@ -32,6 +32,7 @@ class Projeto extends Model
         'tipo_projeto_id',
         'endereco_id',
         'referencia_preco_id',
+        'condicao_financeira_id',
         'descricao',
     ];
 
@@ -67,6 +68,11 @@ class Projeto extends Model
     public function referenciaPreco(): BelongsTo
     {
         return $this->belongsTo(ReferenciaPreco::class);
+    }
+
+    public function condicaoFinanceira(): BelongsTo
+    {
+        return $this->belongsTo(CondicaoFinanceira::class);
     }
 
     public function situacoes(): BelongsToMany

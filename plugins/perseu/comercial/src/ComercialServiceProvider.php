@@ -4,10 +4,14 @@ namespace Perseu\Comercial;
 
 use Filament\Panel;
 use Illuminate\Support\Facades\Gate;
+use Perseu\Comercial\Models\CondicaoFinanceira;
+use Perseu\Comercial\Models\Documento;
 use Perseu\Comercial\Models\Projeto;
 use Perseu\Comercial\Models\ReferenciaPreco;
 use Perseu\Comercial\Models\SituacaoProjeto;
 use Perseu\Comercial\Models\TipoProjeto;
+use Perseu\Comercial\Policies\CondicaoFinanceiraPolicy;
+use Perseu\Comercial\Policies\DocumentoPolicy;
 use Perseu\Comercial\Policies\ProjetoPolicy;
 use Perseu\Comercial\Policies\ReferenciaPrecoPolicy;
 use Perseu\Comercial\Policies\SituacaoProjetoPolicy;
@@ -62,6 +66,14 @@ class ComercialServiceProvider extends PackageServiceProvider
                 // `database/migrations/`, porque `hasMigrations()` é
                 // uma LISTA EXPLÍCITA, não um scan de diretório.
                 '2026_09_06_120000_create_fretes_mobilizacao_table',
+                // Tarefa "Condições Financeiras" (2026-09-08) — mesma
+                // lição dos comentários acima: as duas entradas abaixo
+                // precisam estar aqui ou `artisan migrate` não roda.
+                '2026_09_08_100000_create_condicoes_financeiras_table',
+                '2026_09_08_100001_add_condicao_financeira_id_to_projetos_table',
+                // Tarefa "Documentos" (2026-09-11) — mesma lição dos
+                // comentários acima.
+                '2026_09_11_100000_create_documentos_table',
             ])
             ->runsMigrations()
             ->hasDependency('auditoria')
@@ -77,6 +89,8 @@ class ComercialServiceProvider extends PackageServiceProvider
         Gate::policy(TipoProjeto::class, TipoProjetoPolicy::class);
         Gate::policy(Projeto::class, ProjetoPolicy::class);
         Gate::policy(ReferenciaPreco::class, ReferenciaPrecoPolicy::class);
+        Gate::policy(CondicaoFinanceira::class, CondicaoFinanceiraPolicy::class);
+        Gate::policy(Documento::class, DocumentoPolicy::class);
     }
 
     public function packageRegistered(): void

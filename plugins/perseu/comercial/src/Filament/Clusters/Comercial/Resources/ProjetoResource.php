@@ -49,6 +49,7 @@ use Perseu\Comercial\Filament\Clusters\Comercial\Resources\ProjetoResource\Pages
 use Perseu\Comercial\Filament\Clusters\Comercial\Resources\ProjetoResource\Pages\EditProjeto;
 use Perseu\Comercial\Filament\Clusters\Comercial\Resources\ProjetoResource\Pages\ListProjetos;
 use Perseu\Comercial\Filament\Clusters\Projetos;
+use Perseu\Comercial\Models\CondicaoFinanceira;
 use Perseu\Comercial\Models\FreteMobilizacao;
 use Perseu\Comercial\Models\ItemProjeto;
 use Perseu\Comercial\Models\NotaProjeto;
@@ -404,7 +405,7 @@ class ProjetoResource extends Resource
                                             ? null
                                             : __('comercial::filament/resources/projeto.form.endereco-sem-tag-obra');
                                     })
-                                    ->columnSpan(8)
+                                    ->columnSpan(6)
                                     ->searchable()
                                     ->live()
                                     ->createOptionForm([
@@ -481,7 +482,26 @@ class ProjetoResource extends Resource
                                         ? __('comercial::filament/resources/projeto.form.referencia-preco-aviso')
                                         : null)
                                     ->hintColor('danger')
-                                    ->columnSpan(4),
+                                    ->columnSpan(3),
+
+                                // Condições Financeiras (ver CLAUDE.md) — mesmo
+                                // padrão de Referência de Preços: catálogo
+                                // reutilizável, vínculo opcional (sem
+                                // ->required(), sem trava de negócio própria
+                                // ainda). Layout pedido explicitamente pelo
+                                // usuário: Endereço 50% / Preços 25% /
+                                // Condições Financeiras 25% (columnSpan 6/3/3
+                                // sobre a Grid::make(12) acima).
+                                Select::make('condicao_financeira_id')
+                                    ->label(__('comercial::filament/resources/projeto.form.condicao-financeira'))
+                                    ->relationship(name: 'condicaoFinanceira', titleAttribute: 'descricao')
+                                    ->getOptionLabelFromRecordUsing(fn (CondicaoFinanceira $record) => trim(
+                                        "{$record->descricao} — {$record->created_at?->format('d/m/Y H:i')}"
+                                    ))
+                                    ->searchable()
+                                    ->preload()
+                                    ->live()
+                                    ->columnSpan(3),
                             ]),
                     ]),
 
@@ -993,7 +1013,146 @@ class ProjetoResource extends Resource
                                     ->all();
                             }),
                     ]),
+
+                // Section "Condições Financeiras" (2026-09-08) — item IRMÃO
+                // das Sections "Cabeçalho"/"Itens" acima, posicionada
+                // DEPOIS de "Itens" a pedido explícito do usuário (o Total
+                // do Projeto usado aqui depende da soma dos itens já
+                // inseridos). Só existe conteúdo útil com Projeto já
+                // persistido (soma de `itens()` exige `$record`) — mesmo
+                // critério de `$livewire instanceof EditProjeto` usado pela
+                // listagem de itens logo acima, então some inteira em
+                // CreateProjeto.
+                //
+                // Todos os campos são `Placeholder` (somente leitura,
+                // calculados ao vivo via `calcularCondicoesFinanceirasProjeto()`
+                // abaixo) — NADA aqui é persistido, é só uma prévia. O
+                // Select `condicao_financeira_id` (Grid acima) ganhou
+                // `->live()` só por causa desta Section, pra recalcular na
+                // hora se o usuário trocar a Condição Financeira antes de
+                // salvar.
+                Section::make(__('comercial::filament/resources/projeto.form.sections.condicoes-financeiras.title'))
+                    ->description(__('comercial::filament/resources/projeto.form.sections.condicoes-financeiras.description'))
+                    ->columnSpanFull()
+                    ->visible(fn (?Projeto $record) => $record !== null)
+                    ->schema([
+                        Grid::make(5)
+                            ->columnSpanFull()
+                            ->extraAttributes($gridGap)
+                            ->schema([
+                                Placeholder::make('condicoes_total_geral')
+                                    ->label(__('comercial::filament/resources/projeto.form.condicoes-financeiras.total-geral'))
+                                    ->content(fn (Get $get, ?Projeto $record) => 'R$ ' . number_format(
+                                        static::calcularCondicoesFinanceirasProjeto($record, $get)['total_geral'],
+                                        2,
+                                        ',',
+                                        '.',
+                                    )),
+
+                                Placeholder::make('condicoes_descricao')
+                                    ->label(__('comercial::filament/resources/projeto.form.condicoes-financeiras.condicao'))
+                                    ->content(function (Get $get, ?Projeto $record) {
+                                        $dados = static::calcularCondicoesFinanceirasProjeto($record, $get);
+
+                                        return $dados['condicao']?->descricao
+                                            ?? __('comercial::filament/resources/projeto.form.condicoes-financeiras.sem-condicao');
+                                    }),
+
+                                Placeholder::make('condicoes_valor_entrada')
+                                    ->label(__('comercial::filament/resources/projeto.form.condicoes-financeiras.valor-entrada'))
+                                    ->content(function (Get $get, ?Projeto $record) {
+                                        $valor = static::calcularCondicoesFinanceirasProjeto($record, $get)['valor_entrada'];
+
+                                        return filled($valor) ? 'R$ ' . number_format($valor, 2, ',', '.') : '—';
+                                    }),
+
+                                Placeholder::make('condicoes_qtde_parcelas')
+                                    ->label(__('comercial::filament/resources/projeto.form.condicoes-financeiras.qtde-parcelas'))
+                                    ->content(fn (Get $get, ?Projeto $record) => static::calcularCondicoesFinanceirasProjeto($record, $get)['qtde_parcelas'] ?? '—'),
+
+                                Placeholder::make('condicoes_valor_parcela')
+                                    ->label(__('comercial::filament/resources/projeto.form.condicoes-financeiras.valor-parcela'))
+                                    ->content(function (Get $get, ?Projeto $record) {
+                                        $valor = static::calcularCondicoesFinanceirasProjeto($record, $get)['valor_parcela'];
+
+                                        return filled($valor) ? 'R$ ' . number_format($valor, 2, ',', '.') : '—';
+                                    }),
+                            ]),
+                    ]),
             ]);
+    }
+
+    /**
+     * Fator de amortização pelo Sistema Price (`fator = i / (1 - (1+i)^-n)`,
+     * ver CLAUDE.md "Condições Financeiras") — `$taxaMensalPercentual` é a
+     * `taxa_mensal` cadastrada na Condição Financeira (ex.: 5,00 = "5%
+     * a.m."), convertida aqui pra fração (`i`). Taxa 0% (ou não
+     * cadastrada) cai numa divisão simples (`1/n`) pra evitar dividir por
+     * zero na fórmula de juros — mesmo resultado matemático do limite de
+     * Price quando `i -> 0`.
+     */
+    protected static function calcularFatorPrice(float $taxaMensalPercentual, int $qtdeParcelas): float
+    {
+        if ($qtdeParcelas <= 0) {
+            return 0.0;
+        }
+
+        $i = $taxaMensalPercentual / 100;
+
+        if ($i <= 0) {
+            return 1 / $qtdeParcelas;
+        }
+
+        return $i / (1 - (1 + $i) ** (-$qtdeParcelas));
+    }
+
+    /**
+     * Cálculo completo da Section "Condições Financeiras" (ver CLAUDE.md):
+     * Total do Projeto = soma de `valor_total` de TODOS os itens já
+     * inseridos (independente da origem); Valor Entrada = Total ×
+     * Porcentagem de Entrada da Condição Financeira vinculada; Valor da
+     * Parcela = (Total − Entrada) × fator de Price, usando a Taxa Mensal +
+     * Qtde. Parcelas cadastradas na própria Condição Financeira (SEM
+     * override por Projeto — decisão implícita do desenho original: a
+     * Qtde. Parcelas mostrada aqui é a do catálogo, não um campo próprio
+     * do Projeto).
+     *
+     * Lê `condicao_financeira_id` via `Get $get` (não `$record->
+     * condicao_financeira_id`) de propósito — reflete a seleção ATUAL do
+     * Select na tela (`->live()`), inclusive antes de salvar, igual ao
+     * padrão já usado por `referencia_preco_id` noutros cálculos deste
+     * arquivo.
+     *
+     * @return array{total_geral: float, condicao: ?CondicaoFinanceira, qtde_parcelas: ?int, valor_entrada: ?float, valor_parcela: ?float}
+     */
+    protected static function calcularCondicoesFinanceirasProjeto(?Projeto $record, Get $get): array
+    {
+        $totalGeral = (float) ($record?->itens()->sum('valor_total') ?? 0);
+        $condicaoFinanceiraId = $get('condicao_financeira_id');
+        $condicao = filled($condicaoFinanceiraId) ? CondicaoFinanceira::find($condicaoFinanceiraId) : null;
+
+        if (! $condicao) {
+            return [
+                'total_geral'   => $totalGeral,
+                'condicao'      => null,
+                'qtde_parcelas' => null,
+                'valor_entrada' => null,
+                'valor_parcela' => null,
+            ];
+        }
+
+        $valorEntrada = round($totalGeral * ((float) $condicao->porcentagem_entrada / 100), 2);
+        $valorFinanciado = $totalGeral - $valorEntrada;
+        $qtdeParcelas = (int) ($condicao->qtde_parcelas ?? 1);
+        $fatorPrice = static::calcularFatorPrice((float) $condicao->taxa_mensal, $qtdeParcelas);
+
+        return [
+            'total_geral'   => $totalGeral,
+            'condicao'      => $condicao,
+            'qtde_parcelas' => $qtdeParcelas,
+            'valor_entrada' => $valorEntrada,
+            'valor_parcela' => round($valorFinanciado * $fatorPrice, 2),
+        ];
     }
 
     /**

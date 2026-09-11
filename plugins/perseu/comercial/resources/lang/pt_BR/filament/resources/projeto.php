@@ -19,6 +19,18 @@ return [
                 'title'       => 'Itens',
                 'description' => 'Itens que compõem o Projeto, a partir de diferentes origens.',
             ],
+            'condicoes-financeiras' => [
+                'title'       => 'Condições Financeiras',
+                'description' => 'Prévia calculada a partir do Total do Projeto e da Condição Financeira vinculada.',
+            ],
+        ],
+        'condicoes-financeiras' => [
+            'total-geral'    => 'Total do Projeto',
+            'condicao'       => 'Condições',
+            'sem-condicao'   => 'Nenhuma condição financeira selecionada',
+            'qtde-parcelas'  => 'Quantidade de Parcelas',
+            'valor-entrada'  => 'Valor Entrada',
+            'valor-parcela'  => 'Valor da Parcela',
         ],
         'itens' => [
             'origem'             => 'Origem do Item',
@@ -248,6 +260,7 @@ return [
         'endereco-sem-tag-obra' => 'Este cliente não tem nenhum endereço marcado com a tag Obra. Cadastre um endereço com essa tag no cadastro do cliente, ou use o "+" acima para criar um novo aqui.',
         'referencia-preco'        => 'Referência de Preços',
         'referencia-preco-aviso'  => 'Nenhuma referência de preços selecionada — necessária para calcular o valor de venda',
+        'condicao-financeira'     => 'Condições Financeiras',
         'numero-projeto'          => 'Projeto',
         'numero-projeto-pendente' => 'Gerado automaticamente ao salvar',
         'revisao'                 => 'Revisão',

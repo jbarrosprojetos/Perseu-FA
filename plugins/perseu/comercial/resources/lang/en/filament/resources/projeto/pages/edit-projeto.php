@@ -16,6 +16,13 @@ return [
     ],
 
     'form-actions' => [
+        'documentos' => [
+            'label' => 'Documents',
+            'notification' => [
+                'title' => 'Not implemented yet',
+                'body'  => 'Generating documents from templates for this Project will be implemented in a future step.',
+            ],
+        ],
         'atribuir-processos' => [
             'label' => 'Assign Processes',
             'notification' => [

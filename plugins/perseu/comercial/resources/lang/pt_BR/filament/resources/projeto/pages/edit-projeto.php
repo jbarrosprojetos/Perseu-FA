@@ -16,6 +16,13 @@ return [
     ],
 
     'form-actions' => [
+        'documentos' => [
+            'label' => 'Documentos',
+            'notification' => [
+                'title' => 'Ainda não implementado',
+                'body'  => 'A geração de documentos a partir de templates para este Projeto será implementada numa próxima etapa.',
+            ],
+        ],
         'atribuir-processos' => [
             'label' => 'Atribuir Processos',
             'notification' => [

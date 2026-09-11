@@ -19,6 +19,18 @@ return [
                 'title'       => 'Items',
                 'description' => 'Items that make up the Project, from different sources.',
             ],
+            'condicoes-financeiras' => [
+                'title'       => 'Financial Conditions',
+                'description' => 'Preview calculated from the Project Total and the linked Financial Condition.',
+            ],
+        ],
+        'condicoes-financeiras' => [
+            'total-geral'    => 'Project Total',
+            'condicao'       => 'Conditions',
+            'sem-condicao'   => 'No financial condition selected',
+            'qtde-parcelas'  => 'No. of Installments',
+            'valor-entrada'  => 'Down Payment',
+            'valor-parcela'  => 'Installment Value',
         ],
         'itens' => [
             'origem'            => 'Item Source',
@@ -248,6 +260,7 @@ return [
         'endereco-sem-tag-obra' => 'This client has no address tagged as Job. Add that tag to an address in the client\'s own record, or use the "+" above to create one here.',
         'referencia-preco'        => 'Price Reference',
         'referencia-preco-aviso'  => 'No price reference selected — required to calculate the sale value',
+        'condicao-financeira'     => 'Financial Conditions',
         'numero-projeto'          => 'Project',
         'numero-projeto-pendente' => 'Automatically generated on save',
         'revisao'                 => 'Revision',
