@@ -52,6 +52,7 @@ use Perseu\Comercial\Filament\Clusters\Projetos;
 use Perseu\Comercial\Models\CondicaoFinanceira;
 use Perseu\Comercial\Models\FreteMobilizacao;
 use Perseu\Comercial\Models\ItemProjeto;
+use Perseu\Comercial\Models\ItemProjetoComponente;
 use Perseu\Comercial\Models\NotaProjeto;
 use Perseu\Comercial\Models\Projeto;
 use Perseu\Comercial\Models\ReferenciaPreco;
@@ -1743,17 +1744,27 @@ class ProjetoResource extends Resource
                 $detalhamento = static::calcularDetalhamentoCustoPromob($metricas, $referencia);
                 $custoUnitario = round($detalhamento['custo_unitario'], 2);
                 $valores = static::calcularValoresItemAvulso($custoUnitario, 1, 0, $impostoAplicado);
+                // Custo total BRUTO do XML deste item (raiz `<LISTING>`,
+                // só o CUSTO — `TOTALPRICES/MARGINS/ORDER/@VALUE` — nunca
+                // o "Preço"/margem do Promob, decisão do usuário
+                // 2026-09-12: margem de venda é sempre calculada pelo
+                // Perseu). Guardado pra permitir recalcular "Misc" ao
+                // vivo depois (ver `ItemProjeto::metricasPromob()`), já
+                // que essa parte não é recuperável só a partir dos
+                // componentes individuais.
+                $custoTotalXml = round(PromobXmlParser::parse($conteudo)['custo'], 2);
+
                 $novoItem = $record->itens()->create([
                     'origem'           => OrigemItemProjeto::Promob,
                     // Referência (2026-09-06, revisado) — só um LABEL
                     // curto de origem, NÃO o nome do arquivo + data/hora
                     // (decisão original, revertida pelo usuário): essa
-                    // informação detalhada já fica visível por item no
-                    // ícone "Cálculos" (`renderizarResumoCalculoItemPromob()`
-                    // → `NotaProjeto`), duplicar tudo aqui só encheria a
-                    // coluna/base à toa. Mesmo padrão do rótulo "Item
-                    // Avulso" gravado em `salvarItemAvulso()` — ver
-                    // CLAUDE.md, "Fluxo Promob".
+                    // informação detalhada fica em `arquivo_origem`/
+                    // `arquivo_gerado_em` abaixo (2026-09-12, colunas
+                    // dedicadas — substituem a antiga `NotaProjeto` de
+                    // sistema). Mesmo padrão do rótulo "Item Avulso"
+                    // gravado em `salvarItemAvulso()` — ver CLAUDE.md,
+                    // "Fluxo Promob".
                     'referencia'       => 'Promob',
                     'descricao'        => PromobChecagemTotal::descricaoDoArquivo($nomeArquivo),
                     'quantidade'       => 1,
@@ -1762,18 +1773,23 @@ class ProjetoResource extends Resource
                     'imposto_aplicado' => $impostoAplicado,
                     'valor_unitario'   => $valores['valor_unitario'],
                     'valor_total'      => $valores['valor_total'],
+                    'custo_total_xml'  => $custoTotalXml,
+                    'arquivo_origem'   => $nomeArquivo,
+                    'arquivo_gerado_em' => trim("{$dataHoraItem['data']} {$dataHoraItem['hora']}"),
                 ]);
 
-                // `$novoItem->notas()` já seta `item_projeto_id` sozinho
-                // (é a FK da própria relação) — só `projeto_id` precisa
-                // ser passado explicitamente aqui (não é a FK desta
-                // relação).
-                $novoItem->notas()->create([
-                    'projeto_id'   => $record->id,
-                    'usuario_id'   => auth()->id(),
-                    'tipo_sistema' => true,
-                    'texto'        => static::renderizarResumoCalculoItemPromob($nomeArquivo, $dataHoraItem, $detalhamento),
-                ]);
+                // Componentes (matéria-prima) do Item, base da Aba P/
+                // Necessidade de Materiais (2026-09-12, ver
+                // ItemProjetoComponente/handoff_aba_p.md) — persistidos
+                // na MESMA transação de criação do Item, lidos direto
+                // do XML já em mãos aqui (sem reabrir/reler o arquivo).
+                // `origem` fica com o default do Model (`xml_promob`) —
+                // não passado explicitamente aqui de propósito, único
+                // ponto do sistema que cria estas linhas automaticamente
+                // (edição manual pela Aba P grava `manual`).
+                foreach (PromobXmlParser::componentesParaMateriais($conteudo) as $componente) {
+                    $novoItem->componentes()->create($componente);
+                }
 
                 $totalCriados++;
             }
@@ -1906,23 +1922,25 @@ class ProjetoResource extends Resource
 
     /**
      * Tabela HTML compacta do detalhamento de Custo Unitário de UM item
-     * — gravada como `texto` da `NotaProjeto` vinculada a esse item
-     * (`criarTodosItensPromob()`), acessível depois pelo ícone
-     * "Cálculos" da listagem. Estilo COMPACTO por
-     * pedido explícito da tarefa ("Nota sobre estilo visual — sem
-     * fundo colorido por linha, só bordas leves, alinhamento numérico à
+     * — renderizada AO VIVO no ícone "Materiais" da listagem
+     * (`acaoVerComponentesItem()`, 2026-09-12), não mais gravada como
+     * texto congelado numa `NotaProjeto` (mecanismo removido). Estilo
+     * COMPACTO por pedido explícito da tarefa original ("sem fundo
+     * colorido por linha, só bordas leves, alinhamento numérico à
      * direita") — `style=` INLINE em vez de classes Tailwind
      * (`text-xs`), pra não depender de quais utilitários o CSS
      * pré-compilado do Filament inclui (ver CLAUDE.md da raiz,
-     * "FilamentAsset::register()", sobre classes arbitrárias não
-     * usadas pelo próprio Filament não terem efeito nenhum) — o mesmo
-     * HTML também precisa renderizar OK fora do painel admin (dentro da
-     * Nota, via `Html::make()` no modal de Notas do Projeto).
+     * "FilamentAsset::register()").
      *
-     * @param  array{data: string, hora: string}  $dataHora
+     * `$subtitulo` já vem PRONTO do chamador (2026-09-12, simplificado
+     * de `$nomeArquivo`/`$dataHora` separados — este método passou a
+     * ter um único chamador, então não precisa mais montar o texto
+     * aqui) — hoje é `"{arquivo_origem} — {arquivo_gerado_em}"` do
+     * próprio Item.
+     *
      * @param  array<string, mixed>  $detalhamento
      */
-    protected static function renderizarResumoCalculoItemPromob(string $nomeArquivo, array $dataHora, array $detalhamento): string
+    protected static function renderizarResumoCalculoItemPromob(string $subtitulo, array $detalhamento): string
     {
         $m = $detalhamento['metricas_item'];
         $th = 'text-align:left;padding:2px 6px;border-bottom:1px solid #d1d5db;';
@@ -2001,7 +2019,7 @@ class ProjetoResource extends Resource
 
         $totalTd = 'padding:4px 6px;border-top:1px solid #9ca3af;font-weight:600;';
 
-        return '<p style="margin:0 0 4px;font-size:11px;color:#6b7280;">'.e("{$nomeArquivo} — {$dataHora['data']} {$dataHora['hora']}").'</p>'
+        return ($subtitulo !== '' ? '<p style="margin:0 0 4px;font-size:11px;color:#6b7280;">'.e($subtitulo).'</p>' : '')
             .'<table style="width:100%;border-collapse:collapse;font-size:11px;">'
             .'<thead><tr>'
             .'<th style="'.$th.'">'.e(__('comercial::filament/resources/projeto.form.itens.promob.criar-itens.tabela.categoria')).'</th>'
@@ -3022,18 +3040,28 @@ class ProjetoResource extends Resource
                     ->columnSpan(3),
                 Actions::make([
                     ActionGroup::make(array_values(array_filter([
-                        // "Cálculos" (2026-09-06, ver CLAUDE.md, "Fluxo
-                        // Promob") — só aparece pra Itens com pelo menos
-                        // uma `NotaProjeto` de SISTEMA vinculada
-                        // (`item_projeto_id`), ou seja, Itens criados via
-                        // Promob; Item Avulso nunca tem nota vinculada,
-                        // então nunca mostra este ícone. Modal
-                        // SOMENTE LEITURA — sem editar/excluir por aqui
-                        // (a edição de nota de sistema, quando permitida,
-                        // é só pelo super usuário, no modal geral de
-                        // Notas do Projeto).
-                        $item->notas()->where('tipo_sistema', true)->exists()
-                            ? static::acaoVerCalculosItem($item)
+                        // "Materiais" (2026-09-12, ver
+                        // ItemProjetoComponente/handoff_aba_p.md) — só
+                        // aparece pra Itens com componentes extraídos do
+                        // XML do Promob (Item Avulso nunca tem nenhuma
+                        // linha aqui). Reúne, no MESMO modal, a lista de
+                        // componentes E os Cálculos de Custo Unitário
+                        // (2026-09-06) — antes duas ações separadas
+                        // ("Materiais"/"Cálculos"), unificadas nesta
+                        // tarefa porque passaram a usar a MESMA fonte de
+                        // dados (`ItemProjeto::metricasPromob()`, ao
+                        // invés do texto congelado que ficava numa
+                        // `NotaProjeto` de sistema, mecanismo removido).
+                        // Modal SOMENTE LEITURA de propósito — decisão do
+                        // usuário (2026-09-12): permitir edição livre dos
+                        // componentes criaria risco de o Perseu divergir
+                        // silenciosamente do XML de origem; se um dia
+                        // isso for revisto, cogitado ficar restrito ao
+                        // super usuário (mesmo critério de
+                        // `promobUsuarioPodeConfirmarDivergencia()`), não
+                        // implementado ainda.
+                        $item->componentes()->exists()
+                            ? static::acaoVerComponentesItem($item)
                             : null,
                         // Abre o MESMO Form Modal de "Inserir" (ver
                         // `inserirItemAvulso`/`camposFormularioItemAvulso()`),
@@ -3109,62 +3137,132 @@ class ProjetoResource extends Resource
     }
 
     /**
-     * "Cálculos" (Parte 5 do enunciado da tarefa "Criar Itens do
-     * Promob") — modal SOMENTE LEITURA com a(s) Nota(s) de sistema
-     * vinculadas a este Item (`item_projeto_id`), mais recente
-     * primeiro. Reaproveita `linhaExibicaoNotaSomenteLeitura()` (mesmo
-     * visual de número/autor/data/badge/texto de `linhaExibicaoNota()`
-     * do modal geral de Notas, SEM os ícones de editar/excluir — a
-     * edição de nota de sistema, quando permitida, é só pelo super
-     * usuário, no modal geral).
+     * "Materiais" (2026-09-12, ver `ItemProjetoComponente`/handoff
+     * `handoff_aba_p.md`) — modal SOMENTE LEITURA que reúne, num único
+     * lugar, os componentes de matéria-prima extraídos do XML do
+     * Promob pra este Item E o detalhamento de Custo Unitário
+     * ("Cálculos", antes uma ação separada que lia texto congelado de
+     * uma `NotaProjeto` de sistema — mecanismo removido nesta tarefa).
+     * `->modalSubmitAction(false)`, sem editar/excluir — decisão
+     * deliberada do usuário: qualquer edição aqui arriscaria o Perseu
+     * divergir do XML de origem do Promob sem o usuário perceber,
+     * então por enquanto é só consulta.
+     *
+     * "Cálculos" agora é recalculado AO VIVO
+     * (`ItemProjeto::metricasPromob()` + `calcularDetalhamentoCustoPromob()`),
+     * usando os Fatores ATUAIS da Referência de Preços do Projeto — não
+     * necessariamente os mesmos usados quando o Item foi criado (o
+     * Custo Unitário já gravado no Item continua congelado, sem
+     * relação com o que este modal exibe). Sem Referência vinculada
+     * hoje ao Projeto, os Fatores caem pra `0` (mesma salvaguarda
+     * defensiva de `calcularDetalhamentoCustoPromob()`).
      */
-    protected static function acaoVerCalculosItem(ItemProjeto $item): Action
+    protected static function acaoVerComponentesItem(ItemProjeto $item): Action
     {
-        return Action::make("verCalculosItem{$item->id}")
-            ->label(__('comercial::filament/resources/projeto.form.itens.calculos.acao'))
-            ->icon('heroicon-o-calculator')
+        return Action::make("verComponentesItem{$item->id}")
+            ->label(__('comercial::filament/resources/projeto.form.itens.componentes.acao'))
+            ->icon('heroicon-o-cube')
             ->color('gray')
-            ->modalHeading(__('comercial::filament/resources/projeto.form.itens.calculos.modal.heading', ['numero' => $item->numero_item]))
-            ->modalWidth(Width::Large)
+            ->modalHeading(__('comercial::filament/resources/projeto.form.itens.componentes.modal.heading', ['numero' => $item->numero_item]))
+            ->modalWidth(Width::FourExtraLarge)
             ->modalSubmitAction(false)
             ->form([
                 Group::make()
-                    ->schema(fn () => $item->notas()
-                        ->where('tipo_sistema', true)
-                        ->orderByDesc('numero_nota')
-                        ->get()
-                        ->map(fn (NotaProjeto $nota) => static::linhaExibicaoNotaSomenteLeitura($nota))
-                        ->all()),
+                    ->schema(function () use ($item): array {
+                        $componentes = $item->componentes()->orderBy('categoria')->orderBy('descricao')->get();
+
+                        $referenciaAtual = $item->projeto?->referenciaPreco;
+                        $detalhamento = static::calcularDetalhamentoCustoPromob($item->metricasPromob(), $referenciaAtual);
+                        $subtitulo = trim("{$item->arquivo_origem} — {$item->arquivo_gerado_em}", ' —');
+
+                        return [
+                            Text::make(__('comercial::filament/resources/projeto.form.itens.componentes.title'))
+                                ->weight(FontWeight::Bold),
+                            Html::make(new HtmlString(static::renderizarListaMateriais($componentes))),
+                            Text::make(__('comercial::filament/resources/projeto.form.itens.calculos.acao'))
+                                ->weight(FontWeight::Bold)
+                                ->extraAttributes(['style' => 'margin-top: 1rem; display: block;']),
+                            Html::make(new HtmlString(static::renderizarResumoCalculoItemPromob($subtitulo, $detalhamento))),
+                        ];
+                    }),
             ]);
     }
 
     /**
-     * Linha de exibição SOMENTE LEITURA de uma nota — mesmo cabeçalho
-     * (número/autor/data-hora/badge "Sistema") de `linhaExibicaoNota()`
-     * (modal geral de Notas do Projeto), sem a coluna de ações
-     * (editar/excluir nunca aparecem aqui, independente de quem esteja
-     * vendo — ver `acaoVerCalculosItem()`).
+     * Lista SOMENTE LEITURA de Materiais do modal do item — uma tabela
+     * HTML por `categoria` (`ItemProjetoComponente::categoria`, o
+     * `CATEGORY/@DESCRIPTION` de origem no XML, ver migration
+     * `2026_09_12_130000_add_categoria_to_itens_projeto_componentes_table`
+     * e docblock de `PromobXmlParser::componentesParaMateriais()`),
+     * cada uma com seu próprio título/cabeçalho de coluna — 2026-09-12,
+     * a pedido do usuário ("identificarmos o grupo que fazem parte nas
+     * madeiras e mdf, que as vezes vem como cozinha, dormitório ou até
+     * construtor de armarios"): agrupar por categoria deixa visível na
+     * hora quais peças vieram de qual ambiente/fabricante, sem
+     * precisar de coluna própria (categoria pode repetir em toda
+     * linha, redundante) nem de lista fixa de nomes (o agrupamento é
+     * só pelo valor que já veio no XML, seja lá qual for).
+     *
+     * Uma única `Html::make()` pro modal inteiro (em vez de um
+     * componente Filament por linha) — mesma solução já usada pra
+     * resolver a Descrição longa sobrepondo (`<table>`/`<td>` com
+     * `white-space: normal; word-break: break-word` deixa a linha
+     * inteira crescer junto da célula, sem sobrepor a seguinte).
      */
-    protected static function linhaExibicaoNotaSomenteLeitura(NotaProjeto $nota): Group
+    protected static function renderizarListaMateriais(\Illuminate\Support\Collection $componentes): string
     {
-        $autor = $nota->usuario?->name ?? __('comercial::filament/resources/projeto.form.notas.autor-sistema');
+        if ($componentes->isEmpty()) {
+            return '<p style="font-size:12px;color:#6b7280;">'.e(__('comercial::filament/resources/projeto.form.itens.componentes.modal.vazio')).'</p>';
+        }
 
-        return Group::make()
-            ->key("nota-calculo-{$nota->id}")
-            ->extraAttributes(['style' => 'padding-bottom: .75rem; margin-bottom: .75rem; border-bottom: 1px solid rgba(0,0,0,.08);'])
-            ->schema([
-                Flex::make(array_values(array_filter([
-                    Text::make('#'.$nota->numero_nota)->weight(FontWeight::Bold),
-                    Text::make($autor),
-                    Text::make($nota->created_at?->format('d/m/Y H:i')),
-                    $nota->tipo_sistema
-                        ? Text::make(__('comercial::filament/resources/projeto.form.notas.badge-sistema'))->badge()->color('gray')
-                        : null,
-                ])))
-                    ->dense(),
+        $titulo = fn (string $chave) => __("comercial::filament/resources/projeto.form.itens.componentes.{$chave}");
 
-                Html::make(new HtmlString((string) $nota->texto)),
-            ]);
+        $th = fn (string $chave, string $largura, string $alinhamento = 'left'): string => '<th style="padding:4px 8px;font-size:12px;font-weight:600;text-align:'.$alinhamento.';width:'.$largura.';">'.e($titulo($chave)).'</th>';
+
+        $cabecalho = '<thead><tr>'
+            .$th('referencia', '17%')
+            .$th('descricao-campo', '29%')
+            .$th('repeticao', '8%', 'right')
+            .$th('quantidade', '12%', 'right')
+            .$th('custo', '17%', 'right')
+            .$th('preco', '17%', 'right')
+            .'</tr></thead>';
+
+        $moeda = fn (mixed $valor): string => 'R$ '.number_format((float) $valor, 2, ',', '.');
+
+        $td = fn (string $conteudo, string $largura, string $alinhamento = 'left'): string => '<td style="padding:4px 8px;font-size:12px;vertical-align:top;white-space:normal;word-break:break-word;width:'.$largura.';text-align:'.$alinhamento.';">'.e($conteudo).'</td>';
+
+        $html = '';
+
+        foreach ($componentes->groupBy(fn (ItemProjetoComponente $c) => $c->categoria ?: '—') as $categoria => $componentesDaCategoria) {
+            $linhas = $componentesDaCategoria->map(function (ItemProjetoComponente $componente) use ($td, $moeda): string {
+                $dimensoes = array_filter([
+                    (float) $componente->largura > 0 ? number_format((float) $componente->largura, 0, ',', '.') : null,
+                    (float) $componente->altura > 0 ? number_format((float) $componente->altura, 0, ',', '.') : null,
+                    (float) $componente->profundidade > 0 ? number_format((float) $componente->profundidade, 0, ',', '.') : null,
+                ]);
+
+                $descricao = (string) $componente->descricao;
+
+                if ($dimensoes !== []) {
+                    $descricao .= ' ('.implode(' × ', $dimensoes).' mm)';
+                }
+
+                return '<tr>'
+                    .$td((string) ($componente->referencia ?? ''), '17%')
+                    .$td($descricao, '29%')
+                    .$td((string) $componente->repeticao, '8%', 'right')
+                    .$td(number_format((float) $componente->quantidade, 2, ',', '.'), '12%', 'right')
+                    .$td($moeda($componente->custo), '17%', 'right')
+                    .$td($moeda($componente->preco), '17%', 'right')
+                    .'</tr>';
+            })->implode('');
+
+            $html .= '<p style="margin:12px 0 2px;font-size:12px;font-weight:600;color:#374151;">'.e((string) $categoria).'</p>'
+                .'<table style="width:100%;border-collapse:collapse;table-layout:fixed;">'.$cabecalho.'<tbody>'.$linhas.'</tbody></table>';
+        }
+
+        return $html;
     }
 
     /**

@@ -58,6 +58,28 @@ return [
                 'sketchup'           => 'SketchUp',
                 'mobilizacao-frete'  => 'Mobilização e Frete',
             ],
+            'componentes' => [
+                'title'       => 'Componentes',
+                'descricao'   => 'Matéria-prima extraída do XML do Promob para este item — base da Lista de Compras (Aba P).',
+                'acao'        => 'Materiais',
+                'modal' => [
+                    'heading' => 'Materiais do Item :numero',
+                    'vazio'   => 'Nenhum componente extraído do XML para este item.',
+                ],
+                'referencia'  => 'Referência',
+                'descricao-campo' => 'Descrição',
+                'largura'     => 'Largura',
+                'altura'      => 'Altura',
+                'profundidade' => 'Profundidade',
+                'repeticao'   => 'Peças',
+                'quantidade'  => 'Quantidade',
+                'custo'       => 'Custo',
+                'preco'       => 'Preço',
+                'origens'     => [
+                    'xml-promob' => 'XML Promob',
+                    'manual'     => 'Manual',
+                ],
+            ],
             'notification' => [
                 'sem-selecao'              => 'Selecione uma origem antes de inserir.',
                 'pendente-title'           => 'Inserção ainda não implementada',

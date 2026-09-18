@@ -74,6 +74,25 @@ class ComercialServiceProvider extends PackageServiceProvider
                 // Tarefa "Documentos" (2026-09-11) — mesma lição dos
                 // comentários acima.
                 '2026_09_11_100000_create_documentos_table',
+                // Tarefa "Necessidade de Materiais / Aba P" (2026-09-12)
+                // — mesma lição dos comentários acima (achado real de
+                // novo: `artisan migrate` respondeu "Nothing to migrate"
+                // e nem aparecia em `migrate:status` até acrescentar as
+                // duas entradas abaixo aqui).
+                '2026_09_12_100000_create_itens_projeto_componentes_table',
+                '2026_09_12_110000_add_dados_calculo_promob_to_itens_projeto_table',
+                '2026_09_12_120000_add_componentizado_to_itens_projeto_componentes_table',
+                '2026_09_12_130000_add_categoria_to_itens_projeto_componentes_table',
+                // Tarefa "enriquecer campos pro Plano de Corte"
+                // (2026-09-13) — mesma lição dos comentários acima.
+                '2026_09_13_100000_add_dados_plano_corte_to_itens_projeto_componentes_table',
+                // Correção "PLATECUTTINGROTATE não é permissão de
+                // rotação" (2026-09-17) — mesma lição dos comentários
+                // acima (de novo): sem esta entrada, `artisan migrate`
+                // responde "Nothing to migrate" e o arquivo nem
+                // aparece no `migrate:status`, mesmo presente em
+                // `database/migrations/`.
+                '2026_09_17_100000_add_veio_eixo_fixo_to_itens_projeto_componentes_table',
             ])
             ->runsMigrations()
             ->hasDependency('auditoria')
@@ -98,5 +117,15 @@ class ComercialServiceProvider extends PackageServiceProvider
         Panel::configureUsing(function (Panel $panel): void {
             $panel->plugin(ComercialPlugin::make());
         });
+
+        // Config NOVO deste plugin (2026-09-14, dropdown "Otimizadores"
+        // do Plano de Corte — ver `config/comercial.php` e CLAUDE.md).
+        // `mergeConfigFrom()` é o jeito padrão do Laravel (não depende
+        // de nenhuma API própria do `Webkul\PluginManager\Package`, que
+        // este plugin nunca usou pra config até agora) — os valores
+        // ficam acessíveis via `config('comercial.packingsolver...')`
+        // em qualquer lugar, com o `.env` da raiz do Perseu-FA podendo
+        // sobrescrever cada um.
+        $this->mergeConfigFrom(__DIR__.'/../config/comercial.php', 'comercial');
     }
 }

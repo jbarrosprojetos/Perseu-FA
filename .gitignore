@@ -35,3 +35,15 @@ opencode.json
 .claude/settings.local.json
 .claude/settings.local.json
 .claude/settings.local.json*
+
+# Dumps de banco soltos (o backup de verdade vai pra ~/perseu-backups/, ver backup-perseu.sh)
+*.sql
+*.sql.gz
+
+# Fonte externa do packingsolver, não é código do Perseu
+/packingsolver/
+
+# Configs locais de agente (podem conter chaves/tokens)
+/.claude/
+/.agents/
+plugins/perseu/comercial/Claude outputs/

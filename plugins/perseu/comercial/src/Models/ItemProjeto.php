@@ -62,6 +62,13 @@ class ItemProjeto extends Model
         'custo_unitario',
         'imposto_aplicado',
         'situacao_item_id',
+        // Dados do XML Promob de origem (2026-09-12, ver migration
+        // 2026_09_12_110000 e ItemProjeto::metricasPromob()) —
+        // substituem a antiga NotaProjeto de sistema como registro
+        // estruturado de qual arquivo gerou este Item.
+        'custo_total_xml',
+        'arquivo_origem',
+        'arquivo_gerado_em',
     ];
 
     protected $casts = [
@@ -72,6 +79,7 @@ class ItemProjeto extends Model
         'porcentagem'      => 'decimal:2',
         'custo_unitario'   => 'decimal:2',
         'imposto_aplicado' => 'decimal:2',
+        'custo_total_xml'  => 'decimal:2',
     ];
 
     public function projeto(): BelongsTo
@@ -98,6 +106,67 @@ class ItemProjeto extends Model
     public function freteMobilizacao(): HasOne
     {
         return $this->hasOne(FreteMobilizacao::class, 'item_projeto_id');
+    }
+
+    /**
+     * Componentes (matéria-prima) extraídos do XML do Promob no
+     * momento de "Criar Itens" — base da Aba P (Lista de Compras/
+     * Necessidade de Materiais, 2026-09-12, ver
+     * `ItemProjetoComponente`/migration
+     * `2026_09_12_100000_create_itens_projeto_componentes_table` e
+     * handoff `handoff_aba_p.md`). Só populado pra itens de origem
+     * `OrigemItemProjeto::Promob`; itens de outra origem (Item Avulso
+     * etc.) simplesmente não têm nenhuma linha aqui.
+     */
+    public function componentes(): HasMany
+    {
+        return $this->hasMany(ItemProjetoComponente::class, 'item_projeto_id');
+    }
+
+    /**
+     * Recalcula AO VIVO as 5 métricas do Promob (Peças/m²/Metro Linear/
+     * Custo/Misc, mesma forma de `PromobXmlParser::metricas()`) a
+     * partir dos componentes JÁ PERSISTIDOS — 2026-09-12, ver migration
+     * `2026_09_12_110000_add_dados_calculo_promob_to_itens_projeto_table`
+     * e handoff `handoff_aba_p.md`. Substitui o texto congelado que
+     * antes ficava numa `NotaProjeto` de sistema: como o cálculo agora
+     * é feito aqui, ele sempre reflete os componentes atuais do Item
+     * (nunca precisa reler o XML original, que já foi descartado).
+     *
+     * **Peças/m²/Metro Linear/Custo** somam só os componentes
+     * `componentizado = true` (peças de madeira/painel, `COMPONENT="Y"`
+     * no XML original) — **Misc** soma os `componentizado = false`
+     * (ferragens/acessórios, `COMPONENT="N"` sem filhos). Mesma divisão
+     * exata da fórmula original (`PromobXmlParser::metricas()`), só que
+     * reconstruída a partir do flag persistido em cada componente (ver
+     * migration `2026_09_12_120000_add_componentizado_to_itens_projeto_componentes_table`)
+     * em vez de reler o XML — necessário desde que
+     * `componentesParaMateriais()` passou a também extrair ferragens
+     * como componentes próprios (2026-09-12): sem essa divisão, "Misc"
+     * (e a linha "Ferragens/Miscelânea" do detalhamento) cairia pra
+     * perto de zero, divergindo do Custo Unitário já gravado no Item.
+     *
+     * @return array{pecas: int, m2: float, mlinear: float, custo: float, misc: float}
+     */
+    public function metricasPromob(): array
+    {
+        $componentes = $this->componentes;
+        $madeira = $componentes->where('componentizado', true);
+        $ferragens = $componentes->where('componentizado', false);
+
+        $pecas = (int) $madeira->sum('repeticao');
+        $m2 = (float) $madeira->sum(fn (ItemProjetoComponente $c) => (float) $c->repeticao * (float) $c->quantidade);
+        $mlinear = (float) $madeira->sum(fn (ItemProjetoComponente $c) => ((float) $c->largura + (float) $c->profundidade) * 2 * (float) $c->repeticao / 1000);
+        $custo = (float) $madeira->sum('custo');
+        $misc = (float) $ferragens->sum('custo');
+
+        return [
+            'pecas'   => $pecas,
+            'm2'      => $m2,
+            'mlinear' => $mlinear,
+            'custo'   => $custo,
+            'misc'    => $misc,
+        ];
     }
 
     /**

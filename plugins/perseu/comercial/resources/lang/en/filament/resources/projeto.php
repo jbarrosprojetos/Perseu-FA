@@ -58,6 +58,28 @@ return [
                 'sketchup'           => 'SketchUp',
                 'mobilizacao-frete'  => 'Mobilization and Freight',
             ],
+            'componentes' => [
+                'title'       => 'Components',
+                'descricao'   => 'Raw materials extracted from the Promob XML for this item — basis for the Shopping List (Tab P).',
+                'acao'        => 'Materials',
+                'modal' => [
+                    'heading' => 'Materials for Item :numero',
+                    'vazio'   => 'No components extracted from the XML for this item.',
+                ],
+                'referencia'  => 'Reference',
+                'descricao-campo' => 'Description',
+                'largura'     => 'Width',
+                'altura'      => 'Height',
+                'profundidade' => 'Depth',
+                'repeticao'   => 'Pieces',
+                'quantidade'  => 'Quantity',
+                'custo'       => 'Cost',
+                'preco'       => 'Price',
+                'origens'     => [
+                    'xml-promob' => 'Promob XML',
+                    'manual'     => 'Manual',
+                ],
+            ],
             'notification' => [
                 'sem-selecao'              => 'Select a source before inserting.',
                 'pendente-title'           => 'Insertion not implemented yet',

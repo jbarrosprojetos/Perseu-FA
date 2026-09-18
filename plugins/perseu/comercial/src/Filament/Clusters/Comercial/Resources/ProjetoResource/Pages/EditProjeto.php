@@ -10,6 +10,7 @@ use Filament\Schemas\Components\Component;
 use Filament\Schemas\Components\EmbeddedSchema;
 use Filament\Schemas\Components\Form;
 use Filament\Schemas\Components\Group;
+use Filament\Schemas\Components\Utilities\Get;
 use Illuminate\Database\Eloquent\Collection;
 use Perseu\Comercial\Filament\Clusters\Comercial\Resources\ProjetoResource;
 use Perseu\Comercial\Filament\Clusters\Comercial\Resources\ProjetoResource\Concerns\HasPromobResultado;
@@ -17,7 +18,10 @@ use Perseu\Comercial\Models\ItemProjeto;
 use Perseu\Comercial\Models\NotaProjeto;
 use Perseu\Comercial\Models\Documento;
 use Perseu\Comercial\Services\DocumentoTemplateService;
+use Perseu\Comercial\Services\PlanoCorteRelatorioService;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Radio;
+use Filament\Forms\Components\TextInput;
 
 class EditProjeto extends EditRecord
 {
@@ -187,6 +191,101 @@ class EditProjeto extends EditRecord
                 ->action(function (array $data) {
                     $documento = Documento::findOrFail($data['documento_id']);
                     $resultado = app(DocumentoTemplateService::class)->gerar($this->getRecord(), $documento);
+
+                    return response()->download($resultado['caminho'], $resultado['nome_arquivo'])
+                        ->deleteFileAfterSend(true);
+                }),
+            // "Produção" (2026-09-13, ver CLAUDE.md "Plano de Corte")
+            // — logo depois de "Documentos" a pedido explícito do
+            // usuário. Mesmo padrão: form modal + download imediato,
+            // nada persiste no banco (`PlanoCorteRelatorioService`
+            // recalcula o nesting do zero a cada clique a partir dos
+            // `ItemProjetoComponente` já salvos). Pede o equipamento
+            // ANTES de gerar (decisão explícita do usuário — kerf/
+            // fresa e limpeza de bordas não vêm do XML do Promob, são
+            // parâmetro da marcenaria, então precisam ser perguntados
+            // toda vez, sem valor persistido).
+            Action::make('producao')
+                ->label(__('comercial::filament/resources/projeto/pages/edit-projeto.form-actions.producao.label'))
+                ->color('gray')
+                ->form([
+                    // "Otimizadores" (2026-09-14, ver CLAUDE.md) — a
+                    // pedido explícito do usuário: escolher entre o
+                    // algoritmo NATIVO (`PlanoCorteNestingService`,
+                    // intocado, continua sendo o padrão) e o motor
+                    // externo `fontanf/packingsolver`
+                    // (`PlanoCortePackingSolverService`) — uma opção
+                    // EXPLORATÓRIA, pra aprender e decidir ao longo do
+                    // projeto qual fica, não uma substituição.
+                    Select::make('otimizador')
+                        ->label(__('comercial::filament/resources/projeto/pages/edit-projeto.form-actions.producao.form.otimizador'))
+                        ->options([
+                            'nativa'         => __('comercial::filament/resources/projeto/pages/edit-projeto.form-actions.producao.form.otimizador-options.nativa'),
+                            'packing_solver' => __('comercial::filament/resources/projeto/pages/edit-projeto.form-actions.producao.form.otimizador-options.packing-solver'),
+                        ])
+                        ->helperText(__('comercial::filament/resources/projeto/pages/edit-projeto.form-actions.producao.form.otimizador-ajuda'))
+                        ->default('nativa')
+                        ->required(),
+                    Radio::make('tipo_equipamento')
+                        ->label(__('comercial::filament/resources/projeto/pages/edit-projeto.form-actions.producao.form.tipo-equipamento'))
+                        ->options([
+                            'serra' => __('comercial::filament/resources/projeto/pages/edit-projeto.form-actions.producao.form.tipo-equipamento-options.serra'),
+                            'cnc'   => __('comercial::filament/resources/projeto/pages/edit-projeto.form-actions.producao.form.tipo-equipamento-options.cnc'),
+                        ])
+                        ->inline()
+                        ->live()
+                        ->default('serra')
+                        ->required(),
+                    TextInput::make('espessura_serra')
+                        ->label(__('comercial::filament/resources/projeto/pages/edit-projeto.form-actions.producao.form.espessura-serra'))
+                        ->numeric()
+                        ->minValue(0.1)
+                        ->default(4)
+                        ->suffix('mm')
+                        ->visible(fn (Get $get) => $get('tipo_equipamento') === 'serra')
+                        ->required(fn (Get $get) => $get('tipo_equipamento') === 'serra'),
+                    TextInput::make('espessura_fresa')
+                        ->label(__('comercial::filament/resources/projeto/pages/edit-projeto.form-actions.producao.form.espessura-fresa'))
+                        ->numeric()
+                        ->minValue(0.1)
+                        ->default(6)
+                        ->suffix('mm')
+                        ->visible(fn (Get $get) => $get('tipo_equipamento') === 'cnc')
+                        ->required(fn (Get $get) => $get('tipo_equipamento') === 'cnc'),
+                    TextInput::make('limpeza_bordas')
+                        ->label(__('comercial::filament/resources/projeto/pages/edit-projeto.form-actions.producao.form.limpeza-bordas'))
+                        ->helperText(__('comercial::filament/resources/projeto/pages/edit-projeto.form-actions.producao.form.limpeza-bordas-ajuda'))
+                        ->numeric()
+                        ->minValue(0)
+                        ->default(10)
+                        ->suffix('mm')
+                        ->required(),
+                ])
+                ->action(function (array $data) {
+                    $espessuraFerramenta = $data['tipo_equipamento'] === 'cnc'
+                        ? (float) $data['espessura_fresa']
+                        : (float) $data['espessura_serra'];
+
+                    // Otimizador "Packing Solver" depende de um binário
+                    // externo configurado (ver `PlanoCortePackingSolverService`
+                    // e `config/comercial.php`) — sem isso ele lança
+                    // `\RuntimeException` com uma mensagem clara. Captura
+                    // aqui (em vez de deixar estourar como erro 500) pra
+                    // mostrar como notificação e nunca travar a tela —
+                    // o usuário pode simplesmente tentar de novo com
+                    // "Nativa" enquanto isso.
+                    try {
+                        $servico = new PlanoCorteRelatorioService($data['tipo_equipamento'], $espessuraFerramenta, (float) $data['limpeza_bordas'], $data['otimizador']);
+                        $resultado = $servico->gerar($this->getRecord());
+                    } catch (\Throwable $e) {
+                        Notification::make()
+                            ->danger()
+                            ->title(__('comercial::filament/resources/projeto/pages/edit-projeto.form-actions.producao.notification-erro.title'))
+                            ->body($e->getMessage())
+                            ->send();
+
+                        return null;
+                    }
 
                     return response()->download($resultado['caminho'], $resultado['nome_arquivo'])
                         ->deleteFileAfterSend(true);

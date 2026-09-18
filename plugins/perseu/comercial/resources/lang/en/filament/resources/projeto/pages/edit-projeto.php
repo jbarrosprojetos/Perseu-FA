@@ -22,6 +22,29 @@ return [
                 'documento' => 'Template',
             ],
         ],
+        'producao' => [
+            'label' => 'Production',
+            'form' => [
+                'otimizador' => 'Optimizer',
+                'otimizador-options' => [
+                    'nativa'         => 'Native',
+                    'packing-solver' => 'Packing Solver (experimental)',
+                ],
+                'otimizador-ajuda' => 'Native is Perseu\'s own algorithm. Packing Solver is an external engine under evaluation — it may fail if not configured on the server.',
+                'tipo-equipamento'    => 'Cutting equipment',
+                'tipo-equipamento-options' => [
+                    'serra' => 'Saw',
+                    'cnc'   => 'CNC',
+                ],
+                'espessura-serra'  => 'Saw kerf (mm)',
+                'espessura-fresa'  => 'Router bit width (mm)',
+                'limpeza-bordas'   => 'Sheet edge trim (mm)',
+                'limpeza-bordas-ajuda' => 'Margin trimmed from the perimeter of every sheet before nesting the pieces.',
+            ],
+            'notification-erro' => [
+                'title' => 'Could not generate the Cutting Plan',
+            ],
+        ],
         'atribuir-processos' => [
             'label' => 'Assign Processes',
             'notification' => [
